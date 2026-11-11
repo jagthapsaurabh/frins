@@ -117,7 +117,45 @@ Staff access is never linked from the public website, and each console has its o
 - The primary sign-in page at `/login` is for learners. It has no staff links on it.
 - **No dashboard opens without a session.** `src/auth/guard.ts` holds the rule (`decideDashboardAccess`): no user, no role, or the wrong role all resolve to `REDIRECT_TO_SIGN_IN`. The router applies it to `/dashboard`, `/admin`, `/guide` and `/ai-pipeline`, and the server independently rejects the same requests with 401 (no token) or 403 (wrong role) on every API route.
 
-## 9. Commands
+## 9. Accounts and database scripts
+
+Seeded demo accounts exist so the app boots with something to look at. Create the real admin
+before going live.
+
+```bash
+# Create a staff admin. Generates a strong password and prints it once.
+npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
+
+# Supply your own password instead
+npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN --password 'SomethingLong123'
+
+# Other roles
+npm run create:admin -- --email head@frins.in --name "Curriculum Lead" --role CURRICULUM_OWNER
+npm run create:admin -- --email mentor@frins.in --name "Mentor" --role GUIDE
+npm run create:user  -- --email learner@example.com --name "A Learner"     # LEARNER
+
+# Reset an existing account's password and role
+npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN --force
+
+# See every account
+npm run list:accounts
+npm run create:admin -- --help
+
+# Wipe and re-seed the database (asks for confirmation; --yes to skip)
+npm run db:reset
+```
+
+On a server, run them as the app user so file ownership stays correct:
+
+```bash
+cd /var/www/frins.in && sudo -u frins npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
+```
+
+The tool writes to the same `data/frins.db` the app uses, refuses to touch an existing email without
+`--force`, rejects unknown roles and passwords under 8 characters, and records a
+`STAFF_ACCOUNT_CREATED` or `STAFF_ACCOUNT_RESET` audit event.
+
+## 10. Commands
 
 ```bash
 # Install dependencies
@@ -136,7 +174,7 @@ npm run build
 NODE_ENV=production npm start
 ```
 
-## 10. Deployment
+## 11. Deployment
 
 Stack and hosting instructions are in [`DEPLOYMENT.md`](DEPLOYMENT.md): the technology list, the
 environment variables that matter, Docker and compose files, a VPS systemd unit, Render / Railway /
@@ -155,3 +193,26 @@ Ready-made files in [`deploy/`](deploy):
 | `deploy/nginx-frins.in.conf` | server block for `frins.in` and `www.frins.in` |
 | `deploy/deploy.sh` | pull, install, test, build, restart, health check |
 | `deploy/backup.sh` | nightly safe SQLite backup with integrity check and retention |
+| `deploy/setup-vps.sh` | one-shot server bootstrap: packages, user, build, systemd, nginx, TLS |
+| `deploy/push-to-github.sh` | push to GitHub with a personal access token, without storing the token |
+
+### Fastest path on a fresh VPS
+
+```bash
+# on the server, from a checkout of the repo
+sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
+
+# then create your own admin
+cd /var/www/frins.in && sudo -u frins npm run create:admin -- \
+  --email you@frins.in --name "Your Name" --role ADMIN
+```
+
+The script installs Node 20, nginx, sqlite3 and certbot, creates the `frins` user, builds the app,
+installs the systemd unit and nginx server block, optionally requests the certificate, and finishes
+with a health check. It only touches its own files and only restarts its own service, so other sites
+on the box keep running.
+
+### CI
+
+`.github/workflows/ci.yml` runs on every push to `main`: type check, the 19 tests, a production
+build, and a live smoke test of `/api/health`.
