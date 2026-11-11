@@ -1310,8 +1310,10 @@ export function initDatabaseAndSeed() {
   const pwHash = hashPassword('frins123');
 
   // 1. Seed Users
+  // OR IGNORE so a second process booting at the same moment cannot fail the
+  // seed on the unique email index. The count check above is not atomic.
   const insertUser = db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id, created_at, updated_at)
+    INSERT OR IGNORE INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
