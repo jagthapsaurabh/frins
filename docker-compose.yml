@@ -1,0 +1,21 @@
+services:
+  app:
+    build: .
+    image: frins:1.0
+    container_name: frins
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # AI_PROVIDER: real
+      # AI_API_KEY: ""
+      # AI_MODEL: gpt-4o-mini
+      # GUIDE_REVIEW_API_KEY: ""
+      # CORS_ORIGIN: https://learn.example.com
+    volumes:
+      - frins_data:/app/data
+
+volumes:
+  frins_data:

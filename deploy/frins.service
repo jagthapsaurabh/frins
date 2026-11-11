@@ -1,0 +1,39 @@
+[Unit]
+Description=FRINS web app (frins.in)
+After=network.target
+
+[Service]
+Type=simple
+User=frins
+Group=frins
+WorkingDirectory=/var/www/frins.in
+
+# .env is read by systemd, not by the app itself.
+# Lines must be KEY=value with no "export" and no quotes.
+EnvironmentFile=-/var/www/frins.in/.env
+Environment=NODE_ENV=production
+Environment=PORT=3100
+
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+# Modest guard rails so this app cannot starve the other sites on the box.
+MemoryMax=900M
+TasksMax=256
+
+# Basic hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/www/frins.in/data
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=frins
+
+[Install]
+WantedBy=multi-user.target

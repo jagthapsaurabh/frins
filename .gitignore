@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.npm/
+
+# Build output, produced on the server by `npm run build`
+public_build/
+dist/
+
+# Runtime data. Back this up, do not commit it.
+data/
+backups/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Scratch and generated previews
+previews/
+*.log
+.DS_Store
+.sudo_as_admin_successful

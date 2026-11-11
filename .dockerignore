@@ -1,0 +1,13 @@
+node_modules
+public_build
+dist
+data
+backups
+docs
+previews
+uploads
+tests
+.env
+.env.*
+*.log
+.DS_Store
