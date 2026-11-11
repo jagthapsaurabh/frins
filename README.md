@@ -191,6 +191,7 @@ Ready-made files in [`deploy/`](deploy):
 | --- | --- |
 | `deploy/frins.service` | systemd unit: `/var/www/frins`, user `frins`, port 3100, 900 MB cap |
 | `deploy/nginx-frins.in.conf` | server block for `frins.in` and `www.frins.in` |
+| `deploy/install-nginx.sh` | installs that block, blocks duplicate `server_name` files, tests and rolls back |
 | `deploy/deploy.sh` | pull, install, test, build, restart, health check |
 | `deploy/backup.sh` | nightly safe SQLite backup with integrity check and retention |
 | `deploy/setup-vps.sh` | one-shot server bootstrap: packages, user, build, systemd, nginx, TLS. Handles any clone folder, `DRY_RUN=1` to preview |

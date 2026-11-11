@@ -17,8 +17,8 @@ No Docker anywhere. The app is a Node process on `127.0.0.1:3100`; nginx proxies
   ├── deploy/nginx-frins.in.conf    the file you copy into nginx
   └── server/ src/ package.json
 
-/etc/nginx/sites-available/frins.in     copy of the file above
-/etc/nginx/sites-enabled/frins.in ->    symlink to it
+/etc/nginx/sites-available/frins.in.conf     copy of the file above
+/etc/nginx/sites-enabled/frins.in.conf ->    symlink to it
 
 frins.service                           systemd unit, runs npm start as frins
 127.0.0.1:3100                          Node, not reachable from outside
@@ -85,10 +85,11 @@ If you prefer to do the nginx part yourself, skip to section 3 and run the insta
 
 ## 3. The nginx files
 
-There are two files in `deploy/`:
+There are three files in `deploy/`:
 
 | File | Required? | What it does |
 | --- | --- | --- |
+| `install-nginx.sh` | recommended | Installs the file below, detects your layout, blocks duplicate `server_name` files, backs up, tests and reloads |
 | `nginx-frins.in.conf` | **yes** | The site: proxies `frins.in` and `www.frins.in` to port 3100, caches assets, sets security headers, enables gzip |
 | `nginx-www-redirect.conf` | optional | Sends `www.frins.in` to `https://frins.in`. Add it after the certificate if you want one canonical address |
 
@@ -102,11 +103,25 @@ nginx -T 2>/dev/null | grep -E 'include .*(sites-enabled|conf\.d)' | head
 - Prints `conf.d` → AlmaLinux/Rocky layout, use section 3b
 - Prints both → use `sites-enabled`
 
+### 3. Install it (one command)
+
+```bash
+cd /var/www/frins
+sudo bash deploy/install-nginx.sh
+```
+
+The script detects the layout, refuses to run if another enabled file already claims `frins.in`
+(that is the duplicate problem from above), keeps exactly one file, backs up the old one, runs
+`nginx -t`, and rolls back if the test fails. Add `FORCE=1` to have it move the duplicates aside,
+or `DRY_RUN=1` to see what it would do.
+
+The manual equivalent:
+
 ### 3a. Debian / Ubuntu
 
 ```bash
-sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
-sudo ln -sf /etc/nginx/sites-available/frins.in /etc/nginx/sites-enabled/frins.in
+sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in.conf
+sudo ln -sf /etc/nginx/sites-available/frins.in.conf /etc/nginx/sites-enabled/frins.in.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -138,7 +153,7 @@ sudo systemctl reload nginx
 | Message | Fix |
 | --- | --- |
 | `duplicate default server` | Another block already has `default_server`. This file does not use it, so the conflict is elsewhere. Check the line number nginx prints |
-| `conflicting server name "frins.in"` | An older config still claims the name. `sudo grep -rn "frins.in" /etc/nginx/` and remove that one |
+| `conflicting server name "frins.in"` | An older config still claims the name. See the full entry in section 10 |
 | `unknown directive "http2"` | nginx older than 1.25.2. Put `http2` on the `listen` line instead: `listen 443 ssl http2;` |
 | `Permission denied` writing logs | SELinux on AlmaLinux, see section 7 |
 
@@ -188,7 +203,7 @@ sudo certbot --nginx -d frins.in --redirect
 
 Then `www.frins.in` will not work. Fine if nobody types `www`.
 
-Certbot edits `/etc/nginx/sites-available/frins.in` in place: it adds the 443 block, copies the
+Certbot edits `/etc/nginx/sites-available/frins.in.conf` in place: it adds the 443 block, copies the
 `proxy_pass` lines into it, and adds the HTTP to HTTPS redirect. Your proxy settings survive.
 
 Confirm renewal:
@@ -362,5 +377,8 @@ Leave `data/` owned by `frins` as well, or the app cannot write to the database.
 | Refresh on `/admin` gives 404 | Something other than this app answered | nginx must proxy `/` wholesale, as in the shipped file |
 | Site works but every login fails | Frontend and API on different origins, or cookies dropped | Keep one domain. Check the browser console for CORS or 401 |
 | Certbot: `Could not verify` | DNS not pointing here, or port 80 closed | `dig +short frins.in`, `ufw allow 'Nginx Full'` |
-| `conflicting server name` | Two files claim `frins.in` | `sudo grep -rln "frins.in" /etc/nginx/sites-enabled /etc/nginx/conf.d` |
+| `conflicting server name "frins.in" on 0.0.0.0:80, ignored` | Two enabled files claim `frins.in`, usually `frins.in` and `frins.in.conf`. nginx silently serves only one, so you cannot tell which file certbot edited | `sudo bash deploy/install-nginx.sh` (refuses to write until only one file is left) or `sudo FORCE=1 bash deploy/install-nginx.sh` to move the extra one to `/root`. Always keep the `.conf` name the installer uses |
+| Certbot: `DNS problem: NXDOMAIN looking up A for www.frins.in` | There is no `www` record, only `@` | Add `A www → <server IP>` in Hostinger DNS, wait for it, then `sudo certbot --nginx -d frins.in -d www.frins.in --redirect`. Or request the bare domain only and drop `www.frins.in` from `server_name` |
+| Certbot says `Certificate not yet due for renewal` | A certificate already exists, you only need it attached to the new file | `sudo certbot --nginx --cert-name frins.in --reinstall` |
+| HTTPS works but `http://` does not redirect | The 443 block has no redirect, or certbot was never run with `--redirect` | `sudo certbot --nginx -d frins.in --redirect` |
 | Old Hostinger page appears | DNS still on the shared host | Wait for TTL, check `dig +short frins.in` |

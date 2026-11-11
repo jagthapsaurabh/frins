@@ -235,8 +235,8 @@ nginx -T 2>/dev/null | grep -E 'include .*(sites-enabled|conf\.d)' | head
 
 ```bash
 # Debian / Ubuntu layout
-sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
-sudo ln -sf /etc/nginx/sites-available/frins.in /etc/nginx/sites-enabled/frins.in
+sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in.conf
+sudo ln -sf /etc/nginx/sites-available/frins.in.conf /etc/nginx/sites-enabled/frins.in.conf
 
 # AlmaLinux layout instead:
 # sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/conf.d/frins.in.conf
