@@ -4630,3 +4630,15 @@ a {
 .panel-card > .micro-tag + h2 {
   margin-top: 8px;
 }
+
+/* On a phone the top bar has no room for "Back to website", so the same link
+   lives in the account menu. On a laptop the top bar button is enough. */
+.app-menu-item.website-link {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .app-menu-item.website-link {
+    display: flex;
+  }
+}

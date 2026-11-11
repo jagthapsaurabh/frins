@@ -19,7 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { NotificationBell } from './NotificationBell';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
-import { ADMIN_SECTIONS, ADMIN_GROUPS } from '../pages/adminSections';
+import { ADMIN_SECTIONS } from '../pages/adminSections';
 
 export type ShellRole = 'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRICULUM_OWNER';
 
@@ -267,6 +267,14 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <LayoutDashboard size={16} /> My learning dashboard
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    className="app-menu-item website-link"
+                    onClick={() => navigate('/')}
+                  >
+                    <ArrowLeft size={16} /> View public website
+                  </button>
 
                   <div className="app-menu-divider" />
                   <button
