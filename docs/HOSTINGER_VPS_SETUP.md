@@ -24,6 +24,10 @@ site you already run there. Nothing in this guide touches those.
 `https://frins.in` works. `https://frins.in/app` does not, because the React router and the bundled
 asset paths are absolute. A subdomain such as `staging.frins.in` is fine.
 
+**The backend does not need its own subdomain.** One Node process serves the website and the API on
+the same port, and the frontend calls `/api/...` with relative paths, so `https://frins.in` covers
+everything. Do not create `api.frins.in`.
+
 ---
 
 ## 2. What you need before you start
@@ -124,17 +128,25 @@ If the VPS has a **cloud firewall** in hPanel, open 80 and 443 there too.
 
 ## 5. Put the code on the server
 
+The clone folder is only a bootstrap. The app itself is installed to `APP_DIR`
+(`/var/www/frins.in` by default), and the installer copies the code there for you:
+
 ```bash
-# Service account, with its home directory at the app root
+git clone https://github.com/jagthapsaurabh/frins.git /root/frins
+cd /root/frins
+sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
+```
+
+It handles all four starting cases: no target folder, an existing git checkout, app files without
+git, or an unrelated folder (which it refuses to overwrite). The bootstrap clone can be deleted
+afterwards. Details: [`DEPLOY_CHANGES.md`](DEPLOY_CHANGES.md).
+
+To do it by hand instead:
+
+```bash
 sudo useradd --system --create-home --home-dir /var/www/frins.in --shell /bin/bash frins
-
-# Code
-sudo -u frins git clone <your-repo-url> /var/www/frins.in
-# or from your laptop:
-# rsync -az --exclude node_modules --exclude public_build ./ frins@<vps-ip>:/var/www/frins.in/
-
+sudo -u frins git clone https://github.com/jagthapsaurabh/frins.git /var/www/frins.in
 cd /var/www/frins.in
-
 sudo -u frins mkdir -p data
 sudo -u frins npm ci
 sudo -u frins npm test          # 19 tests

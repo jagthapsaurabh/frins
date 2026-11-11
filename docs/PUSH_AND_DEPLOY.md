@@ -59,6 +59,9 @@ so no database and no secrets go up.
 
 ### 0. Facts this assumes
 
+The backend does **not** need a subdomain. One Node process serves the site and the API, and the
+frontend calls `/api/...` relatively, so `https://frins.in` covers everything.
+
 | Item | Value |
 | --- | --- |
 | Domain | `frins.in` and `www.frins.in` |
@@ -94,11 +97,15 @@ Both must print the VPS IP before you run certbot.
 ssh root@<vps-ip>
 
 # get the code onto the box (public read is enough)
-git clone https://github.com/jagthapsaurabh/frins.git /root/frins-bootstrap
-cd /root/frins-bootstrap
+git clone https://github.com/jagthapsaurabh/frins.git      # creates /root/frins
+cd /root/frins
 
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 ```
+
+The clone folder is only a bootstrap. The script installs the app to `/var/www/frins.in`, so the
+clone stays as it is and can be deleted later. See [`DEPLOY_CHANGES.md`](DEPLOY_CHANGES.md) for the
+folder layout and every settable option.
 
 The script:
 

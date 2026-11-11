@@ -193,8 +193,12 @@ Ready-made files in [`deploy/`](deploy):
 | `deploy/nginx-frins.in.conf` | server block for `frins.in` and `www.frins.in` |
 | `deploy/deploy.sh` | pull, install, test, build, restart, health check |
 | `deploy/backup.sh` | nightly safe SQLite backup with integrity check and retention |
-| `deploy/setup-vps.sh` | one-shot server bootstrap: packages, user, build, systemd, nginx, TLS |
+| `deploy/setup-vps.sh` | one-shot server bootstrap: packages, user, build, systemd, nginx, TLS. Handles any clone folder, `DRY_RUN=1` to preview |
 | `deploy/push-to-github.sh` | push to GitHub with a personal access token, without storing the token |
+
+Folder layout, every settable option and the domain decision are covered in
+[`docs/DEPLOY_CHANGES.md`](docs/DEPLOY_CHANGES.md). The short version: the clone folder is only a
+bootstrap, the app installs to `/var/www/frins.in`, and the API shares the main domain, no subdomain.
 
 ### Fastest path on a fresh VPS
 
