@@ -1,13 +1,15 @@
 # Push to GitHub and deploy to frins.in
 
-Two parts: getting the code into `github.com/jagthapsaurabh/frins`, then running it on the VPS.
+Two parts: the code is now in `github.com/jagthapsaurabh/frins`, and here is how to run it on the VPS.
 
 ---
 
-## Part 1: push the code
+## Part 1: the code is already pushed
 
-The repository in this workspace is committed and ready on branch `main`, two commits deep. What it
-needs is your GitHub credentials, which I do not have. Pick either route.
+`main` is up to date at `github.com/jagthapsaurabh/frins`, 57 files, and CI is green (type check,
+19 tests, production build, live `/api/health` smoke test). Nothing to do here. Jump to Part 2.
+
+The notes below are kept for future pushes from a fresh machine.
 
 ### Route A: push from this workspace with a token
 
