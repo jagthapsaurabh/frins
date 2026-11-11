@@ -11,7 +11,7 @@
 # Options (all optional except DOMAIN):
 #   DOMAIN=frins.in            domain to serve          (required)
 #   EMAIL=you@frins.in         for Let's Encrypt        (omit to skip certificates)
-#   APP_DIR=/var/www/frins.in  where the app lives      (default)
+#   APP_DIR=/var/www/frins  where the app lives      (default)
 #   APP_USER=frins             service account          (default)
 #   PORT=3100                  app port on 127.0.0.1    (default)
 #   REPO=https://github.com/jagthapsaurabh/frins.git
@@ -26,7 +26,7 @@ set -euo pipefail
 
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
-APP_DIR="${APP_DIR:-/var/www/frins.in}"
+APP_DIR="${APP_DIR:-/var/www/frins}"
 APP_USER="${APP_USER:-frins}"
 PORT="${PORT:-3100}"
 REPO="${REPO:-https://github.com/jagthapsaurabh/frins.git}"
@@ -278,7 +278,9 @@ UNIT=/etc/systemd/system/frins.service
 if [ "$DRY_RUN" = "1" ]; then
   info "[dry-run] would write ${UNIT} (User=${APP_USER}, WorkingDirectory=${APP_DIR}, PORT=${PORT})"
 else
-  sed -e "s|/var/www/frins.in|${APP_DIR}|g" \
+  # Escape sed metacharacters in the paths before substituting.
+  APP_DIR_SED="$(printf '%s' "$APP_DIR" | sed -e 's/[&|\\]/\\&/g')"
+  sed -e "s|/var/www/frins|${APP_DIR_SED}|g" \
       -e "s|Environment=PORT=3100|Environment=PORT=${PORT}|" \
       -e "s|^User=frins|User=${APP_USER}|" \
       -e "s|^Group=frins|Group=${APP_USER}|" \
@@ -306,7 +308,9 @@ bold "nginx server block"
 NGINX_SRC="$SRC_DIR/deploy/nginx-frins.in.conf"
 
 render_nginx() {
-  sed -e "s|frins\.in|${DOMAIN}|g" -e "s|127\.0\.0\.1:3100|127.0.0.1:${PORT}|g" "$NGINX_SRC"
+  local domain_sed
+  domain_sed="$(printf '%s' "$DOMAIN" | sed -e 's/[&|\\]/\\&/g')"
+  sed -e "s|frins\.in|${domain_sed}|g" -e "s|127\.0\.0\.1:3100|127.0.0.1:${PORT}|g" "$NGINX_SRC"
 }
 
 if [ "$DRY_RUN" = "1" ]; then

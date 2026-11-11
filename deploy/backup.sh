@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Nightly SQLite backup for FRINS.
-# Cron:  15 2 * * * /var/www/frins.in/deploy/backup.sh >> /var/log/frins-backup.log 2>&1
+# Cron:  15 2 * * * /var/www/frins/deploy/backup.sh >> /var/log/frins-backup.log 2>&1
 #
 # Uses the SQLite backup API, not cp, so a running WAL database is copied
 # consistently.

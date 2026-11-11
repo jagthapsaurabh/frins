@@ -134,7 +134,7 @@ A ready-made walkthrough for an existing nginx VPS is in
 [`docs/HOSTINGER_VPS_SETUP.md`](docs/HOSTINGER_VPS_SETUP.md). It covers DNS at Hostinger, hosting
 next to existing sites in `/var/www`, TLS, backups, and rollback.
 
-Short version, with the app at `/var/www/frins.in` and the Node process on port 3100:
+Short version, with the app at `/var/www/frins` and the Node process on port 3100:
 
 ```bash
 # 1. Node 20, build tools for better-sqlite3, sqlite3 for backups
@@ -142,9 +142,9 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt-get install -y nodejs build-essential python3 sqlite3
 
 # 2. Service account and code
-sudo useradd --system --create-home --home-dir /var/www/frins.in --shell /bin/bash frins
-sudo -u frins git clone <your-repo> /var/www/frins.in
-cd /var/www/frins.in
+sudo useradd --system --create-home --home-dir /var/www/frins --shell /bin/bash frins
+sudo -u frins git clone <your-repo> /var/www/frins
+cd /var/www/frins
 
 # 3. Install, test, build
 sudo -u frins npm ci
@@ -158,8 +158,8 @@ sudo systemctl enable --now frins
 sudo systemctl status frins
 ```
 
-`deploy/frins.service` points at `/var/www/frins.in`, runs as the unprivileged `frins` user, reads
-`/var/www/frins.in/.env` through `EnvironmentFile`, listens on 3100, and caps memory at 900 MB so it
+`deploy/frins.service` points at `/var/www/frins`, runs as the unprivileged `frins` user, reads
+`/var/www/frins/.env` through `EnvironmentFile`, listens on 3100, and caps memory at 900 MB so it
 cannot starve other sites on the same box.
 
 nginx gets one new server block, `deploy/nginx-frins.in.conf`, proxying `frins.in` and

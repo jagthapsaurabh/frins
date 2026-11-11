@@ -65,11 +65,11 @@ frontend calls `/api/...` relatively, so `https://frins.in` covers everything.
 | Item | Value |
 | --- | --- |
 | Domain | `frins.in` and `www.frins.in` |
-| App folder | `/var/www/frins.in` |
+| App folder | `/var/www/frins` |
 | App user | `frins` (unprivileged) |
 | App port | `3100`, localhost only |
 | Reverse proxy | your existing nginx |
-| Database | `/var/www/frins.in/data/frins.db` |
+| Database | `/var/www/frins/data/frins.db` |
 
 Change `PORT` if 3100 is taken: `sudo ss -lntp | grep 3100`.
 
@@ -103,15 +103,15 @@ cd /root/frins
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 ```
 
-The clone folder is only a bootstrap. The script installs the app to `/var/www/frins.in`, so the
+The clone folder is only a bootstrap. The script installs the app to `/var/www/frins`, so the
 clone stays as it is and can be deleted later. See [`DEPLOY_CHANGES.md`](DEPLOY_CHANGES.md) for the
 folder layout and every settable option.
 
 The script:
 
 1. installs Node 20, build tools, sqlite3, nginx and certbot if missing
-2. creates the `frins` user with home `/var/www/frins.in`
-3. clones the app into `/var/www/frins.in` (or updates it if already there)
+2. creates the `frins` user with home `/var/www/frins`
+3. clones the app into `/var/www/frins` (or updates it if already there)
 4. writes `.env` with `NODE_ENV=production` and `PORT=3100`
 5. runs `npm ci` and `npm run build`
 6. installs and starts `frins.service`
@@ -125,7 +125,7 @@ Expected finish:
 
 ```
 ==> Done
-  App folder : /var/www/frins.in
+  App folder : /var/www/frins
   Service    : systemctl status frins
   Logs       : journalctl -u frins -f
   Health     : curl -s http://127.0.0.1:3100/api/health
@@ -135,7 +135,7 @@ Expected finish:
 ### 3. Create your admin
 
 ```bash
-cd /var/www/frins.in
+cd /var/www/frins
 sudo -u frins npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
 ```
 
@@ -160,7 +160,7 @@ The seed ships `admin@frins.org` with the password `frins123`. Delete or suspend
 admin works. In the Admin console, **Team** tab, or directly:
 
 ```bash
-cd /var/www/frins.in && sudo -u frins npm run list:accounts
+cd /var/www/frins && sudo -u frins npm run list:accounts
 ```
 
 ### 5. Verify
@@ -187,7 +187,7 @@ a learner, and confirm `/admin` sends you to `/admin/login`.
 
 ```bash
 sudo mkdir -p /var/backups/frins && sudo chown frins:frins /var/backups/frins
-( sudo crontab -l 2>/dev/null; echo '15 2 * * * /var/www/frins.in/deploy/backup.sh >> /var/log/frins-backup.log 2>&1' ) | sudo crontab -
+( sudo crontab -l 2>/dev/null; echo '15 2 * * * /var/www/frins/deploy/backup.sh >> /var/log/frins-backup.log 2>&1' ) | sudo crontab -
 ```
 
 Pull a copy off the VPS weekly, or it is not really a backup.
@@ -199,7 +199,7 @@ Pull a copy off the VPS weekly, or it is not really a backup.
 **Ship a change**
 
 ```bash
-sudo /var/www/frins.in/deploy/deploy.sh
+sudo /var/www/frins/deploy/deploy.sh
 ```
 
 Pulls, `npm ci`, tests, builds, restarts, waits for the health check, prints the journal if it fails.
@@ -207,7 +207,7 @@ Pulls, `npm ci`, tests, builds, restarts, waits for the health check, prints the
 **Change a config**
 
 ```bash
-sudo nano /var/www/frins.in/.env
+sudo nano /var/www/frins/.env
 sudo systemctl restart frins
 sudo nginx -t && sudo systemctl reload nginx    # only if you touched the nginx file
 ```
@@ -215,7 +215,7 @@ sudo nginx -t && sudo systemctl reload nginx    # only if you touched the nginx 
 **Roll back**
 
 ```bash
-cd /var/www/frins.in && sudo -u frins git log --oneline -5
+cd /var/www/frins && sudo -u frins git log --oneline -5
 sudo -u frins git reset --hard <sha>
 sudo -u frins npm ci && sudo -u frins npm run build
 sudo systemctl restart frins
@@ -228,7 +228,7 @@ sudo systemctl restart frins
 | Live logs | `journalctl -u frins -f` |
 | nginx logs | `/var/log/nginx/frins.in.error.log` |
 | Service state | `systemctl status frins` |
-| Database | `/var/www/frins.in/data/frins.db` |
+| Database | `/var/www/frins/data/frins.db` |
 | Backups | `/var/backups/frins/` |
 
 ---
@@ -240,7 +240,7 @@ sudo systemctl restart frins
 | `502 Bad Gateway` | `systemctl status frins`, then `journalctl -u frins -n 50`. On AlmaLinux also `setsebool -P httpd_can_network_connect 1` |
 | Old Hostinger page still shows | DNS has not moved. `dig +short frins.in` |
 | Certbot fails | Port 80 closed, or DNS not pointing here yet. `sudo certbot --nginx -d frins.in -d www.frins.in` again once DNS is right |
-| Everything logged out after a deploy | The service started from the wrong folder, so it opened a different database. `WorkingDirectory` must be `/var/www/frins.in` |
+| Everything logged out after a deploy | The service started from the wrong folder, so it opened a different database. `WorkingDirectory` must be `/var/www/frins` |
 | Build killed on a small VPS | Add 2 GB swap, or build locally and rsync `public_build/` |
 
 Full troubleshooting table: [`HOSTINGER_VPS_SETUP.md`](HOSTINGER_VPS_SETUP.md) section 14.

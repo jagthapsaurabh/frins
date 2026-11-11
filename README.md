@@ -148,7 +148,7 @@ npm run db:reset
 On a server, run them as the app user so file ownership stays correct:
 
 ```bash
-cd /var/www/frins.in && sudo -u frins npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
+cd /var/www/frins && sudo -u frins npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
 ```
 
 The tool writes to the same `data/frins.db` the app uses, refuses to touch an existing email without
@@ -189,7 +189,7 @@ Ready-made files in [`deploy/`](deploy):
 
 | File | Purpose |
 | --- | --- |
-| `deploy/frins.service` | systemd unit: `/var/www/frins.in`, user `frins`, port 3100, 900 MB cap |
+| `deploy/frins.service` | systemd unit: `/var/www/frins`, user `frins`, port 3100, 900 MB cap |
 | `deploy/nginx-frins.in.conf` | server block for `frins.in` and `www.frins.in` |
 | `deploy/deploy.sh` | pull, install, test, build, restart, health check |
 | `deploy/backup.sh` | nightly safe SQLite backup with integrity check and retention |
@@ -198,17 +198,20 @@ Ready-made files in [`deploy/`](deploy):
 
 Folder layout, every settable option and the domain decision are covered in
 [`docs/DEPLOY_CHANGES.md`](docs/DEPLOY_CHANGES.md). The short version: the clone folder is only a
-bootstrap, the app installs to `/var/www/frins.in`, and the API shares the main domain, no subdomain.
+bootstrap, the app installs to `/var/www/frins`, and the API shares the main domain, no subdomain.
 
 ### Fastest path on a fresh VPS
 
 ```bash
-# on the server, from a checkout of the repo
+# on the server
+cd /var/www
+git clone https://github.com/jagthapsaurabh/frins.git frins
+cd /var/www/frins
+
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 
 # then create your own admin
-cd /var/www/frins.in && sudo -u frins npm run create:admin -- \
-  --email you@frins.in --name "Your Name" --role ADMIN
+sudo -u frins npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
 ```
 
 The script installs Node 20, nginx, sqlite3 and certbot, creates the `frins` user, builds the app,

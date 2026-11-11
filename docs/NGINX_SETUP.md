@@ -10,7 +10,7 @@ No Docker anywhere. The app is a Node process on `127.0.0.1:3100`; nginx proxies
 ## 0. The layout you are aiming for
 
 ```
-/var/www/frins.in/                  app folder, owned by user frins
+/var/www/frins/                  app folder, owned by user frins
   ├── .env                          NODE_ENV=production, PORT=3100
   ├── data/frins.db                 SQLite file
   ├── public_build/                 built site
@@ -37,8 +37,8 @@ Two rules that save trouble:
 
 ```bash
 cd /var/www
-git clone https://github.com/jagthapsaurabh/frins.git frins.in
-cd /var/www/frins.in
+git clone https://github.com/jagthapsaurabh/frins.git frins
+cd /var/www/frins
 ```
 
 The folder name is your choice: `frins.in`, `frins`, anything without spaces. Whatever you pick is the
@@ -54,7 +54,7 @@ ls
 ## 2. Run the installer in place
 
 ```bash
-cd /var/www/frins.in
+cd /var/www/frins
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 ```
 
@@ -64,7 +64,7 @@ second checkout. It will:
 1. install Node 20, build tools, sqlite3, nginx, certbot (skips what exists)
 2. check port 3100 is free
 3. create the `frins` system user
-4. `chown -R frins:frins /var/www/frins.in`
+4. `chown -R frins:frins /var/www/frins`
 5. write `.env` once (`NODE_ENV=production`, `PORT=3100`)
 6. run `npm ci` and `npm run build` as `frins`
 7. install and start `frins.service`, wait for `/api/health`
@@ -105,7 +105,7 @@ nginx -T 2>/dev/null | grep -E 'include .*(sites-enabled|conf\.d)' | head
 ### 3a. Debian / Ubuntu
 
 ```bash
-sudo cp /var/www/frins.in/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
+sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
 sudo ln -sf /etc/nginx/sites-available/frins.in /etc/nginx/sites-enabled/frins.in
 sudo nginx -t
 sudo systemctl reload nginx
@@ -114,7 +114,7 @@ sudo systemctl reload nginx
 ### 3b. AlmaLinux / Rocky
 
 ```bash
-sudo cp /var/www/frins.in/deploy/nginx-frins.in.conf /etc/nginx/conf.d/frins.in.conf
+sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/conf.d/frins.in.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -312,7 +312,7 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo systemctl restart frins
 
 # after pushing new code
-sudo /var/www/frins.in/deploy/deploy.sh
+sudo /var/www/frins/deploy/deploy.sh
 
 # deploy.sh and backup.sh find the app folder from their own location,
 # so they work wherever you cloned. Override with APP_DIR=/path if needed.
@@ -324,6 +324,30 @@ journalctl -u frins -f
 
 **Always `nginx -t` before reloading.** A syntax error in another site's file takes down every site
 on the box, not just this one.
+
+### Git and file ownership in /var/www/frins
+
+You cloned as root, then the installer handed the folder to `frins`. Run git as the app user, or git
+will complain that the repository is owned by a different user:
+
+```bash
+sudo -u frins git -C /var/www/frins status
+sudo -u frins git -C /var/www/frins pull
+```
+
+`deploy/deploy.sh` already does this for you. If you must run git as root, whitelist the folder once:
+
+```bash
+git config --global --add safe.directory /var/www/frins
+```
+
+Editing files by hand has the same trap. Use `sudo -u frins nano ...`, or fix ownership afterwards:
+
+```bash
+sudo chown -R frins:frins /var/www/frins
+```
+
+Leave `data/` owned by `frins` as well, or the app cannot write to the database.
 
 ---
 

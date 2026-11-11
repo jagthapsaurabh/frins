@@ -2,7 +2,7 @@
 #
 # Redeploy FRINS on the VPS.
 #
-#   sudo /var/www/frins.in/deploy/deploy.sh
+#   sudo /var/www/frins/deploy/deploy.sh
 #
 # Works whether you run it as root (it drops to the app user for npm steps)
 # or as the frins user (it uses sudo only for the service restart).

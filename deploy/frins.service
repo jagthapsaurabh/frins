@@ -6,11 +6,11 @@ After=network.target
 Type=simple
 User=frins
 Group=frins
-WorkingDirectory=/var/www/frins.in
+WorkingDirectory=/var/www/frins
 
 # .env is read by systemd, not by the app itself.
 # Lines must be KEY=value with no "export" and no quotes.
-EnvironmentFile=-/var/www/frins.in/.env
+EnvironmentFile=-/var/www/frins/.env
 Environment=NODE_ENV=production
 Environment=PORT=3100
 
@@ -29,7 +29,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/var/www/frins.in/data
+ReadWritePaths=/var/www/frins/data
 
 StandardOutput=journal
 StandardError=journal

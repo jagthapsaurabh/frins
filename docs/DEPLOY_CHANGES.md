@@ -6,7 +6,7 @@ Short answers first.
 website and the API. Do not create `api.frins.in`.
 
 **Where does the code live?** Wherever you tell it. The clone folder is only a bootstrap. The app is
-installed to `/var/www/frins.in` and runs from there.
+installed to `/var/www/frins` and runs from there.
 
 ---
 
@@ -47,10 +47,10 @@ git clone https://github.com/jagthapsaurabh/frins.git /opt/frins   # creates /op
 ```
 
 That folder is a **bootstrap**. `deploy/setup-vps.sh` reads the code from wherever it sits and
-installs it to `APP_DIR`, which defaults to `/var/www/frins.in`. Afterwards the layout is:
+installs it to `APP_DIR`, which defaults to `/var/www/frins`. Afterwards the layout is:
 
 ```
-/var/www/frins.in/            <- the app, and the only folder that matters
+/var/www/frins/            <- the app, and the only folder that matters
 ├── .env                      NODE_ENV, PORT
 ├── data/
 │   └── frins.db              the database, back this up
@@ -67,10 +67,10 @@ The installer handles all four starting situations, each tested:
 | Situation | What it does |
 | --- | --- |
 | Cloned straight into the app folder (`APP_DIR` equals the clone) | **In-place install.** Nothing is copied, it just fixes ownership and proceeds. This is the `/var/www` path. |
-| `/var/www/frins.in` missing | Copies your clone there (keeps `.git`, so `deploy.sh` can pull later). Never downloads twice. |
-| `/var/www/frins.in` already a git checkout | Runs `git fetch` + `git reset --hard origin/main`. This is how re-running the script updates the app. |
-| `/var/www/frins.in` has app files but no `.git` | Copies the source over them, excluding `node_modules`, `data`, `public_build`, `.env`. Your database is untouched. |
-| `/var/www/frins.in` has unrelated files | **Stops** with a message. It will not overwrite someone else's site. |
+| `/var/www/frins` missing | Copies your clone there (keeps `.git`, so `deploy.sh` can pull later). Never downloads twice. |
+| `/var/www/frins` already a git checkout | Runs `git fetch` + `git reset --hard origin/main`. This is how re-running the script updates the app. |
+| `/var/www/frins` has app files but no `.git` | Copies the source over them, excluding `node_modules`, `data`, `public_build`, `.env`. Your database is untouched. |
+| `/var/www/frins` has unrelated files | **Stops** with a message. It will not overwrite someone else's site. |
 
 Two guards protect against mistakes: it refuses to install *inside* the clone, and refuses to run if
 the clone is inside the install folder.
@@ -100,7 +100,7 @@ Everything follows `APP_DIR`: the systemd unit, the working directory, the datab
 Run this on the server, adapting the three values:
 
 ```bash
-sudo DOMAIN=frins.in EMAIL=you@frins.in APP_DIR=/var/www/frins.in \
+sudo DOMAIN=frins.in EMAIL=you@frins.in APP_DIR=/var/www/frins \
      REPO=https://github.com/jagthapsaurabh/frins.git \
      bash deploy/setup-vps.sh
 ```
@@ -109,7 +109,7 @@ sudo DOMAIN=frins.in EMAIL=you@frins.in APP_DIR=/var/www/frins.in \
 | --- | --- | --- |
 | `DOMAIN` | none, required | Always. Used in the nginx `server_name` and the certificate |
 | `EMAIL` | empty | Always, unless you add TLS by hand. Omit it and no certificate is requested |
-| `APP_DIR` | `/var/www/frins.in` | You already have that path in use, or you prefer `/var/www/frins` |
+| `APP_DIR` | `/var/www/frins` | You already have that path in use, or you prefer `/var/www/frins` |
 | `APP_USER` | `frins` | Only if that user already exists for something else |
 | `PORT` | `3100` | The port is taken. Check with `sudo ss -lntp \| grep 3100` |
 | `REPO` / `BRANCH` | this GitHub repo / `main` | You fork the repo or deploy from a branch |
@@ -120,7 +120,7 @@ Then these, which are not script flags:
 | What | Where | Value |
 | --- | --- | --- |
 | DNS | Hostinger hPanel, DNS Zone Editor | `A @` and `A www` → VPS IP. Leave MX/SPF/DKIM alone |
-| `.env` | `/var/www/frins.in/.env` | `NODE_ENV=production`, `PORT=` the same port you passed |
+| `.env` | `/var/www/frins/.env` | `NODE_ENV=production`, `PORT=` the same port you passed |
 | AI provider | `.env` | `AI_PROVIDER=mock` by default. Set `real` plus `AI_API_KEY` to call a live model |
 | Admin account | `npm run create:admin` | Your own email and name |
 | Demo accounts | Admin console, Team tab | Remove `admin@frins.org` / `frins123` |
@@ -169,4 +169,5 @@ It prints every command it would run and exits.
 | Copying `data/frins.db` from a laptop | Old seeded data, wrong paths | Let the server create its own database |
 | Changing `PORT` in `.env` but not in nginx | 502 | Both must match. The script warns if `.env` disagrees |
 | Running `npm ci` as root | Files owned by root, service cannot write `data/` | `sudo -u frins npm ci`, as the script does |
+| Running `git pull` as root in `/var/www/frins` | `detected dubious ownership in repository` | Use `sudo -u frins git -C /var/www/frins pull`, or `git config --global --add safe.directory /var/www/frins` |
 | Deploying with no backup | One bad migration away from data loss | `deploy/backup.sh` nightly, off-box copy weekly |

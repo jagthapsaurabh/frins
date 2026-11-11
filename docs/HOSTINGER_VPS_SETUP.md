@@ -132,13 +132,13 @@ Clone straight into the app folder and run the installer in place:
 
 ```bash
 cd /var/www
-git clone https://github.com/jagthapsaurabh/frins.git frins.in
-cd /var/www/frins.in
+git clone https://github.com/jagthapsaurabh/frins.git frins
+cd /var/www/frins
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 ```
 
 If you would rather keep a separate bootstrap clone somewhere else, that still works: pass
-`APP_DIR=/var/www/frins.in` and the installer copies the code there. nginx details, including the
+`APP_DIR=/var/www/frins` and the installer copies the code there. nginx details, including the
 exact files to copy, are in [`NGINX_SETUP.md`](NGINX_SETUP.md).
 
 It handles all four starting cases: no target folder, an existing git checkout, app files without
@@ -148,9 +148,9 @@ afterwards. Details: [`DEPLOY_CHANGES.md`](DEPLOY_CHANGES.md).
 To do it by hand instead:
 
 ```bash
-sudo useradd --system --create-home --home-dir /var/www/frins.in --shell /bin/bash frins
-sudo -u frins git clone https://github.com/jagthapsaurabh/frins.git /var/www/frins.in
-cd /var/www/frins.in
+sudo useradd --system --create-home --home-dir /var/www/frins --shell /bin/bash frins
+sudo -u frins git clone https://github.com/jagthapsaurabh/frins.git /var/www/frins
+cd /var/www/frins
 sudo -u frins mkdir -p data
 sudo -u frins npm ci
 sudo -u frins npm test          # 19 tests
@@ -171,7 +171,7 @@ The app itself does **not** read `.env`. systemd injects it through `Environment
 file sitting there does nothing until the service is started with this unit.
 
 ```bash
-sudo -u frins tee /var/www/frins.in/.env > /dev/null <<'EOF'
+sudo -u frins tee /var/www/frins/.env > /dev/null <<'EOF'
 NODE_ENV=production
 PORT=3100
 # Optional, only if you switch the AI pipeline to a live provider
@@ -182,8 +182,8 @@ PORT=3100
 # CORS_ORIGIN=https://frins.in
 EOF
 
-sudo chmod 600 /var/www/frins.in/.env
-sudo chown frins:frins /var/www/frins.in/.env
+sudo chmod 600 /var/www/frins/.env
+sudo chown frins:frins /var/www/frins/.env
 ```
 
 Format rules: `KEY=value`, no `export`, no quotes, one per line.
@@ -193,14 +193,14 @@ Format rules: `KEY=value`, no `export`, no quotes, one per line.
 ## 7. Run it as a service
 
 ```bash
-sudo cp /var/www/frins.in/deploy/frins.service /etc/systemd/system/frins.service
+sudo cp /var/www/frins/deploy/frins.service /etc/systemd/system/frins.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now frins
 sudo systemctl status frins --no-pager
 ```
 
-The unit already matches this layout: `User=frins`, `WorkingDirectory=/var/www/frins.in`,
-`EnvironmentFile=/var/www/frins.in/.env`, `PORT=3100`, `MemoryMax=900M`.
+The unit already matches this layout: `User=frins`, `WorkingDirectory=/var/www/frins`,
+`EnvironmentFile=/var/www/frins/.env`, `PORT=3100`, `MemoryMax=900M`.
 
 Watch the boot:
 
@@ -235,11 +235,11 @@ nginx -T 2>/dev/null | grep -E 'include .*(sites-enabled|conf\.d)' | head
 
 ```bash
 # Debian / Ubuntu layout
-sudo cp /var/www/frins.in/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
+sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/sites-available/frins.in
 sudo ln -sf /etc/nginx/sites-available/frins.in /etc/nginx/sites-enabled/frins.in
 
 # AlmaLinux layout instead:
-# sudo cp /var/www/frins.in/deploy/nginx-frins.in.conf /etc/nginx/conf.d/frins.in.conf
+# sudo cp /var/www/frins/deploy/nginx-frins.in.conf /etc/nginx/conf.d/frins.in.conf
 
 sudo nginx -t          # must say "syntax is ok" and "test is successful"
 sudo systemctl reload nginx
@@ -353,7 +353,7 @@ in a private window.
 Deploy a new version:
 
 ```bash
-sudo /var/www/frins.in/deploy/deploy.sh
+sudo /var/www/frins/deploy/deploy.sh
 ```
 
 Run it with sudo. The script drops to the `frins` user for `git`, `npm` and the build, so files stay
@@ -365,7 +365,7 @@ check fails it prints the journal tail and exits non-zero.
 Roll back:
 
 ```bash
-cd /var/www/frins.in
+cd /var/www/frins
 sudo -u frins git log --oneline -5
 sudo -u frins git reset --hard <previous-sha>
 sudo -u frins npm ci && sudo -u frins npm run build
@@ -388,10 +388,10 @@ sudo mkdir -p /var/backups/frins
 sudo chown frins:frins /var/backups/frins
 
 # one backup now
-sudo -u frins /var/www/frins.in/deploy/backup.sh
+sudo -u frins /var/www/frins/deploy/backup.sh
 
 # nightly at 02:15
-( sudo crontab -l 2>/dev/null; echo '15 2 * * * /var/www/frins.in/deploy/backup.sh >> /var/log/frins-backup.log 2>&1' ) | sudo crontab -
+( sudo crontab -l 2>/dev/null; echo '15 2 * * * /var/www/frins/deploy/backup.sh >> /var/log/frins-backup.log 2>&1' ) | sudo crontab -
 ```
 
 `backup.sh` uses `sqlite3 .backup`, checks integrity on the copy, and deletes anything older than
@@ -410,9 +410,9 @@ Restore:
 
 ```bash
 sudo systemctl stop frins
-sudo cp /var/backups/frins/frins_YYYY-MM-DD_HHMM.db /var/www/frins.in/data/frins.db
-sudo rm -f /var/www/frins.in/data/frins.db-wal /var/www/frins.in/data/frins.db-shm
-sudo chown frins:frins /var/www/frins.in/data/frins.db
+sudo cp /var/backups/frins/frins_YYYY-MM-DD_HHMM.db /var/www/frins/data/frins.db
+sudo rm -f /var/www/frins/data/frins.db-wal /var/www/frins/data/frins.db-shm
+sudo chown frins:frins /var/www/frins/data/frins.db
 sudo systemctl start frins
 curl -fsS http://127.0.0.1:3100/api/health
 ```
@@ -423,7 +423,7 @@ curl -fsS http://127.0.0.1:3100/api/health
 
 The rules that keep this safe on a shared VPS:
 
-1. **Own folder.** `/var/www/frins.in`, owned by the `frins` user, nothing shared with other apps.
+1. **Own folder.** `/var/www/frins`, owned by the `frins` user, nothing shared with other apps.
 2. **Own port.** 3100, bound by one process, never exposed publicly. nginx is the only door.
 3. **Own systemd unit.** `frins.service`. Restarting it does not touch your other services.
 4. **One nginx file per domain.** Never edit another site's server block. Never touch the
@@ -456,8 +456,8 @@ free -h && df -h /
 | `504 Gateway Timeout` | A live AI call exceeded the proxy timeout | `proxy_read_timeout 120s` is already set; check `AI_TIMEOUT_MS` |
 | `403 Forbidden` from nginx | File permissions, or a default block matched | Confirm `server_name frins.in` and the symlink exists |
 | Page loads, refresh on `/admin` gives 404 | Something other than this app answered | nginx must proxy `/` wholesale, as in `nginx-frins.in.conf` |
-| Login works, then everyone is logged out after deploy | App started from a different working directory, so it opened a different database | `WorkingDirectory` must be `/var/www/frins.in` |
-| `EACCES` writing `data/frins.db` | Ownership | `sudo chown -R frins:frins /var/www/frins.in/data` |
+| Login works, then everyone is logged out after deploy | App started from a different working directory, so it opened a different database | `WorkingDirectory` must be `/var/www/frins` |
+| `EACCES` writing `data/frins.db` | Ownership | `sudo chown -R frins:frins /var/www/frins/data` |
 | Build killed with `Killed` | Out of memory | Add swap, or build locally and rsync `public_build/` |
 | `Could not locate the bindings file` | `better-sqlite3` built for another Node ABI | `sudo -u frins npm rebuild better-sqlite3` |
 | Certbot fails on HTTP-01 | Port 80 closed or DNS not propagated | `dig +short frins.in`, `ufw allow 'Nginx Full'`, retry |
