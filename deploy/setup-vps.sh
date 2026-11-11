@@ -108,13 +108,16 @@ if [ "$DRY_RUN" != "1" ]; then
 fi
 [ -n "$DOMAIN" ] || die "Set the domain: sudo DOMAIN=frins.in bash deploy/setup-vps.sh"
 
-# Refuse to nest the install inside the bootstrap clone, or the reverse.
-case "$APP_DIR" in
-  "$SRC_DIR"|"$SRC_DIR"/*) die "APP_DIR ($APP_DIR) is inside the clone ($SRC_DIR). Pick a separate APP_DIR, for example /var/www/frins.in." ;;
-esac
-case "$SRC_DIR" in
-  "$APP_DIR"/*) die "The clone ($SRC_DIR) is inside APP_DIR ($APP_DIR). Move the clone somewhere else first." ;;
-esac
+# APP_DIR may equal the clone folder: that is a direct clone into /var/www.
+# Anything else nested inside each other is a mistake.
+IN_PLACE=0
+if [ "$APP_DIR" = "$SRC_DIR" ]; then
+  IN_PLACE=1
+elif [ "${APP_DIR#"$SRC_DIR"/}" != "$APP_DIR" ]; then
+  die "APP_DIR ($APP_DIR) is inside the clone ($SRC_DIR). Run the script from the app folder itself, or pick a separate APP_DIR."
+elif [ "${SRC_DIR#"$APP_DIR"/}" != "$SRC_DIR" ]; then
+  die "The clone ($SRC_DIR) is inside APP_DIR ($APP_DIR). Move the clone out of the app folder first."
+fi
 
 bold "FRINS setup"
 info "Domain      : ${DOMAIN}"
@@ -122,7 +125,7 @@ info "App folder  : ${APP_DIR}"
 info "App user    : ${APP_USER}"
 info "Port        : ${PORT} (bound to localhost, proxied by nginx)"
 info "Repository  : ${REPO} (${BRANCH})"
-info "Source      : ${SRC_DIR}"
+info "Source      : ${SRC_DIR}$([ "$IN_PLACE" = "1" ] && echo ' (installing in place)')"
 info "Mode        : $([ "$DRY_RUN" = "1" ] && echo 'DRY RUN, nothing will change' || echo 'LIVE')"
 
 # --------------------------------------------------------------- packages
@@ -182,6 +185,13 @@ fi
 bold "Placing the code in ${APP_DIR}"
 
 place_code() {
+  # 0. Cloned straight into APP_DIR: nothing to copy, just fix ownership.
+  if [ "$IN_PLACE" = "1" ]; then
+    info "installing in place, the clone is the app folder"
+    run_sh "chown -R '${APP_USER}:${APP_USER}' '$APP_DIR'"
+    return
+  fi
+
   # 1. Existing checkout at the target: fast-forward it.
   if [ -d "$APP_DIR/.git" ]; then
     info "existing git checkout, updating from origin/${BRANCH}"

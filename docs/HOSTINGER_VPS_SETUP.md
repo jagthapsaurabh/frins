@@ -128,14 +128,18 @@ If the VPS has a **cloud firewall** in hPanel, open 80 and 443 there too.
 
 ## 5. Put the code on the server
 
-The clone folder is only a bootstrap. The app itself is installed to `APP_DIR`
-(`/var/www/frins.in` by default), and the installer copies the code there for you:
+Clone straight into the app folder and run the installer in place:
 
 ```bash
-git clone https://github.com/jagthapsaurabh/frins.git /root/frins
-cd /root/frins
+cd /var/www
+git clone https://github.com/jagthapsaurabh/frins.git frins.in
+cd /var/www/frins.in
 sudo DOMAIN=frins.in EMAIL=you@frins.in bash deploy/setup-vps.sh
 ```
+
+If you would rather keep a separate bootstrap clone somewhere else, that still works: pass
+`APP_DIR=/var/www/frins.in` and the installer copies the code there. nginx details, including the
+exact files to copy, are in [`NGINX_SETUP.md`](NGINX_SETUP.md).
 
 It handles all four starting cases: no target folder, an existing git checkout, app files without
 git, or an unrelated folder (which it refuses to overwrite). The bootstrap clone can be deleted

@@ -66,6 +66,7 @@ The installer handles all four starting situations, each tested:
 
 | Situation | What it does |
 | --- | --- |
+| Cloned straight into the app folder (`APP_DIR` equals the clone) | **In-place install.** Nothing is copied, it just fixes ownership and proceeds. This is the `/var/www` path. |
 | `/var/www/frins.in` missing | Copies your clone there (keeps `.git`, so `deploy.sh` can pull later). Never downloads twice. |
 | `/var/www/frins.in` already a git checkout | Runs `git fetch` + `git reset --hard origin/main`. This is how re-running the script updates the app. |
 | `/var/www/frins.in` has app files but no `.git` | Copies the source over them, excluding `node_modules`, `data`, `public_build`, `.env`. Your database is untouched. |

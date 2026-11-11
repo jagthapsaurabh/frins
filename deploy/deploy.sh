@@ -9,7 +9,8 @@
 
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/var/www/frins.in}"
+# Default to the repo this script lives in, so it works wherever you cloned.
+APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 APP_USER="${APP_USER:-frins}"
 SERVICE="${SERVICE:-frins}"
 PORT="${PORT:-3100}"

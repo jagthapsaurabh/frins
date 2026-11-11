@@ -8,7 +8,8 @@
 
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/var/www/frins.in}"
+# Default to the repo this script lives in, so it works wherever you cloned.
+APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/frins}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 
