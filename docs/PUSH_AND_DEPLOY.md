@@ -4,24 +4,22 @@ Two parts: the code is now in `github.com/jagthapsaurabh/frins`, and here is how
 
 ---
 
-## Part 1: push the latest commits
+## Part 1: the code is pushed
 
-`github.com/jagthapsaurabh/frins` is at `c09d2c2` and CI is green there. Six commits after that
-(turn 19: one sidebar in the admin console, real section routes) are committed in this workspace and
-packed into `frins-repo.bundle`. They have not been pushed, because the push needs a token.
+`main` on `github.com/jagthapsaurabh/frins` is at `a8ecc48` and CI is green. Turn 19 is in:
+one sidebar in the admin console, real section routes, no "public website" item.
 
-Either route below gets them up. Then CI runs on its own.
+**The live site has not picked this up yet.** `https://frins.in` is still serving the older bundle
+(`index-uwC8vDTV.js`). Run Part 2, step 6 on the VPS to deploy:
 
-```
-0c1368c Admin console: one sidebar, real section routes, no public website item
-3c2a465 Admin: bounce unknown section URLs back to the overview
-ab0ff3d Admin console polish: overview activity, spacing, copy
-f7bbb1d Keep a way back to the website on small screens
-351030a Remove the leftover inner-rail styles
-5c26ce1 Only admins get the AI engine link
+```bash
+cd /var/www/frins
+sudo ./deploy/deploy.sh
 ```
 
-The notes below are also what to use for any future push from a fresh machine.
+That pulls, runs the tests, builds and restarts the service, then checks `/api/health`.
+
+### For future pushes from this workspace
 
 ### Route A: push from this workspace with a token
 
