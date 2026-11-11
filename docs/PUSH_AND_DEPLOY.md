@@ -4,12 +4,24 @@ Two parts: the code is now in `github.com/jagthapsaurabh/frins`, and here is how
 
 ---
 
-## Part 1: the code is already pushed
+## Part 1: push the latest commits
 
-`main` is up to date at `github.com/jagthapsaurabh/frins`, 57 files, and CI is green (type check,
-19 tests, production build, live `/api/health` smoke test). Nothing to do here. Jump to Part 2.
+`github.com/jagthapsaurabh/frins` is at `c09d2c2` and CI is green there. Six commits after that
+(turn 19: one sidebar in the admin console, real section routes) are committed in this workspace and
+packed into `frins-repo.bundle`. They have not been pushed, because the push needs a token.
 
-The notes below are kept for future pushes from a fresh machine.
+Either route below gets them up. Then CI runs on its own.
+
+```
+0c1368c Admin console: one sidebar, real section routes, no public website item
+3c2a465 Admin: bounce unknown section URLs back to the overview
+ab0ff3d Admin console polish: overview activity, spacing, copy
+f7bbb1d Keep a way back to the website on small screens
+351030a Remove the leftover inner-rail styles
+5c26ce1 Only admins get the AI engine link
+```
+
+The notes below are also what to use for any future push from a fresh machine.
 
 ### Route A: push from this workspace with a token
 
@@ -23,6 +35,8 @@ The notes below are kept for future pushes from a fresh machine.
 cd /home/user
 GITHUB_TOKEN=ghp_yourtoken bash deploy/push-to-github.sh
 ```
+
+Then deploy on the VPS (Part 2, step 6) so frins.in picks up the new build.
 
 The script pushes `main` using the token in the remote URL for that one command, then sets `origin`
 back to the clean HTTPS URL. The token is never written to `.git/config`.
@@ -49,7 +63,7 @@ git push -u origin main --force
 `--force` is only needed if the remote `main` already has commits you do not want. It currently holds
 a single `README.md`, so a force push replaces it.
 
-**What gets pushed:** 57 files, about 2.4 MB. Source, docs, deploy scripts and the uploaded
+**What gets pushed:** the source tree, about 2.4 MB. Source, docs, deploy scripts and the uploaded
 requirement PDF. `node_modules`, `data/`, `public_build/`, `.env` and the local previews are ignored,
 so no database and no secrets go up.
 
