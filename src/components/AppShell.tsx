@@ -57,7 +57,11 @@ const navForRole = (role: string | undefined): NavItem[] => {
         group: section.group,
         exact: section.key === 'overview'
       })),
-      { path: '/ai-pipeline', label: 'AI Engine', icon: <SparklesIcon size={17} />, group: 'Tools' }
+      // The AI engine is admin-only, so a curriculum owner does not get the link
+      // to a page that would turn them away.
+      ...(role === 'ADMIN'
+        ? [{ path: '/ai-pipeline', label: 'AI Engine', icon: <SparklesIcon size={17} />, group: 'Tools' }]
+        : [])
     ];
   }
 
