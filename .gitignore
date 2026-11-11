@@ -20,3 +20,6 @@ previews/
 *.log
 .DS_Store
 .sudo_as_admin_successful
+
+# Local export of the repo, not part of it
+*.bundle
