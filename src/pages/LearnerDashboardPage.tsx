@@ -1,14 +1,38 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, CheckCircle2, HelpCircle, BadgeCheck } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  BookOpen,
+  ClipboardList,
+  CheckCircle2,
+  HelpCircle,
+  BadgeCheck,
+  TrendingUp,
+  MessageSquare,
+  ArrowRight,
+  FileText
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-type LearnerTabKey = 'courses_tasks' | 'uploaded_results' | 'pdp_and_evidence';
+type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress';
+
+const SECTION_COPY: Record<LearnerSection, { title: string; blurb: string }> = {
+  overview: { title: 'Overview', blurb: 'Where you are and what is waiting for you.' },
+  courses: { title: 'My courses', blurb: 'The courses built for you, and the questions inside them.' },
+  tasks: { title: 'Tasks and uploads', blurb: 'Your practical tasks, the work you sent, and the mentor chat.' },
+  progress: { title: 'Progress', blurb: 'Your plan, reflections and the evidence behind your level.' }
+};
 
 export const LearnerDashboardPage: React.FC = () => {
   const { user, authFetch, loginWithEmail } = useAuth();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<LearnerTabKey>('courses_tasks');
+  const navigate = useNavigate();
+  const params = useParams<{ section?: string }>();
+  const section: LearnerSection =
+    params.section === 'courses' || params.section === 'tasks' || params.section === 'progress'
+      ? params.section
+      : 'overview';
+  const unknownSection = Boolean(params.section) && section === 'overview';
 
   // Guest gate state
   const [guestEmail, setGuestEmail] = useState<string>('');
@@ -29,13 +53,6 @@ export const LearnerDashboardPage: React.FC = () => {
   // Course question answering state
   const [courseAnswers, setCourseAnswers] = useState<Record<string, number>>({});
   const [courseResults, setCourseResults] = useState<Record<string, any>>({});
-
-  // Practice submission form state
-  const [practiceComp, setPracticeComp] = useState('COMP-PROC-01');
-  const [practiceTitle, setPracticeTitle] = useState('');
-  const [practiceScenario, setPracticeScenario] = useState('');
-  const [practiceResponse, setPracticeResponse] = useState('');
-  const [practiceStatus, setPracticeStatus] = useState<string | null>(null);
 
   // Reflection form state
   const [refComp, setRefComp] = useState('COMP-EXEC-03');
@@ -67,6 +84,10 @@ export const LearnerDashboardPage: React.FC = () => {
   useEffect(() => {
     loadDashboard();
   }, [user]);
+
+  useEffect(() => {
+    if (unknownSection) navigate('/dashboard', { replace: true });
+  }, [unknownSection, navigate]);
 
   useEffect(() => {
     if (!data?.tasks) return;
@@ -115,7 +136,7 @@ export const LearnerDashboardPage: React.FC = () => {
     });
     if (res.ok) {
       setTaskUploadBanner(
-        '✓ Your task result and chart have been uploaded! You can view your uploaded result and chat with your mentor in the "Uploaded Results & Mentor Chat" tab.'
+        '✓ Task uploaded. Your mentor can see it now, and you can find it below with the chat.'
       );
       await loadDashboard();
     } else {
@@ -148,30 +169,6 @@ export const LearnerDashboardPage: React.FC = () => {
       const out = await res.json();
       setCourseResults((prev) => ({ ...prev, [questionId]: out }));
       await loadDashboard();
-    }
-  };
-
-  const handlePracticeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!practiceTitle.trim() || !practiceResponse.trim()) return;
-    setPracticeStatus('Saving practice artefact...');
-    const res = await authFetch('/api/learner/practice', {
-      method: 'POST',
-      body: JSON.stringify({
-        competencyCode: practiceComp,
-        taskTitle: practiceTitle,
-        scenarioContext: practiceScenario || 'Deliberate routine practice check',
-        submittedResponse: practiceResponse
-      })
-    });
-    if (res.ok) {
-      setPracticeTitle('');
-      setPracticeScenario('');
-      setPracticeResponse('');
-      setPracticeStatus('✓ Practice artefact saved with MEDIUM_PRACTICE evidence weight.');
-      await loadDashboard();
-    } else {
-      setPracticeStatus('Could not save practice artefact.');
     }
   };
 
@@ -280,133 +277,37 @@ export const LearnerDashboardPage: React.FC = () => {
   const assignedCourses: any[] = data?.assignedCourses || [];
   const courseQuestions: any[] = data?.courseQuestions || [];
   const tasksList: any[] = data?.tasks || [];
+  const reflections: any[] = data?.reflections || [];
+  const evidenceItems: any[] = data?.evidenceItems || [];
   const selectedTask = tasksList.find((t) => t.id === selectedTaskId) || tasksList[0] || null;
+
+  const courseTitleFor = (task: any) =>
+    assignedCourses.find((c: any) => c.course_id === task.course_id)?.course_title || 'General task';
+
+  const todoTasks = tasksList.filter((t) => t.status !== 'REVIEWED' && t.status !== 'APPROVED');
+  const reviewedCount = tasksList.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
+  const answeredQuestions = courseQuestions.filter((q) => Boolean(q.lastAttempt)).length;
+  const latestFeedbackTask = tasksList.find((t) => Boolean(t.guide_feedback)) || null;
+  const progressPct =
+    tasksList.length === 0 ? 0 : Math.round((reviewedCount / tasksList.length) * 100);
+
+  const statusClass = (status: string) =>
+    status === 'REVIEWED' || status === 'APPROVED'
+      ? 'approved'
+      : status === 'SUBMITTED'
+        ? 'info'
+        : 'pending';
 
   return (
     <div className="workspace-shell">
       <div className="container-wide">
-        {/* Learner Workspace Header */}
-        <div className="dash-hero">
-          <div className="dash-hero-tags">
-            <span className="micro-tag accent">Student Workspace</span>
-            <span className="micro-tag success">Level {profile?.approved_level || 'L1'}</span>
-            {profile?.proposed_level && profile?.level_review_state === 'PENDING_GUIDE_REVIEW' && (
-              <span className="micro-tag warn">Level {profile.proposed_level} pending review</span>
-            )}
-            {tasksList.filter((t) => t.status === 'SUBMITTED').length > 0 && (
-              <span className="micro-tag">Awaiting mentor review: {tasksList.filter((t) => t.status === 'SUBMITTED').length}</span>
-            )}
-          </div>
-          <h1>Welcome back, {data?.learner?.name?.split(' ')[0] || 'there'}</h1>
-          <p>
-            Here are your courses and tasks. Upload your work when you are done, and ask your mentor anything
-            in the chat.
-          </p>
-        </div>
-
-        <div className="dash-stats">
-          <div className="dash-stat">
-            <span className="dash-stat-icon"><BookOpen size={17} /></span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-label">Assigned Courses</span>
-              <span className="dash-stat-value">{assignedCourses.length}</span>
-              <span className="dash-stat-hint">Built around your goals</span>
-            </div>
-          </div>
-          <div className="dash-stat">
-            <span className="dash-stat-icon amber"><ClipboardList size={17} /></span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-label">Tasks In Progress</span>
-              <span className="dash-stat-value">
-                {tasksList.filter((t) => t.status !== 'REVIEWED' && t.status !== 'APPROVED').length}
-              </span>
-              <span className="dash-stat-hint">{tasksList.length} total assigned</span>
-            </div>
-          </div>
-          <div className="dash-stat">
-            <span className="dash-stat-icon green"><CheckCircle2 size={17} /></span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-label">Submitted</span>
-              <span className="dash-stat-value">{tasksList.filter((t) => t.learner_submission).length}</span>
-              <span className="dash-stat-hint">Uploaded for review</span>
-            </div>
-          </div>
-          <div className="dash-stat">
-            <span className="dash-stat-icon slate"><HelpCircle size={17} /></span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-label">Course Questions</span>
-              <span className="dash-stat-value">
-                {courseQuestions.filter((q) => q.lastAttempt).length}/{courseQuestions.length}
-              </span>
-              <span className="dash-stat-hint">Answered</span>
-            </div>
-          </div>
-          <div className="dash-stat">
-            <span className="dash-stat-icon rose"><BadgeCheck size={17} /></span>
-            <div className="dash-stat-body">
-              <span className="dash-stat-label">Evidence Status</span>
-              <span className="dash-stat-value" style={{ fontSize: 16 }}>
-                {suffEval?.evidenceStatus || profile?.evidence_status || 'SUFFICIENT'}
-              </span>
-              <span className="dash-stat-hint">Multi-source sufficiency</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Flat Underline Student Navigation Tabs */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 24,
-            borderBottom: '2px solid var(--border-subtle)',
-            marginBottom: 24,
-            overflowX: 'auto',
-            background: '#FFFFFF',
-            padding: '0 20px'
-          }}
-          role="tablist"
-        >
-          {[
-            {
-              key: 'courses_tasks',
-              label: `My Custom Courses & Tasks (${assignedCourses.length} Courses · ${tasksList.length} Tasks)`
-            },
-            {
-              key: 'uploaded_results',
-              label: `Uploaded Results & Mentor Chat (${tasksList.filter((t) => t.learner_submission).length})`
-            },
-            {
-              key: 'pdp_and_evidence',
-              label: 'Development Plan (PDP), Reflections & Evidence'
-            }
-          ].map((tab) => {
-            const isAct = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isAct}
-                onClick={() => setActiveTab(tab.key as LearnerTabKey)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: isAct ? '3px solid var(--accent)' : '3px solid transparent',
-                  borderRadius: 0,
-                  padding: '14px 4px',
-                  fontSize: 14,
-                  fontWeight: isAct ? 700 : 500,
-                  color: isAct ? 'var(--accent)' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  marginBottom: -2
-                }}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {section !== 'overview' && (
+          <header className="admin-page-head">
+            <span className="admin-page-eyebrow">Student workspace</span>
+            <h1>{SECTION_COPY[section].title}</h1>
+            <p>{SECTION_COPY[section].blurb}</p>
+          </header>
+        )}
 
         {taskUploadBanner && (
           <div className="governance-alert success" style={{ marginBottom: 20 }}>
@@ -414,18 +315,193 @@ export const LearnerDashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* ===================================================================
-            TAB 1: ASSIGNED CUSTOM COURSES & SOLVE / UPLOAD STUDENT TASKS
-           =================================================================== */}
-        {activeTab === 'courses_tasks' && (
-          <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
-            {/* Left: Assigned Custom Courses */}
-            <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">Built Around You &middot; Custom Curriculum</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 12px' }}>
-                My Assigned Custom Courses ({assignedCourses.length})
-              </h3>
+        {/* =================== OVERVIEW =================== */}
+        {section === 'overview' && (
+          <>
+            <div className="dash-hero">
+              <div className="dash-hero-tags">
+                <span className="micro-tag accent">Student workspace</span>
+                <span className="micro-tag success">Level {profile?.approved_level || 'L1'}</span>
+                {profile?.proposed_level && profile?.level_review_state === 'PENDING_GUIDE_REVIEW' && (
+                  <span className="micro-tag warn">Level {profile.proposed_level} pending review</span>
+                )}
+                {tasksList.filter((t) => t.status === 'SUBMITTED').length > 0 && (
+                  <span className="micro-tag">
+                    Awaiting mentor review: {tasksList.filter((t) => t.status === 'SUBMITTED').length}
+                  </span>
+                )}
+              </div>
+              <h1>Welcome back, {data?.learner?.name?.split(' ')[0] || 'there'}</h1>
+              <p>
+                Your courses and tasks are here. Upload your work when it is done, and ask your mentor
+                anything in the chat.
+              </p>
+            </div>
 
+            <div className="dash-stats">
+              <div className="dash-stat">
+                <span className="dash-stat-icon"><BookOpen size={17} /></span>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-label">My courses</span>
+                  <span className="dash-stat-value">{assignedCourses.length}</span>
+                  <span className="dash-stat-hint">Built around your goals</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <span className="dash-stat-icon amber"><ClipboardList size={17} /></span>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-label">Tasks to do</span>
+                  <span className="dash-stat-value">{todoTasks.length}</span>
+                  <span className="dash-stat-hint">{tasksList.length} given in total</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <span className="dash-stat-icon green"><CheckCircle2 size={17} /></span>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-label">Reviewed</span>
+                  <span className="dash-stat-value">{reviewedCount}</span>
+                  <span className="dash-stat-hint">Checked by your mentor</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <span className="dash-stat-icon slate"><HelpCircle size={17} /></span>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-label">Course questions</span>
+                  <span className="dash-stat-value">
+                    {answeredQuestions}/{courseQuestions.length}
+                  </span>
+                  <span className="dash-stat-hint">Answered so far</span>
+                </div>
+              </div>
+              <div className="dash-stat">
+                <span className="dash-stat-icon rose"><BadgeCheck size={17} /></span>
+                <div className="dash-stat-body">
+                  <span className="dash-stat-label">Evidence status</span>
+                  <span className="dash-stat-value" style={{ fontSize: 16 }}>
+                    {suffEval?.evidenceStatus || profile?.evidence_status || 'SUFFICIENT'}
+                  </span>
+                  <span className="dash-stat-hint">Multi-source sufficiency</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="learner-overview-grid">
+              <section className="panel-card">
+                <span className="micro-tag accent">Next up</span>
+                <h3 className="admin-card-title">What is waiting for you</h3>
+                <p className="admin-card-copy">Open a task to write your answer and upload your chart.</p>
+
+                {todoTasks.length === 0 ? (
+                  <p className="admin-muted">Nothing is waiting. Everything assigned has been reviewed.</p>
+                ) : (
+                  <div className="learner-list">
+                    {todoTasks.slice(0, 4).map((t: any) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className="learner-list-row"
+                        onClick={() => {
+                          setSelectedTaskId(t.id);
+                          navigate('/dashboard/tasks');
+                        }}
+                      >
+                        <span className="learner-list-text">
+                          <strong>{t.title}</strong>
+                          <small>{courseTitleFor(t)} &middot; {t.status.toLowerCase()}</small>
+                        </span>
+                        <ArrowRight size={15} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <button type="button" className="admin-link-button" onClick={() => navigate('/dashboard/tasks')}>
+                  Go to tasks and uploads
+                </button>
+              </section>
+
+              <section className="panel-card">
+                <span className="micro-tag accent">My courses</span>
+                <h3 className="admin-card-title">Courses you are on</h3>
+                <p className="admin-card-copy">Each one comes with modules and questions set by your team.</p>
+
+                {assignedCourses.length === 0 ? (
+                  <p className="admin-muted">No course assigned yet. Your mentor will add one.</p>
+                ) : (
+                  <div className="learner-list">
+                    {assignedCourses.slice(0, 4).map((sc: any) => {
+                      const qs = courseQuestions.filter((q) => q.course_id === sc.course_id);
+                      const done = qs.filter((q) => Boolean(q.lastAttempt)).length;
+                      return (
+                        <button
+                          key={sc.id}
+                          type="button"
+                          className="learner-list-row"
+                          onClick={() => navigate('/dashboard/courses')}
+                        >
+                          <span className="learner-list-text">
+                            <strong>{sc.course_title}</strong>
+                            <small>
+                              {sc.course_level} &middot; {qs.length} question{qs.length === 1 ? '' : 's'}
+                              {qs.length > 0 ? ` · ${done} answered` : ''}
+                            </small>
+                          </span>
+                          <ArrowRight size={15} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <button type="button" className="admin-link-button" onClick={() => navigate('/dashboard/courses')}>
+                  See all courses
+                </button>
+              </section>
+            </div>
+
+            {latestFeedbackTask && (
+              <section className="panel-card" style={{ marginTop: 16 }}>
+                <span className="micro-tag success">Latest mentor feedback</span>
+                <h3 className="admin-card-title">{latestFeedbackTask.title}</h3>
+                <p className="admin-card-copy">{latestFeedbackTask.guide_feedback}</p>
+                <button type="button" className="admin-link-button" onClick={() => navigate('/dashboard/tasks')}>
+                  Open the task
+                </button>
+              </section>
+            )}
+
+            <div className="learner-quick-grid">
+              <button type="button" className="learner-quick" onClick={() => navigate('/dashboard/courses')}>
+                <BookOpen size={18} />
+                <strong>Courses</strong>
+                <span>{assignedCourses.length} assigned</span>
+              </button>
+              <button type="button" className="learner-quick" onClick={() => navigate('/dashboard/tasks')}>
+                <ClipboardList size={18} />
+                <strong>Tasks &amp; uploads</strong>
+                <span>{todoTasks.length} to do</span>
+              </button>
+              <button type="button" className="learner-quick" onClick={() => navigate('/dashboard/progress')}>
+                <TrendingUp size={18} />
+                <strong>Progress</strong>
+                <span>{progressPct}% of tasks reviewed</span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* =================== COURSES =================== */}
+        {section === 'courses' && (
+          <div className="panel-card">
+            <span className="micro-tag accent">Built around you</span>
+            <h3 className="admin-card-title">My courses ({assignedCourses.length})</h3>
+            <p className="admin-card-copy">
+              Read the modules, then answer the questions. You get one attempt per question.
+            </p>
+
+            {assignedCourses.length === 0 ? (
+              <p className="admin-muted">No course assigned yet. Your mentor will add one.</p>
+            ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {assignedCourses.map((sc: any) => (
                   <div
@@ -437,7 +513,7 @@ export const LearnerDashboardPage: React.FC = () => {
                       border: '1px solid var(--border-subtle)'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 10, flexWrap: 'wrap' }}>
                       <strong style={{ fontSize: 16 }}>{sc.course_title}</strong>
                       <span className="status-pill approved">{sc.course_level}</span>
                     </div>
@@ -454,10 +530,10 @@ export const LearnerDashboardPage: React.FC = () => {
                           marginBottom: 10
                         }}
                       >
-                        Mentor Note: {sc.custom_notes}
+                        Note from your mentor: {sc.custom_notes}
                       </div>
                     )}
-                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Course Modules:</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Course modules</div>
                     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {(sc.modules || []).map((m: string, idx: number) => (
                         <li key={idx}>{m}</li>
@@ -470,15 +546,14 @@ export const LearnerDashboardPage: React.FC = () => {
                       return (
                         <div style={{ marginTop: 14 }}>
                           <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-                            Course Questions set by your Admin ({qs.length}):
+                            Course questions ({qs.length})
                           </div>
                           {qs.map((q: any, qi: number) => {
                             const live = courseResults[q.id];
                             const answered = Boolean(live) || Boolean(q.lastAttempt);
                             const correctIndex =
                               live?.correctOptionIndex ?? q.correctOptionIndex ?? q.lastAttempt?.selectedOptionIndex ?? 0;
-                            const correctText =
-                              live?.correctAnswer ?? (q.options || [])[correctIndex];
+                            const correctText = live?.correctAnswer ?? (q.options || [])[correctIndex];
                             const selectedIndex = live
                               ? courseAnswers[q.id]
                               : q.lastAttempt?.selectedOptionIndex ?? courseAnswers[q.id];
@@ -523,7 +598,7 @@ export const LearnerDashboardPage: React.FC = () => {
                                     disabled={courseAnswers[q.id] === undefined}
                                     onClick={() => handleAnswerCourseQuestion(q.id)}
                                   >
-                                    Check Answer
+                                    Check answer
                                   </button>
                                 )}
                                 {answered && (
@@ -538,8 +613,8 @@ export const LearnerDashboardPage: React.FC = () => {
                                     }}
                                   >
                                     {(live ? live.isCorrect : q.lastAttempt?.isCorrect)
-                                      ? '✓ Correct!'
-                                      : `✗ Not quite. Correct answer: ${String.fromCharCode(65 + Number(correctIndex))}. ${correctText}`}
+                                      ? 'Correct.'
+                                      : `Not quite. Correct answer: ${String.fromCharCode(65 + Number(correctIndex))}. ${correctText}`}
                                     {showExplanation && (
                                       <div style={{ fontWeight: 400, marginTop: 4, color: 'var(--text-muted)' }}>
                                         {showExplanation}
@@ -556,268 +631,152 @@ export const LearnerDashboardPage: React.FC = () => {
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* Right: Assigned Tasks & Upload Result Form */}
-            <div className="panel-card" style={{ marginBottom: 0, border: '2px solid var(--accent)' }}>
-              <span className="micro-tag accent">Practical Student Tasks</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
-                Complete Task &amp; Upload Your Result
-              </h3>
-              <p style={{ fontSize: 13, marginBottom: 14 }}>
-                Select an assigned task below, write your findings, and upload your chart/result for mentor review.
-              </p>
-
-              {/* Task Selector Buttons */}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                {tasksList.map((t: any) => {
-                  const isSel = selectedTask?.id === t.id;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`btn btn-sm ${isSel ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => setSelectedTaskId(t.id)}
-                    >
-                      {t.title.slice(0, 34)}... ({t.status})
-                    </button>
-                  );
-                })}
-              </div>
-
-              {selectedTask && (
-                <form onSubmit={handleUploadTaskResult}>
-                  <div
-                    style={{
-                      padding: 14,
-                      background: 'var(--bg-canvas)',
-                      borderRadius: 10,
-                      border: '1px solid var(--border-subtle)',
-                      marginBottom: 14
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <strong style={{ fontSize: 15 }}>{selectedTask.title}</strong>
-                      <span
-                        className={`status-pill ${
-                          selectedTask.status === 'REVIEWED'
-                            ? 'approved'
-                            : selectedTask.status === 'SUBMITTED'
-                              ? 'info'
-                              : 'pending'
-                        }`}
-                      >
-                        {selectedTask.status}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: 13, whiteSpace: 'pre-line', color: 'var(--text-muted)' }}>
-                      {selectedTask.instructions}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>
-                      Your Answer / Analysis *
-                    </label>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      style={{ padding: '4px 10px', fontSize: 11.5 }}
-                      onClick={handleLoadSampleHeikinAshiSubmission}
-                    >
-                      ⚡ Auto-Fill Heikin-Ashi Answer
-                    </button>
-                  </div>
-
-                  <div className="form-group">
-                    <textarea
-                      className="form-textarea"
-                      rows={5}
-                      placeholder="Write your findings, formula explanation, and chart observations..."
-                      value={taskAnswerText}
-                      onChange={(e) => setTaskAnswerText(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Upload Chart Screenshot / Result File (PNG, JPG, SVG)
-                    </label>
-                    <input
-                      type="file"
-                      accept="image/*,.svg"
-                      className="form-input"
-                      onChange={handleFileChange}
-                    />
-                    {uploadedFileName && (
-                      <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
-                        Attached File: {uploadedFileName}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    <button type="submit" className="btn btn-primary">
-                      Upload Result &amp; Submit Task &rarr;
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => setActiveTab('uploaded_results')}
-                    >
-                      View Uploaded Result &amp; Chat With Mentor &rarr;
-                    </button>
-                  </div>
-                </form>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        {/* ===================================================================
-            TAB 2: SEPARATE TAB FOR UPLOADED RESULTS, MENTOR REVIEW & DIRECT CHAT
-           =================================================================== */}
-        {activeTab === 'uploaded_results' && (
+        {/* =================== TASKS =================== */}
+        {section === 'tasks' && (
           <div className="workspace-sidebar-layout">
-            {/* Left Sidebar: Student Tasks */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">My Task Submissions</span>
-              <h3 style={{ fontSize: 18, margin: '6px 0 12px' }}>Select Task to View Result &amp; Chat</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {tasksList.map((t: any) => {
-                  const isSel = selectedTask?.id === t.id;
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => setSelectedTaskId(t.id)}
-                      style={{
-                        padding: 12,
-                        borderRadius: 10,
-                        border: isSel ? '2px solid var(--accent)' : '1px solid var(--border-subtle)',
-                        background: isSel ? 'var(--accent-soft)' : 'var(--bg-canvas)',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <strong style={{ fontSize: 13 }}>{t.title}</strong>
-                      </div>
-                      <span
-                        className={`status-pill ${
-                          t.status === 'REVIEWED'
-                            ? 'approved'
-                            : t.status === 'SUBMITTED'
-                              ? 'info'
-                              : 'pending'
-                        }`}
+              <span className="micro-tag accent">My tasks</span>
+              <h3 className="admin-card-title">Pick a task</h3>
+              {tasksList.length === 0 ? (
+                <p className="admin-muted">No task assigned yet.</p>
+              ) : (
+                <div className="learner-task-list">
+                  {tasksList.map((t: any) => {
+                    const isSel = selectedTask?.id === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`learner-task-item ${isSel ? 'active' : ''}`}
+                        onClick={() => setSelectedTaskId(t.id)}
                       >
-                        {t.status}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                        <span className="learner-task-text">
+                          <strong>{t.title}</strong>
+                          <small>{courseTitleFor(t)}</small>
+                        </span>
+                        <span className={`status-pill ${statusClass(t.status)}`}>{t.status}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            {/* Right: Uploaded Result Preview + Official Mentor Review + Direct Chat */}
-            {selectedTask && (
-              <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
-                <div className="panel-card" style={{ marginBottom: 0 }}>
-                  <span className="micro-tag accent">Uploaded Result</span>
-                  <h3 style={{ fontSize: 19, margin: '6px 0 10px' }}>{selectedTask.title}</h3>
+            {selectedTask ? (
+              <div className="learner-task-detail">
+                <section className="panel-card" style={{ marginBottom: 0 }}>
+                  <div className="learner-task-head">
+                    <div>
+                      <span className="micro-tag accent">Task</span>
+                      <h3 className="admin-card-title">{selectedTask.title}</h3>
+                      <p className="admin-card-copy">{courseTitleFor(selectedTask)}</p>
+                    </div>
+                    <span className={`status-pill ${statusClass(selectedTask.status)}`}>{selectedTask.status}</span>
+                  </div>
+
+                  <div className="learner-instructions">
+                    <strong>What to do</strong>
+                    <div>{selectedTask.instructions}</div>
+                  </div>
 
                   {selectedTask.guide_feedback && (
-                    <div
-                      style={{
-                        padding: 14,
-                        background: 'var(--success-bg)',
-                        border: '1px solid var(--success-border)',
-                        borderRadius: 10,
-                        color: 'var(--success-text)',
-                        fontSize: 13.5,
-                        marginBottom: 14
-                      }}
-                    >
-                      <strong>✓ Official Mentor / Admin Review Feedback:</strong>
-                      <div style={{ marginTop: 4 }}>{selectedTask.guide_feedback}</div>
+                    <div className="learner-feedback">
+                      <strong>Mentor feedback</strong>
+                      <div>{selectedTask.guide_feedback}</div>
                     </div>
                   )}
 
-                  <div
-                    style={{
-                      padding: 14,
-                      background: 'var(--bg-canvas)',
-                      borderRadius: 10,
-                      border: '1px solid var(--border-subtle)',
-                      whiteSpace: 'pre-line',
-                      fontSize: 13.5,
-                      marginBottom: 14
-                    }}
-                  >
-                    <strong>Your Submitted Answer:</strong>
-                    <div style={{ marginTop: 6 }}>
-                      {selectedTask.learner_submission || 'No result uploaded yet.'}
+                  {selectedTask.learner_submission && (
+                    <div className="learner-submission">
+                      <strong>What you sent</strong>
+                      <div>{selectedTask.learner_submission}</div>
+                      {selectedTask.uploaded_file_data && (
+                        <div className="learner-file-preview">
+                          <img
+                            src={selectedTask.uploaded_file_data}
+                            alt={selectedTask.uploaded_file_name || 'Uploaded chart'}
+                          />
+                        </div>
+                      )}
+                      {!selectedTask.uploaded_file_data && selectedTask.uploaded_file_name && (
+                        <small>File attached: {selectedTask.uploaded_file_name}</small>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTask.status === 'REVIEWED' || selectedTask.status === 'APPROVED' ? (
+                    <p className="admin-muted" style={{ marginTop: 14 }}>
+                      This task is finished. Ask your mentor in the chat if you want to redo it.
+                    </p>
+                  ) : (
+                    <form onSubmit={handleUploadTaskResult} style={{ marginTop: 16 }}>
+                      <div className="learner-form-row">
+                        <label className="form-label" style={{ marginBottom: 0 }}>
+                          Your answer / analysis
+                        </label>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '4px 10px', fontSize: 11.5 }}
+                          onClick={handleLoadSampleHeikinAshiSubmission}
+                        >
+                          Fill a sample answer
+                        </button>
+                      </div>
+
+                      <div className="form-group">
+                        <textarea
+                          className="form-textarea"
+                          rows={5}
+                          placeholder="Write what you found, the formula you used, and what the chart shows."
+                          value={taskAnswerText}
+                          onChange={(e) => setTaskAnswerText(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Chart screenshot or result file</label>
+                        <input type="file" accept="image/*,.svg" className="form-input" onChange={handleFileChange} />
+                        {uploadedFileName && (
+                          <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
+                            Attached: {uploadedFileName}
+                          </div>
+                        )}
+                      </div>
+
+                      <button type="submit" className="btn btn-primary">
+                        Upload result &amp; submit
+                      </button>
+                    </form>
+                  )}
+                </section>
+
+                <section className="panel-card" style={{ marginBottom: 0 }}>
+                  <div className="learner-task-head">
+                    <div>
+                      <span className="micro-tag accent">
+                        <MessageSquare size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
+                        Mentor chat
+                      </span>
+                      <h3 className="admin-card-title">Ask about this task</h3>
                     </div>
                   </div>
 
-                  {selectedTask.uploaded_file_data && (
-                    <div
-                      style={{
-                        borderRadius: 10,
-                        overflow: 'hidden',
-                        border: '1px solid var(--border-subtle)',
-                        background: '#0F172A',
-                        padding: 8
-                      }}
-                    >
-                      <img
-                        src={selectedTask.uploaded_file_data}
-                        alt={selectedTask.uploaded_file_name || 'Uploaded Chart'}
-                        style={{ maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* Direct Chat With Admin / Mentor */}
-                <div className="panel-card" style={{ marginBottom: 0 }}>
-                  <span className="micro-tag accent">Direct Mentor &amp; Admin Chat</span>
-                  <h3 style={{ fontSize: 19, margin: '6px 0 10px' }}>
-                    Discuss This Task Result With Your Mentor
-                  </h3>
-
-                  <div
-                    style={{
-                      maxHeight: 320,
-                      overflowY: 'auto',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                      padding: 12,
-                      background: 'var(--bg-canvas)',
-                      borderRadius: 10,
-                      border: '1px solid var(--border-subtle)',
-                      marginBottom: 12
-                    }}
-                  >
+                  <div className="learner-chat">
+                    {(selectedTask.messages || []).length === 0 && (
+                      <p className="admin-muted">No messages yet. Ask a question below.</p>
+                    )}
                     {(selectedTask.messages || []).map((m: any) => {
                       const isMe = m.sender_role === 'LEARNER';
                       return (
-                        <div
-                          key={m.id}
-                          style={{
-                            alignSelf: isMe ? 'flex-end' : 'flex-start',
-                            maxWidth: '88%',
-                            padding: '10px 12px',
-                            borderRadius: 10,
-                            background: isMe ? 'var(--accent)' : '#FFFFFF',
-                            color: isMe ? '#FFFFFF' : 'var(--text-main)',
-                            border: isMe ? 'none' : '1px solid var(--border-subtle)',
-                            fontSize: 13
-                          }}
-                        >
-                          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.85, marginBottom: 3 }}>
-                            {m.sender_name} &middot; {new Date(m.created_at).toLocaleTimeString()}
+                        <div key={m.id} className={`learner-bubble ${isMe ? 'mine' : ''}`}>
+                          <div className="learner-bubble-meta">
+                            {m.sender_name} &middot; {new Date(m.created_at).toLocaleString()}
                           </div>
                           <div>{m.message}</div>
                         </div>
@@ -825,10 +784,10 @@ export const LearnerDashboardPage: React.FC = () => {
                     })}
                   </div>
 
-                  <form onSubmit={handleSendStudentChat} style={{ display: 'flex', gap: 8 }}>
+                  <form onSubmit={handleSendStudentChat} className="learner-chat-form">
                     <input
                       className="form-input"
-                      placeholder="Ask a question or reply to your mentor..."
+                      placeholder="Write a message to your mentor"
                       value={studentChatText}
                       onChange={(e) => setStudentChatText(e.target.value)}
                     />
@@ -836,32 +795,56 @@ export const LearnerDashboardPage: React.FC = () => {
                       Send
                     </button>
                   </form>
-                </div>
+                </section>
+              </div>
+            ) : (
+              <div className="panel-card">
+                <p className="admin-muted">No task selected.</p>
               </div>
             )}
           </div>
         )}
 
-        {/* ===================================================================
-            TAB 3: ACTIVE PDP, REFLECTIONS & MULTI-SOURCE EVIDENCE TIMELINE
-           =================================================================== */}
-        {activeTab === 'pdp_and_evidence' && (
+        {/* =================== PROGRESS =================== */}
+        {section === 'progress' && (
           <>
             {pendingPDP && (
               <div className="governance-alert warn">
-                <strong>Governance Rule Active (Requirement 10):</strong> A new candidate PDP revision (
-                <strong>v{pendingPDP.version_number}.0, {pendingPDP.title}</strong>) is currently in{' '}
-                <code>PENDING_GUIDE_REVIEW</code>. Your previously approved PDP (
-                <strong>v{activePDP?.version_number || 1}.0</strong>) remains your active operating plan until your Learning Guide explicitly approves the revision.
+                <strong>Waiting for your guide:</strong> a new plan (<strong>v{pendingPDP.version_number}.0, {pendingPDP.title}</strong>)
+                is in review. Your approved plan (<strong>v{activePDP?.version_number || 1}.0</strong>) stays active
+                until your Learning Guide approves the new one.
               </div>
             )}
 
+            <div className="progress-stats" style={{ marginBottom: 16 }}>
+              <div>
+                <ClipboardList size={16} />
+                <strong>{reviewedCount}/{tasksList.length}</strong>
+                <span>Tasks reviewed</span>
+              </div>
+              <div>
+                <FileText size={16} />
+                <strong>{reflections.length}</strong>
+                <span>Reflections logged</span>
+              </div>
+              <div>
+                <BadgeCheck size={16} />
+                <strong>{evidenceItems.length}</strong>
+                <span>Evidence items</span>
+              </div>
+              <div>
+                <TrendingUp size={16} />
+                <strong>{progressPct}%</strong>
+                <span>Overall task progress</span>
+              </div>
+            </div>
+
             <div className="workspace-grid-2">
-              <div className="panel-card" style={{ border: '2px solid var(--success-border)' }}>
+              <div className="panel-card" style={{ border: '2px solid var(--success-border)', marginBottom: 0 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                  <span className="micro-tag success">ACTIVE APPROVED PDP &middot; v{activePDP?.version_number || 1}.0</span>
+                  <span className="micro-tag success">Approved plan &middot; v{activePDP?.version_number || 1}.0</span>
                   <span style={{ fontSize: 12, color: 'var(--text-light-muted)' }}>
-                    Approved by Guide ({activePDP?.reviewed_by_guide_id || 'usr_guide_vikram'})
+                    Approved by your guide
                   </span>
                 </div>
 
@@ -869,36 +852,39 @@ export const LearnerDashboardPage: React.FC = () => {
                   <>
                     <h2 style={{ fontSize: 22, marginBottom: 8 }}>{activePDP.title}</h2>
                     <p style={{ fontSize: 14, marginBottom: 16 }}>{activePDP.summary}</p>
-                    <div style={{ padding: 14, background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: 16 }}>
+                    <div style={{ padding: 14, background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
                       <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 4 }}>
-                        Approved Practice Routine Cadence
+                        Practice routine
                       </div>
                       <div style={{ fontSize: 13.5, fontWeight: 600 }}>{activePDP.routine_schedule}</div>
                     </div>
                   </>
                 ) : (
-                  <p>No Approved PDP yet.</p>
+                  <p>No approved plan yet.</p>
                 )}
               </div>
 
-              <div className="panel-card">
-                <span className="micro-tag accent">Post-Decision Reflection</span>
-                <h3 style={{ fontSize: 19, margin: '6px 0 8px' }}>Log Structured Decision Reflection</h3>
+              <div className="panel-card" style={{ marginBottom: 0 }}>
+                <span className="micro-tag accent">Reflection</span>
+                <h3 className="admin-card-title">Log what you learned</h3>
+                <p className="admin-card-copy">
+                  Short and honest beats long. Your guide reads these before your next conversation.
+                </p>
                 <form onSubmit={handleReflectionSubmit}>
                   <div className="form-group">
-                    <label className="form-label">Reflection Title</label>
+                    <label className="form-label">Title</label>
                     <input
                       className="form-input"
-                      placeholder="e.g. Post-Session Process Check"
+                      placeholder="e.g. Post-session process check"
                       value={refTitle}
                       onChange={(e) => setRefTitle(e.target.value)}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Reflection Narrative</label>
+                    <label className="form-label">What did you notice?</label>
                     <textarea
                       className="form-textarea"
-                      placeholder="What did you observe about your process execution?"
+                      placeholder="What did you do, and what would you change next time?"
                       value={refText}
                       onChange={(e) => setRefText(e.target.value)}
                       required
@@ -910,11 +896,29 @@ export const LearnerDashboardPage: React.FC = () => {
                     </div>
                   )}
                   <button type="submit" className="btn btn-secondary">
-                    Save Structured Reflection
+                    Save reflection
                   </button>
                 </form>
               </div>
             </div>
+
+            <section className="panel-card" style={{ marginTop: 16 }}>
+              <span className="micro-tag accent">History</span>
+              <h3 className="admin-card-title">Reflections you have logged ({reflections.length})</h3>
+              {reflections.length === 0 ? (
+                <p className="admin-muted">Nothing yet. The box above is a good start.</p>
+              ) : (
+                <div className="learner-list">
+                  {reflections.slice(0, 8).map((r: any) => (
+                    <div key={r.id} className="learner-reflect-row">
+                      <strong>{r.title}</strong>
+                      <small>{new Date(r.created_at).toLocaleDateString()} &middot; {r.evidence_weight.replaceAll('_', ' ').toLowerCase()}</small>
+                      <p>{r.reflection_notes}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </>
         )}
       </div>

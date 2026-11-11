@@ -2609,6 +2609,11 @@ app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req
     };
   });
 
+  // Course question attempts, so the console can show per-learner course progress.
+  const courseQuestionAttempts = db
+    .prepare('SELECT question_id, learner_id, is_correct, attempted_at FROM course_question_attempts ORDER BY attempted_at DESC')
+    .all();
+
   const competencies = db.prepare('SELECT * FROM core_competencies ORDER BY code ASC').all();
   const auditEvents = db.prepare('SELECT * FROM audit_events ORDER BY created_at DESC LIMIT 100').all() as any[];
 
@@ -2639,6 +2644,7 @@ app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req
     solvedDiscoverySessions,
     courses,
     courseQuestions,
+    courseQuestionAttempts,
     studentCourses: rawStudentCourses,
     studentTasks,
     competencies,

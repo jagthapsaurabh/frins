@@ -19,6 +19,7 @@ import {
 import { StaffSignInGate } from '../components/StaffSignInGate';
 import { GuideWorkspacePage } from './GuideWorkspacePage';
 import { AdminNotifications } from './admin/AdminNotifications';
+import { LearnerProgress } from './admin/LearnerProgress';
 import { ADMIN_SECTIONS, adminKeyFromPath, findAdminSection, type AdminSectionKey } from './adminSections';
 
 const BOOKING_STATUSES = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
@@ -2735,6 +2736,19 @@ export const AdminWorkspacePage: React.FC = () => {
               </form>
             </section>
           </>
+        )}
+
+        {activeTab === 'progress' && (
+          <LearnerProgress
+            learners={learnersList}
+            courses={coursesList}
+            courseQuestions={courseQuestionsList}
+            studentCourses={studentCoursesList}
+            studentTasks={allStudentTasks}
+            attempts={data?.courseQuestionAttempts || []}
+            authFetch={authFetch}
+            onChanged={loadAdminOverview}
+          />
         )}
 
         {activeTab === 'notifications' && <AdminNotifications />}

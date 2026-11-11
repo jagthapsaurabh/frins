@@ -97,8 +97,9 @@ The purge refuses to run if it would leave the database with no active administr
 
 Admin and Curriculum Owner sign in at `/admin/login` and land on `/admin`. The console is a set of
 pages, not one long scrolling page. There is one sidebar: the same app sidebar every role gets, with
-the admin sections grouped inside it. No second menu inside the page, and no "public website" entry,
-because the top bar already has "Back to website".
+the admin sections grouped inside it. No second menu inside the page. Neither the admin sidebar nor
+the learner sidebar has a "public website" entry; the site link sits in the account menu, so the
+workspace stays a workspace.
 
 | Group | Section | What it does |
 | --- | --- | --- |
@@ -106,6 +107,7 @@ because the top bar already has "Back to website".
 | Work | Task review | Uploaded work, internal AI pre-check, direct chat, approve or send back |
 | Work | Courses & tasks | Build courses, add questions, assign a course, give a task to one learner |
 | People | Learners | The full learner review desk, embedded: roster, dossiers, PDP decisions, level changes, assessments |
+| People | Learner progress | One learner at a time: courses with task and question bars, every task with its status, uploads and AI pre-check, and a box to assign another course |
 | People | Staff & access | Change a role, suspend or reactivate, reset a password, create an account |
 | Growth | Leads | Website form submissions with a status you can move along |
 | Growth | Bookings | Every call, with a status: confirmed, completed, no show, cancelled |
@@ -145,9 +147,15 @@ all; write a full stop, a colon or a comma instead. Headings stay around ten wor
 | `/tracks` | Tracks |
 | `/discovery` | Discovery questions |
 | `/login` | Student sign-in (standalone page) |
-| `/dashboard` | Learner dashboard (redirects to `/login` when signed out) |
+| `/dashboard` | Learner overview (redirects to `/login` when signed out) |
+| `/dashboard/courses` | My courses: modules and the course questions |
+| `/dashboard/tasks` | Tasks and uploads: write an answer, attach a chart, chat with the mentor |
+| `/dashboard/progress` | Progress: approved plan, reflections, evidence |
 
 `/learner` and `/prototype` now redirect to `/dashboard`.
+
+The learner workspace uses the same shell as the admin console: one sidebar, page header, and the
+section decided by the URL. Admin sections live under `/admin/:section` for the same reason.
 
 ### Staff routes
 

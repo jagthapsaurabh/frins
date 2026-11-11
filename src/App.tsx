@@ -59,16 +59,19 @@ export const EcosystemShell: React.FC = () => {
 
       {/* Learner sign-in + dashboard */}
       <Route path="/login" element={<SignInPage />} />
-      <Route
-        path="/dashboard"
-        element={
-          <RequireLearner>
-            <AppShell>
-              <LearnerDashboardPage />
-            </AppShell>
-          </RequireLearner>
-        }
-      />
+      {['/dashboard', '/dashboard/:section'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RequireLearner>
+              <AppShell>
+                <LearnerDashboardPage />
+              </AppShell>
+            </RequireLearner>
+          }
+        />
+      ))}
       <Route path="/learner" element={<Navigate to="/dashboard" replace />} />
       <Route path="/prototype" element={<Navigate to="/dashboard" replace />} />
 

@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   UserCog,
   Contact,
+  TrendingUp,
   BellRing,
   Settings as SettingsIcon
 } from 'lucide-react';
@@ -18,6 +19,7 @@ export type AdminSectionKey =
   | 'tasks'
   | 'courses'
   | 'learners'
+  | 'progress'
   | 'staff'
   | 'leads'
   | 'bookings'
@@ -45,6 +47,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'tasks', label: 'Task review', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work', path: '/admin/tasks' },
   { key: 'courses', label: 'Courses & tasks', hint: 'Build courses and assign work', icon: <BookOpen size={17} />, group: 'Work', path: '/admin/courses' },
   { key: 'learners', label: 'Learners', hint: 'Roster, plans, assessments', icon: <GraduationCap size={17} />, group: 'People', path: '/admin/learners' },
+  { key: 'progress', label: 'Learner progress', hint: 'Courses, tasks, uploads', icon: <TrendingUp size={17} />, group: 'People', path: '/admin/progress' },
   { key: 'staff', label: 'Staff & access', hint: 'Roles, status, passwords', icon: <UserCog size={17} />, group: 'People', path: '/admin/staff' },
   { key: 'leads', label: 'Leads', hint: 'Website form inbox', icon: <Contact size={17} />, group: 'Growth', path: '/admin/leads' },
   { key: 'bookings', label: 'Bookings', hint: 'Calls with the team', icon: <CalendarCheck size={17} />, group: 'Growth', path: '/admin/bookings' },

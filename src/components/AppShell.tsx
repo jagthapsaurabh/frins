@@ -13,6 +13,9 @@ import {
   BookOpenCheck,
   ArrowLeft,
   KeyRound,
+  BookOpen,
+  ClipboardList,
+  TrendingUp,
   Sparkles as SparklesIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -72,7 +75,10 @@ const navForRole = (role: string | undefined): NavItem[] => {
   }
 
   return [
-    { path: '/dashboard', label: 'My learning', icon: <LayoutDashboard size={17} />, group: 'Workspace' }
+    { path: '/dashboard', label: 'Overview', icon: <LayoutDashboard size={17} />, group: 'Learning', exact: true },
+    { path: '/dashboard/courses', label: 'My courses', icon: <BookOpen size={17} />, group: 'Learning' },
+    { path: '/dashboard/tasks', label: 'Tasks & uploads', icon: <ClipboardList size={17} />, group: 'Learning' },
+    { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' }
   ];
 };
 
@@ -132,7 +138,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     ? 'Admin console'
     : user?.role === 'GUIDE'
       ? 'Guide'
-      : 'Dashboard';
+      : 'My learning';
 
   return (
     <div className="app-shell">
@@ -232,11 +238,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
 
           <div className="app-topbar-right">
-            <button type="button" className="app-ghost-button desktop-only" onClick={() => navigate('/')}>
-              <ArrowLeft size={15} />
-              Back to website
-            </button>
-
             <NotificationBell />
 
             <div className="app-account" ref={menuRef}>
