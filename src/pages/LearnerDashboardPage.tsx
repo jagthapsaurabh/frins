@@ -297,7 +297,7 @@ export const LearnerDashboardPage: React.FC = () => {
               <span className="micro-tag">Awaiting mentor review: {tasksList.filter((t) => t.status === 'SUBMITTED').length}</span>
             )}
           </div>
-          <h1>Welcome back, {data?.learner?.name?.split(' ')[0] || 'there'} 👋</h1>
+          <h1>Welcome back, {data?.learner?.name?.split(' ')[0] || 'there'}</h1>
           <p>
             Here are your courses and tasks. Upload your work when you are done, and ask your mentor anything
             in the chat.

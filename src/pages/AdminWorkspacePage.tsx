@@ -1515,7 +1515,7 @@ export const AdminWorkspacePage: React.FC = () => {
               {/* Create Custom Course + Assign Course to Student */}
               <div className="panel-card" style={{ marginBottom: 0 }}>
                 <span className="micro-tag accent">Course Builder &amp; Student Assignment</span>
-                <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+                <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
                   1. Make a Custom Course
                 </h3>
                 <p style={{ fontSize: 13, marginBottom: 14 }}>
@@ -1787,7 +1787,7 @@ export const AdminWorkspacePage: React.FC = () => {
             {/* Course Library: Edit / Delete Courses & Manage Course Questions */}
             <div className="panel-card" style={{ marginTop: 24 }}>
               <span className="micro-tag accent">Course Library &amp; Course Questions</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+              <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
                 Edit Courses &amp; Set Course Questions ({coursesList.length} courses &middot; {courseQuestionsList.length} questions)
               </h3>
               <p style={{ fontSize: 13, marginBottom: 16 }}>
@@ -2083,7 +2083,7 @@ export const AdminWorkspacePage: React.FC = () => {
             {/* Right: Book a Call Leads (Both Direct & Post-Discovery) */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Book a Call Leads &amp; Consultations</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+              <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
                 Scheduled Team Calls &amp; Website Leads ({(data?.callBookings || []).length})
               </h3>
               <p style={{ fontSize: 13, marginBottom: 14 }}>
@@ -2162,7 +2162,7 @@ export const AdminWorkspacePage: React.FC = () => {
           {/* Website Form Submissions (Leads) */}
           <div className="panel-card" style={{ marginTop: 24 }}>
             <span className="micro-tag accent">Website Form Data &middot; Leads Inbox</span>
-            <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+            <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
               All Website Leads Captured ({leadsList.length})
             </h3>
             <p style={{ fontSize: 13, marginBottom: 14 }}>
@@ -2229,7 +2229,7 @@ export const AdminWorkspacePage: React.FC = () => {
             {/* Left: Users Who Solved Discovery Questions + Exact Q&A Answers */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Solved Discovery Profiles &amp; Answers</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+              <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
                 Users Who Solved Discovery Questions ({solvedSessions.length})
               </h3>
               <p style={{ fontSize: 13, marginBottom: 14 }}>
@@ -2500,8 +2500,8 @@ export const AdminWorkspacePage: React.FC = () => {
             {/* Right: Add New Custom Discovery Question & Answer Choices */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Add New Question &amp; Answers</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
-                + Create Custom Discovery Question &amp; Answer Options
+              <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
+                Create Custom Discovery Question &amp; Answer Options
               </h3>
               <form
                 onSubmit={handleAddCustomQuestion}
