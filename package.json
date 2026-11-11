@@ -14,7 +14,8 @@
     "db:reset": "tsx server/reset-db.ts",
     "create:admin": "tsx server/create-admin.ts",
     "create:user": "tsx server/create-admin.ts --role LEARNER",
-    "list:accounts": "tsx server/create-admin.ts --list"
+    "list:accounts": "tsx server/create-admin.ts --list",
+    "purge:demo": "tsx server/purge-demo-accounts.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",

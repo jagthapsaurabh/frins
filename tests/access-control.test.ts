@@ -136,4 +136,43 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     expect(session.custom_track).toBe('Final-year student running a paper trading journal');
     expect(session.candidateResult.recommendedProgram).toContain('Final-year student running a paper trading journal');
   });
+
+  it('FRI-AUTH-002: the demo account directory is gone and no password defaults are accepted', async () => {
+    const directory = await fetch(`${base}/api/auth/demo-accounts`);
+    expect(directory.status).toBe(404);
+
+    const switcher = await fetch(`${base}/api/admin/session/switch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@frins.org' })
+    });
+    expect(switcher.status).toBe(404);
+
+    // An empty password used to fall back to a shared demo password.
+    const emptyLogin = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@frins.org', password: '' })
+    });
+    expect(emptyLogin.status).toBe(400);
+
+    // The old alias is not a shortcut either.
+    const aliasLogin = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'admin@frins.org', password: 'frins2026' })
+    });
+    expect(aliasLogin.status).toBe(401);
+  });
+
+  it('FRI-DISC-003: the public question feed hides test personas and retired questions', async () => {
+    const res = await fetch(`${base}/api/discovery/questions`);
+    const data = await res.json();
+
+    expect(data.success).toBe(true);
+    expect(Array.isArray(data.questions)).toBe(true);
+    expect(data.questions.length).toBeGreaterThan(0);
+    expect(data.personas).toBeUndefined();
+    expect(data.questions.every((q: any) => q.isActive !== false)).toBe(true);
+  });
 });

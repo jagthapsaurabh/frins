@@ -55,14 +55,11 @@ const initialsOf = (name?: string) =>
     .join('');
 
 export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, demoAccounts, switchAccount, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [switchBusy, setSwitchBusy] = useState<string | null>(null);
-  const [switchError, setSwitchError] = useState<string | null>(null);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
@@ -79,26 +76,11 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   useEffect(() => {
     setSidebarOpen(false);
     setMenuOpen(false);
-    setSwitcherOpen(false);
   }, [location.pathname]);
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER';
   const nav = navForRole(user?.role);
   const current = nav.find((n) => n.path === location.pathname) ||
     (location.pathname === '/prototype' ? nav[0] : undefined);
-
-  const handleSwitch = async (email: string) => {
-    setSwitchError(null);
-    setSwitchBusy(email);
-    const res = await switchAccount(email);
-    setSwitchBusy(null);
-    if (!res.ok) {
-      setSwitchError(res.error || 'Could not switch workspace.');
-      return;
-    }
-    setMenuOpen(false);
-    setSwitcherOpen(false);
-  };
 
   return (
     <div className="app-shell">
@@ -233,55 +215,18 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     <LayoutDashboard size={16} /> My learning dashboard
                   </button>
 
-                  {isAdmin ? (
-                    <>
-                      <div className="app-menu-divider" />
-                      <button
-                        type="button"
-                        className="app-menu-item"
-                        onClick={() => setSwitcherOpen((v) => !v)}
-                      >
-                        <Repeat size={16} /> Switch workspace
-                        <ChevronDown size={14} className={`app-chevron ${switcherOpen ? 'up' : ''}`} />
-                      </button>
-                      {switcherOpen && (
-                        <div className="app-switch-list">
-                          {demoAccounts.map((acc) => (
-                            <button
-                              key={acc.id}
-                              type="button"
-                              disabled={switchBusy === acc.email || acc.email === user?.email}
-                              onClick={() => handleSwitch(acc.email)}
-                              className={acc.email === user?.email ? 'current' : ''}
-                            >
-                              <span className="app-avatar sm">{initialsOf(acc.name)}</span>
-                              <span className="app-switch-line">
-                                <strong>{acc.name}</strong>
-                                <small>{ROLE_LABEL[acc.role] || acc.role}</small>
-                              </span>
-                              {switchBusy === acc.email && <span className="app-switch-busy">…</span>}
-                            </button>
-                          ))}
-                          {switchError && <p className="app-switch-error">{switchError}</p>}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="app-menu-divider" />
-                      <button
-                        type="button"
-                        className="app-menu-item"
-                        onClick={() => {
-                          setMenuOpen(false);
-                          setSignOutOpen(true);
-                        }}
-                      >
-                        <Repeat size={16} /> Switch account
-                      </button>
-                      <p className="app-menu-hint">You will be signed out so you can sign in with another account.</p>
-                    </>
-                  )}
+                  <div className="app-menu-divider" />
+                  <button
+                    type="button"
+                    className="app-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSignOutOpen(true);
+                    }}
+                  >
+                    <Repeat size={16} /> Switch account
+                  </button>
+                  <p className="app-menu-hint">You will be signed out so you can sign in with another account.</p>
 
                   <div className="app-menu-divider" />
                   <button

@@ -560,7 +560,11 @@ export const AdminWorkspacePage: React.FC = () => {
     });
     const out = await res.json();
     if (res.ok && out.success) {
-      setBanner(`✓ Provisioned new ${newRole} account (${newName}) and logged to Audit Trail.`);
+      setBanner(
+        out.temporaryPassword
+          ? `✓ Provisioned ${newName} (${newRole}). Temporary password, shown once: ${out.temporaryPassword}`
+          : `✓ Provisioned new ${newRole} account (${newName}) and logged to Audit Trail.`
+      );
       setNewName('');
       setNewEmail('');
       loadAdminOverview();

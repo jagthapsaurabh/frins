@@ -41,6 +41,26 @@ const corsOrigin = (process.env.CORS_ORIGIN || '').trim();
 app.use(cors(corsOrigin ? { origin: corsOrigin.split(',').map((o) => o.trim()) } : {}));
 app.use(express.json({ limit: '1mb' }));
 
+function defaultGuideId(): string | null {
+  const guide = db
+    .prepare("SELECT id FROM users WHERE role = 'GUIDE' AND account_status = 'ACTIVE' ORDER BY created_at ASC LIMIT 1")
+    .get() as { id: string } | undefined;
+  return guide?.id ?? null;
+}
+
+/**
+ * Human-readable one-time password for accounts provisioned from the admin
+ * console. The admin sees it once and passes it on; nobody can log in with a
+ * guessable default.
+ */
+function generateTemporaryPassword(): string {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  const bytes = crypto.randomBytes(20);
+  let out = '';
+  for (const byte of bytes) out += alphabet[byte % alphabet.length];
+  return `${out.slice(0, 6)}-${out.slice(6, 12)}-${out.slice(12, 18)}`;
+}
+
 // Simple in-memory rate limiter for public endpoints & AI triggers (Requirement 13)
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 function rateLimit(maxRequests: number, windowMs: number) {
@@ -441,47 +461,18 @@ app.post('/api/book-call', rateLimit(20, 60_000), (req, res) => {
 });
 
 // ============================================================================
-// 3. AUTHENTICATION & DEMO ACCOUNTS
+// 3. AUTHENTICATION
 // ============================================================================
-/**
- * Demo account directory.
- *
- * The public website is learner-only, so anonymous callers only ever receive
- * LEARNER accounts. Staff (GUIDE / ADMIN / CURRICULUM_OWNER) accounts are returned
- * only to an already-authenticated staff session.
- */
-app.get('/api/auth/demo-accounts', (req, res) => {
-  const authHeader = String(req.headers.authorization || '');
-  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  const session = bearerToken
-    ? (db.prepare('SELECT user_id FROM auth_sessions WHERE token = ?').get(bearerToken) as any)
-    : null;
-  const requester = session
-    ? (db.prepare('SELECT role, account_status FROM users WHERE id = ?').get(session.user_id) as any)
-    : null;
-  const isStaff = Boolean(
-    requester &&
-      requester.account_status === 'ACTIVE' &&
-      ['GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(requester.role)
-  );
-
-  const users = db
-    .prepare(
-      `SELECT u.id, u.name, u.email, u.role, u.track, p.approved_level, p.proposed_level, p.evidence_status
-       FROM users u
-       LEFT JOIN student_learning_profiles p ON p.learner_id = u.id
-       WHERE u.account_status = 'ACTIVE' AND (? = 1 OR u.role = 'LEARNER')
-       ORDER BY CASE u.role WHEN 'LEARNER' THEN 1 WHEN 'GUIDE' THEN 2 WHEN 'ADMIN' THEN 3 ELSE 4 END, u.name`
-    )
-    .all(isStaff ? 1 : 0);
-
-  res.json({ success: true, accounts: users, scope: isStaff ? 'STAFF' : 'LEARNER_ONLY' });
-});
-
 app.post('/api/auth/login', rateLimit(30, 60_000), (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const rawPassword = String(req.body?.password || 'frins123');
-  const password = rawPassword === 'frins2026' ? 'frins123' : rawPassword;
+  const password = String(req.body?.password || '');
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'Enter your email and password.'
+    });
+  }
 
   const user = db
     .prepare('SELECT * FROM users WHERE lower(email) = ?')
@@ -546,73 +537,28 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ success: true, user: req.user });
 });
 
-/**
- * Workspace switcher for authorised staff (ADMIN / CURRICULUM_OWNER).
- * Issues a fresh session for another account without asking for its password,
- * so operators can move between Admin / Guide / Learner views from the dashboard.
- * Every switch is audit-logged. Learners can never escalate with this endpoint.
- */
-app.post('/api/admin/session/switch', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
-  const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!email) {
-    return res.status(400).json({ success: false, error: 'Target account email is required.' });
-  }
-
-  const target = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email) as any;
-  if (!target) {
-    return res.status(404).json({ success: false, error: 'Account not found.' });
-  }
-  if (target.account_status !== 'ACTIVE') {
-    return res.status(403).json({ success: false, error: 'That account is suspended.' });
-  }
-
-  const token = `tok_${crypto.randomUUID().replace(/-/g, '')}`;
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
-
-  db.prepare(`
-    INSERT INTO auth_sessions (token, user_id, role, expires_at, created_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(token, target.id, target.role, expiresAt, now.toISOString());
-
-  writeAuditEvent({
-    actorUserId: req.user!.id,
-    actorRole: req.user!.role,
-    action: 'STAFF_WORKSPACE_SWITCHED',
-    entityType: 'USER',
-    entityId: target.id,
-    details: { fromRole: req.user!.role, toRole: target.role }
-  });
-
-  return res.json({
-    success: true,
-    token,
-    user: {
-      id: target.id,
-      name: target.name,
-      email: target.email,
-      role: target.role,
-      track: target.track,
-      assigned_guide_id: target.assigned_guide_id
-    }
-  });
-});
 
 // ============================================================================
 // 4. DYNAMIC ADMIN-CONFIGURABLE DISCOVERY ENDPOINTS (N Questions)
 // ============================================================================
 app.get('/api/discovery/questions', (req, res) => {
-  const includeAll = req.query.all === 'true';
+  const requester = resolveAuthUser(req);
+  const isAdmin = requester?.role === 'ADMIN' || requester?.role === 'CURRICULUM_OWNER';
+  // Only admins may pull the full bank (including retired questions).
+  const includeAll = isAdmin && req.query.all === 'true';
   const activeQuestions = getActiveDiscoveryQuestions();
   const allQuestions = includeAll ? getAllDiscoveryQuestions() : activeQuestions;
 
-  res.json({
+  const payload: Record<string, unknown> = {
     success: true,
     questionBankVersion: QUESTION_BANK_VERSION,
     totalQuestions: activeQuestions.length,
-    questions: allQuestions,
-    personas: DISCOVERY_TEST_PERSONAS
-  });
+    questions: allQuestions
+  };
+  // Sample answer sets are test fixtures. They are not part of the public API.
+  if (isAdmin) payload.personas = DISCOVERY_TEST_PERSONAS;
+
+  res.json(payload);
 });
 
 app.post('/api/discovery/start', rateLimit(30, 60_000), (req, res) => {
@@ -741,7 +687,7 @@ app.get('/api/discovery/:sessionId', (req, res) => {
 });
 
 app.post('/api/discovery/answer', (req, res) => {
-  const { sessionId, questionId, answer, answerValue, answerText, batchAnswers, answersBatch, personaPreset } = req.body || {};
+  const { sessionId, questionId, answer, answerValue, answerText, batchAnswers, answersBatch } = req.body || {};
   if (!sessionId) {
     return res.status(400).json({ success: false, error: 'sessionId is required.' });
   }
@@ -763,26 +709,7 @@ app.post('/api/discovery/answer', (req, res) => {
       answered_at = excluded.answered_at
   `);
 
-  let incomingBatch = batchAnswers || answersBatch;
-  if (personaPreset) {
-    const presetMap: Record<string, Record<string, string>> = {
-      trader: DISCOVERY_TEST_PERSONAS.active_trader_friction.answers,
-      investor: DISCOVERY_TEST_PERSONAS.contradictory_participant.answers,
-      no_concern: DISCOVERY_TEST_PERSONAS.steady_investor_no_concern.answers
-    };
-    const presetAnswers = presetMap[personaPreset] || DISCOVERY_TEST_PERSONAS.active_trader_friction.answers;
-    const populated: Record<string, string> = {};
-    for (const q of activeConfiguredQuestions) {
-      if (presetAnswers[q.id]) {
-        populated[q.id] = presetAnswers[q.id];
-      } else if (q.options && q.options.length > 0) {
-        populated[q.id] = q.options[0].value;
-      } else {
-        populated[q.id] = 'Building a disciplined risk and execution routine.';
-      }
-    }
-    incomingBatch = populated;
-  }
+  const incomingBatch = batchAnswers || answersBatch;
 
   if (incomingBatch && typeof incomingBatch === 'object') {
     const tx = db.transaction(() => {
@@ -3059,7 +2986,9 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const role = String(req.body?.role || 'LEARNER').toUpperCase();
   const track = String(req.body?.track || 'trader').toLowerCase();
-  const password = String(req.body?.password || 'frins123');
+  const suppliedPassword = String(req.body?.password || '').trim();
+  const password = suppliedPassword || generateTemporaryPassword();
+  const generatedPassword = suppliedPassword ? null : password;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required.' });
@@ -3086,7 +3015,7 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
     hashPassword(password),
     role,
     track,
-    role === 'LEARNER' ? 'usr_guide_vikram' : null,
+    role === 'LEARNER' ? defaultGuideId() : null,
     now,
     now
   );
@@ -3109,7 +3038,12 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
     details: { name, email, role, track }
   });
 
-  res.status(201).json({ success: true, userId: id });
+  res.status(201).json({
+    success: true,
+    userId: id,
+    // Shown once in the admin console so it can be handed over securely.
+    temporaryPassword: generatedPassword
+  });
 });
 
 app.patch('/api/admin/users/:userId', requireRole(['ADMIN']), (req, res) => {

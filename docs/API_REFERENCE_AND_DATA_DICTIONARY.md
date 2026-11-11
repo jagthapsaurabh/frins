@@ -27,7 +27,7 @@
 - `POST /api/leads` — Rate-limited booking/contact intake from the public website modal. Validates `name`, `email`, `track`, and `context`, persists lead, and writes an audit event.
 
 ### Authentication & Role Switching (`FRI-ADMIN-001`)
-- `GET /api/auth/me` — Returns current authenticated user and list of demo accounts.
+- `GET /api/auth/me` — Returns the current authenticated user.
 - `POST /api/auth/login` — Authenticates via email/password and returns a Bearer token.
 - `POST /api/auth/switch-role` — Switches role session for evaluation and testing.
 

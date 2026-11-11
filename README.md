@@ -38,8 +38,8 @@ Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Pr
 - The marketing site exposes **only** learner-facing entry points: `Student Login`, `Book a Call`, `Start Discovery`.
 - No Admin/Guide console links, staff portal menu, role badges or staff demo accounts appear anywhere on the public pages; the floating "Platform Portals" dock has been removed.
 - Staff consoles (`/admin`, `/guide`, `/ai-pipeline`) remain reachable by direct URL but require a real staff email + password through a credential gate. The previous one-click "Switch to Admin/Guide" shortcuts (hardcoded password) were removed.
-- `GET /api/auth/demo-accounts` returns **LEARNER accounts only** to anonymous/learner callers; the full staff directory requires an authenticated staff session.
-- Visitors stay anonymous. There is no silent auto-login as a demo student. `/dashboard` redirects to the standalone `/login` page until the visitor signs in.
+- There is no account directory endpoint. `/api/auth/demo-accounts` was removed, so no page can list, prefill or switch into another account. Every session starts from a real email and password.
+- Visitors stay anonymous. There is no silent auto-login. `/dashboard` redirects to the standalone `/login` page until the visitor signs in.
 
 ## 4. Dashboard Experience
 
@@ -58,22 +58,38 @@ Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Pr
 
 ## 6. Real Credentials Only
 
-- The login dialog no longer lists demo accounts, demo emails or passwords; fields start empty and are `autocomplete`-friendly.
+- The login forms start empty, are `autocomplete`-friendly, and never display or prefill credentials.
 - Generic placeholders only (`you@example.com`, "Enter your full name"). No seeded person names appear anywhere in the UI.
-- Discovery's sample-profile auto-fill buttons are rendered for Admin sessions only, so real candidates see a clean questionnaire.
-- The sign-in error no longer reveals the demo password.
+- Discovery has no sample-profile auto-fill buttons. Candidates answer the questions themselves.
+- The sign-in error is the same for an unknown email and a wrong password.
 
-## 7. Demo Role Accounts (Password for all: `frins123`)
+## 7. Seeded accounts (development only)
 
-You can switch between these accounts with one click using the top bar **Role Switcher** in the live preview:
+The seed exists so a fresh development database has something to look at. It creates five
+accounts, all with the password `frins123`, and it only runs when the database has no accounts
+and no questions.
 
 | Role | Name | Email | Scenario |
 | :--- | :--- | :--- | :--- |
-| **Learner (Trader)** | Aarav Mehta | `aarav@example.com` | Approved Level `L2`; has Active PDP `v1.0` + Pending Revision `v2.0`, practice tasks, reflections, and formal assessment. |
-| **Learner (Investor)** | Priya Nair | `priya@example.com` | Approved Level `L1`; completed Discovery with contradiction flags; awaiting Guide review of initial PDP `v1.0`. |
-| **Learner (No Concern)** | Rohan Verma | `rohan@example.com` | Approved Level `L3`; deterministic `NO_CONCERN_ESTABLISHED` pathway with light maintenance charter. |
-| **Learning Guide** | Dr. Vikram Sen | `vikram.guide@frins.org` | Full access to Learner Roster, Three-Agent AI Briefs, PDP Approve/Edit/Request-Changes/Reject workflow, and Level Decisions. |
-| **Administrator / Curriculum Owner** | Meera Krishnan | `admin@frins.org` | Account provisioning, role/status controls, Core Competency & Rubric Versioning, AI Benchmarks, and Immutable Audit Trail. |
+| **Learner (Trader)** | Aarav Mehta | `aarav@example.com` | Approved Level `L2`; active PDP, practice tasks, reflections, formal assessment. |
+| **Learner (Investor)** | Priya Nair | `priya@example.com` | Approved Level `L1`; completed Discovery with contradiction flags. |
+| **Learner (No Concern)** | Rohan Verma | `rohan@example.com` | Approved Level `L3`; `NO_CONCERN_ESTABLISHED` pathway. |
+| **Learning Guide** | Dr. Vikram Sen | `vikram.guide@frins.org` | Learner roster, AI briefs, PDP review, level decisions. |
+| **Administrator** | Meera Krishnan | `admin@frins.org` | Account provisioning, rubrics, AI benchmarks, audit trail. |
+
+Sign in with the email and password on the relevant login page. There is no switcher, and no
+endpoint returns the account list.
+
+**On a real server, remove them.** They share a published password, so a public install must not
+keep them. Create your own admin, then purge:
+
+```bash
+npm run create:admin -- --email you@frins.in --name "Your Name" --role ADMIN
+npm run purge:demo              # shows what would be removed
+npm run purge:demo -- --yes     # removes the five seeded accounts and their sessions
+```
+
+The purge refuses to run if it would leave the database with no active administrator.
 
 ---
 
