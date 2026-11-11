@@ -3775,106 +3775,6 @@ a {
    Admin console: section rail, cards, notifications, password
    ------------------------------------------------------------- */
 
-.admin-layout {
-  display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-  margin-top: 8px;
-}
-
-.admin-rail {
-  position: sticky;
-  top: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 16px 12px;
-  box-shadow: var(--shadow-xs);
-}
-
-.admin-rail-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.admin-rail-heading {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-light-muted);
-  padding: 0 10px 6px;
-}
-
-.admin-rail-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-radius: var(--radius-sm);
-  padding: 9px 10px;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: var(--transition-smooth);
-}
-
-.admin-rail-item:hover {
-  background: var(--bg-canvas);
-  color: var(--text-main);
-}
-
-.admin-rail-item.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.admin-rail-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--bg-canvas-subtle);
-  color: inherit;
-  flex: 0 0 auto;
-}
-
-.admin-rail-item.active .admin-rail-icon {
-  background: #fff;
-  border: 1px solid var(--accent-border);
-}
-
-.admin-rail-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.admin-rail-text strong {
-  font-size: 13.5px;
-  font-weight: 650;
-  line-height: 1.3;
-}
-
-.admin-rail-text small {
-  font-size: 11px;
-  color: var(--text-light-muted);
-  line-height: 1.3;
-}
-
-.admin-rail-item.active .admin-rail-text small {
-  color: #3B5BC0;
-}
-
 .admin-body {
   min-width: 0;
 }
@@ -4403,35 +4303,8 @@ a {
 }
 
 @media (max-width: 1100px) {
-  .admin-layout {
+  .admin-split {
     grid-template-columns: 1fr;
-  }
-
-  .admin-rail {
-    position: static;
-    flex-direction: row;
-    overflow-x: auto;
-    gap: 8px;
-    padding: 10px;
-    scrollbar-width: thin;
-  }
-
-  .admin-rail-group {
-    flex-direction: row;
-    gap: 6px;
-  }
-
-  .admin-rail-heading {
-    display: none;
-  }
-
-  .admin-rail-item {
-    width: auto;
-    white-space: nowrap;
-  }
-
-  .admin-rail-text small {
-    display: none;
   }
 }
 
