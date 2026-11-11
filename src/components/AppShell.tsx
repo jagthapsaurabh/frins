@@ -12,10 +12,13 @@ import {
   Menu,
   X,
   BookOpenCheck,
-  ArrowLeft
+  ArrowLeft,
+  KeyRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
+import { NotificationBell } from './NotificationBell';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 export type ShellRole = 'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRICULUM_OWNER';
 
@@ -33,15 +36,32 @@ const ROLE_LABEL: Record<string, string> = {
   CURRICULUM_OWNER: 'Curriculum Owner'
 };
 
+/**
+ * Each role sees only the workspaces that belong to it. Staff do not get a
+ * "My Learning" item, because /dashboard is the learner area and would bounce
+ * them to a sign-in page. Everything an admin needs, including the guide work,
+ * lives inside the Admin Console.
+ */
 const navForRole = (role: string | undefined): NavItem[] => {
   const isAdmin = role === 'ADMIN' || role === 'CURRICULUM_OWNER';
-  const isStaff = isAdmin || role === 'GUIDE';
+
+  if (isAdmin) {
+    return [
+      { path: '/admin', label: 'Admin Console', icon: <ShieldCheck size={17} /> },
+      { path: '/ai-pipeline', label: 'AI Engine', icon: <Sparkles size={17} /> },
+      { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
+    ];
+  }
+
+  if (role === 'GUIDE') {
+    return [
+      { path: '/guide', label: 'Learner Reviews', icon: <Users size={17} /> },
+      { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
+    ];
+  }
 
   return [
     { path: '/dashboard', label: 'My Learning', icon: <LayoutDashboard size={17} /> },
-    ...(isStaff ? [{ path: '/guide', label: 'Guide Console', icon: <Users size={17} /> }] : []),
-    ...(isAdmin ? [{ path: '/admin', label: 'Admin Console', icon: <ShieldCheck size={17} /> }] : []),
-    ...(isAdmin ? [{ path: '/ai-pipeline', label: 'AI Engine', icon: <Sparkles size={17} /> }] : []),
     { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
   ];
 };
@@ -61,6 +81,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -181,6 +202,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               Back to website
             </button>
 
+            <NotificationBell />
+
             <div className="app-account" ref={menuRef}>
               <button
                 type="button"
@@ -211,11 +234,23 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   <button type="button" className="app-menu-item" onClick={() => navigate('/')}>
                     <Globe size={16} /> View public website
                   </button>
-                  <button type="button" className="app-menu-item" onClick={() => navigate('/dashboard')}>
-                    <LayoutDashboard size={16} /> My learning dashboard
-                  </button>
+                  {user?.role === 'LEARNER' && (
+                    <button type="button" className="app-menu-item" onClick={() => navigate('/dashboard')}>
+                      <LayoutDashboard size={16} /> My learning dashboard
+                    </button>
+                  )}
 
                   <div className="app-menu-divider" />
+                  <button
+                    type="button"
+                    className="app-menu-item"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setPasswordOpen(true);
+                    }}
+                  >
+                    <KeyRound size={16} /> Update password
+                  </button>
                   <button
                     type="button"
                     className="app-menu-item"
@@ -247,6 +282,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
         <main className="app-content">{children}</main>
       </div>
+
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
 
       <ConfirmDialog
         open={signOutOpen}

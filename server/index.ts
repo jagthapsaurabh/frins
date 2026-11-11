@@ -537,6 +537,197 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   res.json({ success: true, user: req.user });
 });
 
+/**
+ * Change your own password. Requires the current password, so a stolen session
+ * token alone cannot lock the owner out.
+ */
+app.post('/api/auth/change-password', requireAuth, rateLimit(10, 60_000), (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  const currentToken = String(req.headers.authorization || '').replace(/^Bearer\s+/, '').trim();
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ success: false, error: 'Enter your current password and a new one.' });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ success: false, error: 'Use at least 8 characters for the new password.' });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ success: false, error: 'The new password must be different from the current one.' });
+  }
+
+  const account = db.prepare('SELECT id, role, password_hash FROM users WHERE id = ?').get(req.user!.id) as any;
+  if (!account || !verifyPassword(currentPassword, account.password_hash)) {
+    return res.status(401).json({ success: false, error: 'Your current password is not correct.' });
+  }
+
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(
+    hashPassword(newPassword),
+    new Date().toISOString(),
+    account.id
+  );
+
+  // Every other device is signed out. This one stays signed in.
+  db.prepare('DELETE FROM auth_sessions WHERE user_id = ? AND token != ?').run(account.id, currentToken);
+
+  writeAuditEvent({
+    actorUserId: account.id,
+    actorRole: account.role,
+    action: 'USER_PASSWORD_CHANGED',
+    entityType: 'USER',
+    entityId: account.id,
+    details: { otherSessionsRevoked: true }
+  });
+
+  res.json({ success: true, message: 'Password updated. Other devices were signed out.' });
+});
+
+// ============================================================================
+// 3b. NOTIFICATIONS
+// ============================================================================
+function audienceMatches(audience: string, role: string): boolean {
+  if (audience === 'ALL') return true;
+  if (audience === 'LEARNERS') return role === 'LEARNER';
+  if (audience === 'STAFF') return ['GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role);
+  return false;
+}
+
+/** Notices for the signed-in user, newest first, with a read flag. */
+app.get('/api/notifications', requireAuth, (req, res) => {
+  const userId = req.user!.id;
+  const role = req.user!.role;
+
+  const rows = db
+    .prepare(
+      `SELECT n.*, CASE WHEN r.notification_id IS NULL THEN 0 ELSE 1 END AS is_read, r.read_at
+         FROM notifications n
+         LEFT JOIN notification_reads r ON r.notification_id = n.id AND r.user_id = ?
+        WHERE (n.audience = 'USER' AND n.target_user_id = ?)
+           OR (n.audience != 'USER' AND substr(n.created_at, 1, 10) >= '2000-01-01')
+        ORDER BY n.created_at DESC
+        LIMIT 50`
+    )
+    .all(userId, userId) as any[];
+
+  const mine = rows.filter((n) => n.audience === 'USER' || audienceMatches(n.audience, role));
+
+  res.json({
+    success: true,
+    unreadCount: mine.filter((n) => !n.is_read).length,
+    notifications: mine.map((n) => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      audience: n.audience,
+      createdByName: n.created_by_name,
+      createdAt: n.created_at,
+      isRead: Boolean(n.is_read)
+    }))
+  });
+});
+
+app.post('/api/notifications/:notificationId/read', requireAuth, (req, res) => {
+  const { notificationId } = req.params;
+  db.prepare(
+    'INSERT OR IGNORE INTO notification_reads (notification_id, user_id, read_at) VALUES (?, ?, ?)'
+  ).run(notificationId, req.user!.id, new Date().toISOString());
+  res.json({ success: true });
+});
+
+app.get('/api/admin/notifications', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT n.*,
+              (SELECT COUNT(*) FROM users u
+                WHERE u.account_status = 'ACTIVE'
+                  AND (n.audience = 'ALL'
+                    OR (n.audience = 'LEARNERS' AND u.role = 'LEARNER')
+                    OR (n.audience = 'STAFF' AND u.role IN ('GUIDE','ADMIN','CURRICULUM_OWNER'))
+                    OR (n.audience = 'USER' AND u.id = n.target_user_id))) AS recipient_count,
+              (SELECT COUNT(*) FROM notification_reads r WHERE r.notification_id = n.id) AS read_count
+         FROM notifications n
+        ORDER BY n.created_at DESC
+        LIMIT 100`
+    )
+    .all() as any[];
+
+  res.json({
+    success: true,
+    notifications: rows.map((n) => ({
+      id: n.id,
+      title: n.title,
+      message: n.message,
+      audience: n.audience,
+      targetUserId: n.target_user_id,
+      createdByName: n.created_by_name,
+      createdAt: n.created_at,
+      recipientCount: n.recipient_count,
+      readCount: n.read_count
+    }))
+  });
+});
+
+app.post('/api/admin/notifications', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const title = String(req.body?.title || '').trim();
+  const message = String(req.body?.message || '').trim();
+  const audience = String(req.body?.audience || 'ALL').toUpperCase();
+  const targetUserId = String(req.body?.targetUserId || '').trim();
+
+  if (!title || !message) {
+    return res.status(400).json({ success: false, error: 'Add a title and a message.' });
+  }
+  if (title.length > 120) {
+    return res.status(400).json({ success: false, error: 'Keep the title under 120 characters.' });
+  }
+  if (!['ALL', 'LEARNERS', 'STAFF', 'USER'].includes(audience)) {
+    return res.status(400).json({ success: false, error: 'Choose who should receive this.' });
+  }
+  if (audience === 'USER') {
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, error: 'Pick the person who should receive this.' });
+    }
+    const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetUserId);
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'That account does not exist.' });
+    }
+  }
+
+  const id = `ntf_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const now = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO notifications (id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    title,
+    message,
+    audience,
+    audience === 'USER' ? targetUserId : null,
+    req.user!.id,
+    req.user!.name,
+    now
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'NOTIFICATION_SENT',
+    entityType: 'NOTIFICATION',
+    entityId: id,
+    details: { audience, targetUserId: audience === 'USER' ? targetUserId : null, title }
+  });
+
+  res.status(201).json({ success: true, id });
+});
+
+app.delete('/api/admin/notifications/:notificationId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { notificationId } = req.params;
+  db.prepare('DELETE FROM notification_reads WHERE notification_id = ?').run(notificationId);
+  db.prepare('DELETE FROM notifications WHERE id = ?').run(notificationId);
+  res.json({ success: true });
+});
+
 
 // ============================================================================
 // 4. DYNAMIC ADMIN-CONFIGURABLE DISCOVERY ENDPOINTS (N Questions)
@@ -1538,7 +1729,7 @@ app.post('/api/learner/reflections', requireRole(['LEARNER', 'GUIDE', 'ADMIN']),
 // ============================================================================
 // 7. GUIDE WORKSPACE & GOVERNANCE ENDPOINTS (RBAC: GUIDE or ADMIN only)
 // ============================================================================
-app.get('/api/guide/workspace', requireRole(['GUIDE', 'ADMIN']), (_req, res) => {
+app.get('/api/guide/workspace', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
   const learners = db
     .prepare(
       `SELECT u.id, u.name, u.email, u.track, u.account_status,
@@ -1618,7 +1809,7 @@ app.get('/api/guide/workspace', requireRole(['GUIDE', 'ADMIN']), (_req, res) => 
   });
 });
 
-app.get('/api/guide/learners/:learnerId', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.get('/api/guide/learners/:learnerId', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { learnerId } = req.params;
   const learner = db.prepare('SELECT id, name, email, role, track, created_at FROM users WHERE id = ?').get(learnerId) as any;
   if (!learner) {
@@ -1673,7 +1864,7 @@ app.get('/api/guide/learners/:learnerId', requireRole(['GUIDE', 'ADMIN']), (req,
  * Step 6, 7 & 8 of Product Journey:
  * Guide records the 45-minute 1-on-1 FRINS Conversation, agreed learning needs, and optionally drafts a candidate PDP version.
  */
-app.post('/api/guide/learners/:learnerId/conversations', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.post('/api/guide/learners/:learnerId/conversations', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { learnerId } = req.params;
   const conversationSummary = String(req.body?.conversationSummary || '').trim();
   const agreedLearningNeeds = Array.isArray(req.body?.agreedLearningNeeds)
@@ -1771,7 +1962,7 @@ app.post('/api/guide/learners/:learnerId/conversations', requireRole(['GUIDE', '
  * Step 11 & 12 / Section 11:
  * Guide records a Formal Scenario/Process Assessment (HIGH_FORMAL weight) and updates multi-source sufficiency.
  */
-app.post('/api/guide/learners/:learnerId/assessments', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.post('/api/guide/learners/:learnerId/assessments', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { learnerId } = req.params;
   const competencyCode = String(req.body?.competencyCode || 'COMP-RISK-02');
   const assessmentType = String(req.body?.assessmentType || 'SCENARIO_EVALUATION');
@@ -1847,7 +2038,7 @@ app.post('/api/guide/learners/:learnerId/assessments', requireRole(['GUIDE', 'AD
 /**
  * Consequential Governance Endpoint: Guide Approves, Edits-and-Approves, Requests Changes, or Rejects a PDP Draft.
  */
-app.post('/api/guide/pdp/:pdpId/decision', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.post('/api/guide/pdp/:pdpId/decision', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { pdpId } = req.params;
   const action = String(req.body?.action || '').toUpperCase();
   const reason = String(req.body?.reason || '').trim();
@@ -1981,7 +2172,7 @@ app.post('/api/guide/pdp/:pdpId/decision', requireRole(['GUIDE', 'ADMIN']), (req
 /**
  * Consequential Governance Endpoint: Guide Approves or Rejects Competency Level Progression (L1 -> L2 -> L3 -> L4)
  */
-app.post('/api/guide/learners/:learnerId/level-decision', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.post('/api/guide/learners/:learnerId/level-decision', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { learnerId } = req.params;
   const decisionStatus = String(req.body?.decisionStatus || 'APPROVED').toUpperCase();
   const targetLevel = String(req.body?.targetLevel || 'L2').toUpperCase();
@@ -2062,7 +2253,7 @@ app.post('/api/guide/learners/:learnerId/level-decision', requireRole(['GUIDE', 
   });
 });
 
-app.post('/api/guide/learners/:learnerId/competency-proposal', requireRole(['GUIDE', 'ADMIN']), (req, res) => {
+app.post('/api/guide/learners/:learnerId/competency-proposal', requireRole(['GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { learnerId } = req.params;
   const title = String(req.body?.title || '').trim();
   const domain = String(req.body?.domain || 'RISK_EXECUTION').trim();
@@ -2979,6 +3170,95 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
   });
 
   res.json({ success: true, taskId, status, guideFeedback });
+});
+
+/**
+ * Booking status. A booking starts as CONFIRMED, and the team moves it along.
+ */
+app.patch('/api/admin/bookings/:bookingId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { bookingId } = req.params;
+  const status = String(req.body?.status || '').toUpperCase();
+  const allowed = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
+
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ success: false, error: `Status must be one of: ${allowed.join(', ')}.` });
+  }
+
+  const booking = db.prepare('SELECT * FROM call_bookings WHERE id = ?').get(bookingId) as any;
+  if (!booking) {
+    return res.status(404).json({ success: false, error: 'Booking not found.' });
+  }
+
+  db.prepare('UPDATE call_bookings SET status = ? WHERE id = ?').run(status, bookingId);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'CALL_BOOKING_UPDATED',
+    entityType: 'CALL_BOOKING',
+    entityId: bookingId,
+    details: { previousStatus: booking.status, nextStatus: status }
+  });
+
+  res.json({ success: true, bookingId, status });
+});
+
+app.patch('/api/admin/leads/:leadId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { leadId } = req.params;
+  const status = String(req.body?.status || '').toUpperCase();
+  const allowed = ['NEW', 'DISCOVERY_STARTED', 'CONTACTED', 'QUALIFIED', 'CONVERTED', 'CLOSED'];
+
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ success: false, error: `Status must be one of: ${allowed.join(', ')}.` });
+  }
+
+  const lead = db.prepare('SELECT * FROM leads WHERE id = ?').get(leadId) as any;
+  if (!lead) {
+    return res.status(404).json({ success: false, error: 'Lead not found.' });
+  }
+
+  db.prepare('UPDATE leads SET status = ? WHERE id = ?').run(status, leadId);
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEAD_STATUS_UPDATED',
+    entityType: 'LEAD',
+    entityId: leadId,
+    details: { previousStatus: lead.status, nextStatus: status }
+  });
+
+  res.json({ success: true, leadId, status });
+});
+
+/**
+ * Admin-side password reset. Returns a one-time password; the account holder is
+ * expected to change it after signing in.
+ */
+app.post('/api/admin/users/:userId/reset-password', requireRole(['ADMIN']), (req, res) => {
+  const { userId } = req.params;
+  const target = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(userId) as any;
+  if (!target) {
+    return res.status(404).json({ success: false, error: 'User not found.' });
+  }
+
+  const temporaryPassword = generateTemporaryPassword();
+  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(
+    hashPassword(temporaryPassword),
+    new Date().toISOString(),
+    target.id
+  );
+  db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(target.id);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'USER_PASSWORD_RESET',
+    entityType: 'USER',
+    entityId: target.id,
+    details: { targetEmail: target.email }
+  });
+
+  res.json({ success: true, userId: target.id, temporaryPassword });
 });
 
 app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {

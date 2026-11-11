@@ -23,3 +23,7 @@ previews/
 
 # Local export of the repo, not part of it
 *.bundle
+
+# Playwright / browser test leftovers
+.cache/
+.pki/

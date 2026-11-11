@@ -93,6 +93,35 @@ The purge refuses to run if it would leave the database with no active administr
 
 ---
 
+## 7b. The Admin Console
+
+Admin and Curriculum Owner sign in at `/admin/login` and land on `/admin`. The console is a rail of
+sections, not one long page.
+
+| Group | Section | What it does |
+| --- | --- | --- |
+| Work | Overview | Counts and four cards that jump to whatever needs attention |
+| Work | Task review | Uploaded work, internal AI pre-check, direct chat, approve or send back |
+| Work | Courses & tasks | Build courses, add questions, assign a course, give a task to one learner |
+| People | Learners | The full learner review desk, embedded: roster, dossiers, PDP decisions, level changes, assessments |
+| People | Staff & access | Change a role, suspend or reactivate, reset a password, create an account |
+| Growth | Leads | Website form submissions with a status you can move along |
+| Growth | Bookings | Every call, with a status: confirmed, completed, no show, cancelled |
+| Growth | Notifications | Send a notice to everyone, all learners, all staff, or one person |
+| Setup | Discovery | Question bank, how many questions are active, add or retire questions |
+| Setup | Settings | Your own password, rubric versions, full audit trail |
+
+Notes:
+
+- An admin can do everything a guide can. The guide API routes accept `GUIDE`, `ADMIN` and
+  `CURRICULUM_OWNER`, and the Learners section renders the same review desk a guide sees.
+- Staff no longer see a "My Learning" item, because `/dashboard` is the learner area and would
+  bounce them to a sign-in page.
+- The bell in the top bar shows unread notices and marks them read as they are opened.
+- "Update password" is in the account menu for every role. Changing it signs out other devices.
+- Resetting someone else's password requires no current password, returns a one-time password, and
+  ends their sessions. Every reset is written to the audit trail.
+
 ## 8. Routes, Copy Tone & Sign-In Pages
 
 **Copy tone.** Website and dashboard copy is written to sound like a person, not a brochure: short

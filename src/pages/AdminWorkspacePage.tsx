@@ -1,67 +1,81 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Users, CalendarCheck, ClipboardList, BookOpen, GraduationCap, HelpCircle } from 'lucide-react';
+import {
+  Users,
+  CalendarCheck,
+  ClipboardList,
+  BookOpen,
+  GraduationCap,
+  HelpCircle,
+  LayoutDashboard,
+  UserCog,
+  Contact,
+  BellRing,
+  Settings as SettingsIcon,
+  KeyRound
+} from 'lucide-react';
 import { StaffSignInGate } from '../components/StaffSignInGate';
-
-const REQUIREMENTS_MATRIX = [
-  {
-    id: 'FRI-PROD-001',
-    title: 'Product vision and prohibited scope understood',
-    status: 'PASS',
-    evidence: 'Non-advisory market learning check across UI copy, the safety validator and the SEBI footer disclaimer.'
-  },
-  {
-    id: 'FRI-WEB-001',
-    title: 'Public website built from approved design assets',
-    status: 'PASS',
-    evidence: 'Multi-page responsive React website (/, /why-frins, /how-it-works, /tracks, /discovery) with direct Call Booking and Basic Details -> Discovery flow.'
-  },
-  {
-    id: 'FRI-DISC-001',
-    title: 'Admin-configurable Discovery flow (N questions & answers), Result & Call Booking',
-    status: 'PASS',
-    evidence: 'Admin configures N active Discovery questions & answer options, views solved candidate Q&A, and manages call bookings.'
-  },
-  {
-    id: 'FRI-LEARN-001',
-    title: 'Learner dashboard, custom courses, task uploads & direct mentor chat',
-    status: 'PASS',
-    evidence: 'Learner dashboard displays assigned custom courses, tasks (e.g. Heikin-Ashi analysis), result/chart upload, and direct mentor chat.'
-  },
-  {
-    id: 'FRI-GUIDE-001',
-    title: 'Guide & Admin task review with internal AI pre-check',
-    status: 'PASS',
-    evidence: 'AI pre-analyzes student uploaded task results for Admin/Team only (hidden from students), paired with direct chat and official approval.'
-  },
-  {
-    id: 'FRI-ADMIN-001',
-    title: 'Admin dashboard, Course/Task Builder, AI Task Pre-Review & RBAC',
-    status: 'PASS',
-    evidence: 'Server-side RBAC on /api/admin/*, Discovery Q&A configurator, Solved Q&A viewer, Course & Task builder, Submission review tab, and Audit Trail.'
-  },
-  {
-    id: 'FRI-AI-001..004',
-    title: 'Three-Agent AI Pipeline & Internal Task Correctness Analyzer',
-    status: 'PASS',
-    evidence: 'Governed Observational, Decision, and Generative pipeline plus Admin-only AI Task Pre-Reviewer for student uploads.'
-  }
-];
+import { GuideWorkspacePage } from './GuideWorkspacePage';
+import { AdminNotifications } from './admin/AdminNotifications';
 
 type AdminTabKey =
-  | 'submissions_review'
-  | 'discovery_setup'
-  | 'solved_and_leads'
-  | 'courses_and_tasks'
-  | 'governance';
+  | 'overview'
+  | 'tasks'
+  | 'courses'
+  | 'learners'
+  | 'staff'
+  | 'leads'
+  | 'bookings'
+  | 'discovery'
+  | 'notifications'
+  | 'settings';
+
+const ADMIN_SECTIONS: Array<{
+  key: AdminTabKey;
+  label: string;
+  hint: string;
+  icon: React.ReactNode;
+  group: 'Work' | 'People' | 'Growth' | 'Setup';
+}> = [
+  { key: 'overview', label: 'Overview', hint: 'Today at a glance', icon: <LayoutDashboard size={17} />, group: 'Work' },
+  { key: 'tasks', label: 'Task review', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work' },
+  { key: 'courses', label: 'Courses & tasks', hint: 'Build, assign, give work', icon: <BookOpen size={17} />, group: 'Work' },
+  { key: 'learners', label: 'Learners', hint: 'Full guide access', icon: <GraduationCap size={17} />, group: 'People' },
+  { key: 'staff', label: 'Staff & access', hint: 'Roles, status, passwords', icon: <UserCog size={17} />, group: 'People' },
+  { key: 'leads', label: 'Leads', hint: 'Website form inbox', icon: <Contact size={17} />, group: 'Growth' },
+  { key: 'bookings', label: 'Bookings', hint: 'Calls with the team', icon: <CalendarCheck size={17} />, group: 'Growth' },
+  { key: 'notifications', label: 'Notifications', hint: 'Send notices', icon: <BellRing size={17} />, group: 'Growth' },
+  { key: 'discovery', label: 'Discovery', hint: 'Questions and answers', icon: <HelpCircle size={17} />, group: 'Setup' },
+  { key: 'settings', label: 'Settings', hint: 'Password, rubrics, audit', icon: <SettingsIcon size={17} />, group: 'Setup' }
+];
+
+const BOOKING_STATUSES = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
+const BOOKING_STATUS_LABEL: Record<string, string> = {
+  NEW: 'New request',
+  DIRECT_CALL_BOOKED: 'Booked from website',
+  CONFIRMED: 'Confirmed',
+  COMPLETED: 'Completed',
+  NO_SHOW: 'No show',
+  CANCELLED: 'Cancelled'
+};
+
+const LEAD_STATUSES = ['NEW', 'DISCOVERY_STARTED', 'CONTACTED', 'QUALIFIED', 'CONVERTED', 'CLOSED'];
+const LEAD_STATUS_LABEL: Record<string, string> = {
+  NEW: 'New',
+  DISCOVERY_STARTED: 'Started Discovery',
+  CONTACTED: 'Contacted',
+  QUALIFIED: 'Qualified',
+  CONVERTED: 'Converted',
+  CLOSED: 'Closed'
+};
 
 export const AdminWorkspacePage: React.FC = () => {
   const { user, authFetch } = useAuth();
   const [data, setData] = useState<any>(null);
   const [rbacError, setRbacError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<AdminTabKey>('submissions_review');
+  const [activeTab, setActiveTab] = useState<AdminTabKey>('overview');
 
   // Confirmation dialog state for destructive / state-changing actions
   const [confirmState, setConfirmState] = useState<{
@@ -72,6 +86,13 @@ export const AdminWorkspacePage: React.FC = () => {
     run: () => Promise<void> | void;
   } | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+
+  // Settings: change your own password
+  const [ownCurrentPassword, setOwnCurrentPassword] = useState('');
+  const [ownNewPassword, setOwnNewPassword] = useState('');
+  const [ownConfirmPassword, setOwnConfirmPassword] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   // Tab 1: Discovery Question & Answer Configurator State
   const [customCountN, setCustomCountN] = useState<number>(7);
@@ -623,6 +644,111 @@ export const AdminWorkspacePage: React.FC = () => {
     }
   };
 
+  const handleBookingStatus = async (bookingId: string, status: string) => {
+    const res = await authFetch(`/api/admin/bookings/${bookingId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+    if (res.ok) {
+      setBanner(`Booking moved to ${BOOKING_STATUS_LABEL[status] || status}.`);
+      loadAdminOverview();
+    } else {
+      setBanner('Could not update that booking.');
+    }
+  };
+
+  const handleLeadStatus = async (leadId: string, status: string) => {
+    const res = await authFetch(`/api/admin/leads/${leadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status })
+    });
+    if (res.ok) {
+      setBanner(`Lead moved to ${LEAD_STATUS_LABEL[status] || status}.`);
+      loadAdminOverview();
+    } else {
+      setBanner('Could not update that lead.');
+    }
+  };
+
+  const handleResetPassword = (u: any) => {
+    setConfirmState({
+      title: `Reset the password for ${u.name}?`,
+      message: (
+        <>
+          <p>They will be signed out everywhere and will need the new password to get back in.</p>
+          <p style={{ marginTop: 8 }}>
+            The new password is shown to you once. Pass it on to them, and ask them to change it after
+            signing in.
+          </p>
+        </>
+      ),
+      confirmLabel: 'Reset password',
+      variant: 'primary',
+      run: async () => {
+        const res = await authFetch(`/api/admin/users/${u.id}/reset-password`, { method: 'POST' });
+        const out = await res.json();
+        if (res.ok && out.success) {
+          setBanner(`New password for ${u.name}: ${out.temporaryPassword} (shown once, copy it now)`);
+          loadAdminOverview();
+        } else {
+          setBanner(`Could not reset the password: ${out.error || 'unknown error'}`);
+        }
+      }
+    });
+  };
+
+  const handleRoleChange = (u: any, nextRole: string) => {
+    setConfirmState({
+      title: `Change ${u.name} to ${nextRole}?`,
+      message: `Their access changes straight away. Every change is written to the audit trail.`,
+      confirmLabel: 'Change role',
+      variant: 'primary',
+      run: async () => {
+        const res = await authFetch(`/api/admin/users/${u.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role: nextRole })
+        });
+        if (res.ok) {
+          setBanner(`${u.name} is now ${nextRole}.`);
+          loadAdminOverview();
+        } else {
+          setBanner(`Could not change the role for ${u.name}.`);
+        }
+      }
+    });
+  };
+
+  const handleChangeOwnPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    if (ownNewPassword.length < 8) {
+      setPasswordError('Use at least 8 characters for the new password.');
+      return;
+    }
+    if (ownNewPassword !== ownConfirmPassword) {
+      setPasswordError('The two new passwords do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    try {
+      const res = await authFetch('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: ownCurrentPassword, newPassword: ownNewPassword })
+      });
+      const out = await res.json();
+      if (res.ok && out.success) {
+        setBanner('Your password is updated. Other devices were signed out.');
+        setOwnCurrentPassword('');
+        setOwnNewPassword('');
+        setOwnConfirmPassword('');
+      } else {
+        setPasswordError(out.error || 'Could not update your password.');
+      }
+    } finally {
+      setPasswordBusy(false);
+    }
+  };
+
   const hasAdminAccess = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER';
 
   if (!hasAdminAccess) {
@@ -670,6 +796,38 @@ export const AdminWorkspacePage: React.FC = () => {
   return (
     <div className="workspace-shell">
       <div className="container-wide">
+        {/* Section rail: every admin workspace, one level deep */}
+        <div className="admin-layout">
+          <nav className="admin-rail" aria-label="Admin sections">
+            {(['Work', 'People', 'Growth', 'Setup'] as const).map((group) => (
+              <div key={group} className="admin-rail-group">
+                <span className="admin-rail-heading">{group}</span>
+                {ADMIN_SECTIONS.filter((section) => section.group === group).map((section) => {
+                  const isActive = activeTab === section.key;
+                  return (
+                    <button
+                      key={section.key}
+                      type="button"
+                      className={`admin-rail-item ${isActive ? 'active' : ''}`}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => setActiveTab(section.key)}
+                    >
+                      <span className="admin-rail-icon">{section.icon}</span>
+                      <span className="admin-rail-text">
+                        <strong>{section.label}</strong>
+                        <small>{section.hint}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          <div className="admin-body">
+
+        {activeTab === 'overview' && (
+          <>
         <div className="dash-hero">
           <div className="dash-hero-tags">
             <span className="micro-tag accent">Admin Workspace</span>
@@ -740,137 +898,86 @@ export const AdminWorkspacePage: React.FC = () => {
             </div>
           </div>
         </div>
+          </>
+        )}
 
         {banner && (
-          <div className="governance-alert success" style={{ marginBottom: 20 }}>
+          <div className={`admin-banner ${banner.startsWith('✓') ? 'ok' : 'info'}`} role="status">
             {banner}
+            <button type="button" className="admin-banner-close" onClick={() => setBanner('')} aria-label="Dismiss">
+              ×
+            </button>
           </div>
         )}
 
-        {/* Top Operational Metrics */}
-        {data?.metrics && (
-          <div className="workspace-grid-4" style={{ marginBottom: 22 }}>
-            <div
-              className="metric-stat-box"
-              style={{ cursor: 'pointer', borderColor: activeTab === 'submissions_review' ? 'var(--accent)' : undefined }}
-              onClick={() => setActiveTab('submissions_review')}
-            >
-              <span className="metric-label">Uploaded Task Results</span>
-              <span className="metric-value">{data.metrics.submittedTasksForReview ?? 0}</span>
-              <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
-                AI Pre-Reviewed &middot; Click to Review &amp; Chat
-              </span>
-            </div>
-
-            <div
-              className="metric-stat-box"
-              style={{ cursor: 'pointer', borderColor: activeTab === 'courses_and_tasks' ? 'var(--accent)' : undefined }}
-              onClick={() => setActiveTab('courses_and_tasks')}
-            >
-              <span className="metric-label">Custom Courses &amp; Assigned</span>
-              <span className="metric-value">
-                {data.metrics.totalCourses ?? coursesList.length} / {data.metrics.assignedStudentCourses ?? studentCoursesList.length}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Courses Built &middot; Student Assignments
-              </span>
-            </div>
-
-            <div
-              className="metric-stat-box"
-              style={{ cursor: 'pointer', borderColor: activeTab === 'solved_and_leads' ? 'var(--accent)' : undefined }}
-              onClick={() => setActiveTab('solved_and_leads')}
-            >
-              <span className="metric-label">Solved Discovery &amp; Call Leads</span>
-              <span className="metric-value">
-                {solvedSessions.length} / {data.metrics.totalCallBookings ?? 0}
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Solved Q&amp;A Profiles &middot; Booked Calls
-              </span>
-            </div>
-
-            <div
-              className="metric-stat-box"
-              style={{ cursor: 'pointer', borderColor: activeTab === 'discovery_setup' ? 'var(--accent)' : undefined }}
-              onClick={() => setActiveTab('discovery_setup')}
-            >
-              <span className="metric-label">Discovery Question Set (N)</span>
-              <span className="metric-value">N = {activeQuestions.length}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {allQuestions.length} Total Questions in Bank
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Flat Underline Admin Navigation Tabs (No Rounded Borders) */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 24,
-            borderBottom: '2px solid var(--border-subtle)',
-            marginBottom: 24,
-            overflowX: 'auto',
-            background: '#FFFFFF',
-            padding: '0 20px'
-          }}
-          role="tablist"
-        >
-          {[
-            {
-              key: 'submissions_review',
-              label: `Uploaded Results, AI Review & Chat (${allStudentTasks.filter((t) => t.learner_submission).length})`
-            },
-            {
-              key: 'courses_and_tasks',
-              label: `Make Courses & Give Tasks (${coursesList.length})`
-            },
-            {
-              key: 'solved_and_leads',
-              label: `Solved Discovery Q&A & Call Leads (${solvedSessions.length})`
-            },
-            {
-              key: 'discovery_setup',
-              label: `Discovery Q&A Setup (N=${activeQuestions.length})`
-            },
-            {
-              key: 'governance',
-              label: 'Users, Rubrics & Audit'
-            }
-          ].map((tab) => {
-            const isAct = activeTab === tab.key;
-            return (
+        {activeTab === 'overview' && (
+          <>
+          <div className="admin-quick-grid">
+            {[
+              {
+                key: 'tasks' as AdminTabKey,
+                title: 'Review uploads',
+                body: (() => {
+                  const n = allStudentTasks.filter((t) => t.status === 'SUBMITTED').length;
+                  return n === 1 ? '1 submission is waiting for a review.' : `${n} submissions are waiting for a review.`;
+                })(),
+                cta: 'Open task review'
+              },
+              {
+                key: 'leads' as AdminTabKey,
+                title: 'New leads',
+                body: (() => {
+                  const n = leadsList.filter((l) => l.status === 'NEW' || l.status === 'DISCOVERY_STARTED').length;
+                  if (n === 0) return 'Everyone who came in from the website has been contacted.';
+                  return n === 1
+                    ? '1 person came in from the website and has not been contacted yet.'
+                    : `${n} people came in from the website and have not been contacted yet.`;
+                })(),
+                cta: 'Open leads'
+              },
+              {
+                key: 'bookings' as AdminTabKey,
+                title: 'Upcoming calls',
+                body: (() => {
+                  const n = (data?.callBookings || []).filter(
+                    (b: any) => b.status !== 'CANCELLED' && b.status !== 'COMPLETED'
+                  ).length;
+                  if (n === 0) return 'No calls are booked right now.';
+                  return n === 1 ? '1 call is on the calendar.' : `${n} calls are on the calendar.`;
+                })(),
+                cta: 'Open bookings'
+              },
+              {
+                key: 'learners' as AdminTabKey,
+                title: 'Learner reviews',
+                body: (() => {
+                  const n = data?.metrics?.pendingPDPReviews ?? 0;
+                  if (n === 0) return 'No learning plans are waiting for a decision.';
+                  return n === 1
+                    ? '1 learning plan is waiting for a decision.'
+                    : `${n} learning plans are waiting for a decision.`;
+                })(),
+                cta: 'Open learners'
+              }
+            ].map((card) => (
               <button
-                key={tab.key}
+                key={card.key}
                 type="button"
-                role="tab"
-                aria-selected={isAct}
-                onClick={() => setActiveTab(tab.key as AdminTabKey)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: isAct ? '3px solid var(--accent)' : '3px solid transparent',
-                  borderRadius: 0,
-                  padding: '14px 4px',
-                  fontSize: 14,
-                  fontWeight: isAct ? 700 : 500,
-                  color: isAct ? 'var(--accent)' : 'var(--text-muted)',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  marginBottom: -2
-                }}
+                className="admin-quick-card"
+                onClick={() => setActiveTab(card.key)}
               >
-                {tab.label}
+                <strong>{card.title}</strong>
+                <p>{card.body}</p>
+                <span>{card.cta} &rarr;</span>
               </button>
-            );
-          })}
-        </div>
-
+            ))}
+          </div>
+          </>
+        )}
         {/* ===================================================================
             TAB 1: STUDENT UPLOADED RESULTS, INTERNAL AI PRE-REVIEW & DIRECT CHAT
            =================================================================== */}
-        {activeTab === 'submissions_review' && (
+        {activeTab === 'tasks' && (
           <div className="workspace-sidebar-layout">
             {/* Left Sidebar: List of Student Tasks & Uploaded Submissions */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
@@ -1374,7 +1481,7 @@ export const AdminWorkspacePage: React.FC = () => {
         {/* ===================================================================
             TAB 2: MAKE CUSTOM COURSES, ASSIGN TO STUDENTS & GIVE TASKS
            =================================================================== */}
-        {activeTab === 'courses_and_tasks' && (
+        {activeTab === 'courses' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
               {/* Create Custom Course + Assign Course to Student */}
@@ -1943,9 +2050,154 @@ export const AdminWorkspacePage: React.FC = () => {
         {/* ===================================================================
             TAB 3: SOLVED DISCOVERY USERS (WITH ANSWERS) & BOOK A CALL LEADS
            =================================================================== */}
-        {activeTab === 'solved_and_leads' && (
+        {activeTab === 'bookings' && (
+          <div>
+            {/* Right: Book a Call Leads (Both Direct & Post-Discovery) */}
+            <div className="panel-card" style={{ marginBottom: 0 }}>
+              <span className="micro-tag accent">Book a Call Leads &amp; Consultations</span>
+              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+                Scheduled Team Calls &amp; Website Leads ({(data?.callBookings || []).length})
+              </h3>
+              <p style={{ fontSize: 13, marginBottom: 14 }}>
+                Includes candidates who booked a 1-on-1 call after viewing their Discovery Result as well as visitors who booked directly from the Home page.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                {(data?.callBookings || []).map((b: any) => (
+                  <div
+                    key={b.id}
+                    style={{
+                      padding: 15,
+                      background: 'var(--bg-canvas)',
+                      borderRadius: 12,
+                      border: '1px solid var(--border-subtle)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+                      <div>
+                        <strong style={{ fontSize: 15 }}>{b.participant_name}</strong>
+                        <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                          {b.participant_email} &middot; {b.phone || 'Phone on file'} &middot; Track:{' '}
+                          <strong>
+                            {b.track === 'other' ? `Other (${b.custom_track || 'self-described'})` : b.track}
+                          </strong>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="micro-tag" style={{ fontSize: 10 }}>Status</span>
+                        <select
+                          className="form-select"
+                          style={{ width: 'auto', fontSize: 12.5, padding: '6px 10px' }}
+                          value={b.status}
+                          aria-label={`Booking status for ${b.participant_name}`}
+                          onChange={(e) => handleBookingStatus(b.id, e.target.value)}
+                        >
+                          {BOOKING_STATUSES.map((st) => (
+                            <option key={st} value={st}>
+                              {BOOKING_STATUS_LABEL[st] || st}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '8px 12px',
+                        background: '#FFFFFF',
+                        borderRadius: 8,
+                        border: '1px solid var(--border-subtle)',
+                        fontSize: 13,
+                        marginBottom: 6
+                      }}
+                    >
+                      <strong>Call Slot:</strong> {b.preferred_date} at <strong>{b.preferred_time_slot}</strong>
+                    </div>
+
+                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                      <strong>Focus / Result Summary:</strong> {b.result_summary}
+                    </div>
+                    {b.notes && (
+                      <div style={{ fontSize: 12.5, color: 'var(--accent)', marginTop: 4 }}>
+                        <strong>Notes:</strong> &ldquo;{b.notes}&rdquo;
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'leads' && (
           <>
-          <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
+          {/* Website Form Submissions (Leads) */}
+          <div className="panel-card" style={{ marginTop: 24 }}>
+            <span className="micro-tag accent">Website Form Data &middot; Leads Inbox</span>
+            <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
+              All Website Leads Captured ({leadsList.length})
+            </h3>
+            <p style={{ fontSize: 13, marginBottom: 14 }}>
+              Every form submitted on the public website appears here with the contact details and the focus the
+              visitor picked: Basic Details and Discovery starts, Book a Call requests, and sign-ups.
+            </p>
+
+            {leadsList.length === 0 ? (
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                No website leads captured yet. Submissions from the public website forms will appear here automatically.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>
+                      <th style={{ padding: '8px 10px' }}>Name</th>
+                      <th style={{ padding: '8px 10px' }}>Email</th>
+                      <th style={{ padding: '8px 10px' }}>Track / Focus</th>
+                      <th style={{ padding: '8px 10px' }}>Status</th>
+                      <th style={{ padding: '8px 10px' }}>Source / Notes</th>
+                      <th style={{ padding: '8px 10px' }}>Captured</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leadsList.map((lead: any) => (
+                      <tr key={lead.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '9px 10px', fontWeight: 700 }}>{lead.name}</td>
+                        <td style={{ padding: '9px 10px' }}>{lead.email}</td>
+                        <td style={{ padding: '9px 10px' }}>
+                          {lead.track === 'other' ? 'Other' : lead.track}
+                          {lead.track === 'other' && lead.custom_track && (
+                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>“{lead.custom_track}”</div>
+                          )}
+                        </td>
+                        <td style={{ padding: '9px 10px' }}>
+                          <select
+                            className="form-select"
+                            style={{ width: 'auto', fontSize: 12, padding: '5px 8px' }}
+                            value={lead.status}
+                            aria-label={`Status for lead ${lead.name}`}
+                            onChange={(e) => handleLeadStatus(lead.id, e.target.value)}
+                          >
+                            {LEAD_STATUSES.map((st) => (
+                              <option key={st} value={st}>
+                                {LEAD_STATUS_LABEL[st] || st}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-muted)', maxWidth: 380 }}>{lead.notes}</td>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-muted)' }}>
+                          {lead.created_at ? new Date(lead.created_at).toLocaleString() : 'Not set'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+            <div style={{ marginTop: 24 }}>
             {/* Left: Users Who Solved Discovery Questions + Exact Q&A Answers */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Solved Discovery Profiles &amp; Answers</span>
@@ -2035,128 +2287,14 @@ export const AdminWorkspacePage: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Right: Book a Call Leads (Both Direct & Post-Discovery) */}
-            <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">Book a Call Leads &amp; Consultations</span>
-              <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
-                Scheduled Team Calls &amp; Website Leads ({(data?.callBookings || []).length})
-              </h3>
-              <p style={{ fontSize: 13, marginBottom: 14 }}>
-                Includes candidates who booked a 1-on-1 call after viewing their Discovery Result as well as visitors who booked directly from the Home page.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                {(data?.callBookings || []).map((b: any) => (
-                  <div
-                    key={b.id}
-                    style={{
-                      padding: 15,
-                      background: 'var(--bg-canvas)',
-                      borderRadius: 12,
-                      border: '1px solid var(--border-subtle)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
-                      <div>
-                        <strong style={{ fontSize: 15 }}>{b.participant_name}</strong>
-                        <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                          {b.participant_email} &middot; {b.phone || 'Phone on file'} &middot; Track:{' '}
-                          <strong>
-                            {b.track === 'other' ? `Other (${b.custom_track || 'self-described'})` : b.track}
-                          </strong>
-                        </div>
-                      </div>
-                      <span className="status-pill approved">{b.status}</span>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '8px 12px',
-                        background: '#FFFFFF',
-                        borderRadius: 8,
-                        border: '1px solid var(--border-subtle)',
-                        fontSize: 13,
-                        marginBottom: 6
-                      }}
-                    >
-                      <strong>Call Slot:</strong> {b.preferred_date} at <strong>{b.preferred_time_slot}</strong>
-                    </div>
-
-                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                      <strong>Focus / Result Summary:</strong> {b.result_summary}
-                    </div>
-                    {b.notes && (
-                      <div style={{ fontSize: 12.5, color: 'var(--accent)', marginTop: 4 }}>
-                        <strong>Notes:</strong> &ldquo;{b.notes}&rdquo;
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
             </div>
-          </div>
-
-          {/* Website Form Submissions (Leads) */}
-          <div className="panel-card" style={{ marginTop: 24 }}>
-            <span className="micro-tag accent">Website Form Data &middot; Leads Inbox</span>
-            <h3 style={{ fontSize: 20, margin: '6px 0 8px' }}>
-              All Website Leads Captured ({leadsList.length})
-            </h3>
-            <p style={{ fontSize: 13, marginBottom: 14 }}>
-              Every form submitted on the public website appears here with the contact details and the focus the
-              visitor picked: Basic Details and Discovery starts, Book a Call requests, and sign-ups.
-            </p>
-
-            {leadsList.length === 0 ? (
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                No website leads captured yet. Submissions from the public website forms will appear here automatically.
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-subtle)' }}>
-                      <th style={{ padding: '8px 10px' }}>Name</th>
-                      <th style={{ padding: '8px 10px' }}>Email</th>
-                      <th style={{ padding: '8px 10px' }}>Track / Focus</th>
-                      <th style={{ padding: '8px 10px' }}>Status</th>
-                      <th style={{ padding: '8px 10px' }}>Source / Notes</th>
-                      <th style={{ padding: '8px 10px' }}>Captured</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leadsList.map((lead: any) => (
-                      <tr key={lead.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                        <td style={{ padding: '9px 10px', fontWeight: 700 }}>{lead.name}</td>
-                        <td style={{ padding: '9px 10px' }}>{lead.email}</td>
-                        <td style={{ padding: '9px 10px' }}>
-                          {lead.track === 'other' ? 'Other' : lead.track}
-                          {lead.track === 'other' && lead.custom_track && (
-                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>“{lead.custom_track}”</div>
-                          )}
-                        </td>
-                        <td style={{ padding: '9px 10px' }}>
-                          <span className="status-pill info">{lead.status}</span>
-                        </td>
-                        <td style={{ padding: '9px 10px', color: 'var(--text-muted)', maxWidth: 380 }}>{lead.notes}</td>
-                        <td style={{ padding: '9px 10px', color: 'var(--text-muted)' }}>
-                          {lead.created_at ? new Date(lead.created_at).toLocaleString() : 'Not set'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
           </>
         )}
 
         {/* ===================================================================
             TAB 4: DISCOVERY QUESTION & ANSWER CONFIGURATOR (SET N & EDIT Q&A)
            =================================================================== */}
-        {activeTab === 'discovery_setup' && (
+        {activeTab === 'discovery' && (
           <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Discovery Question &amp; Answer Configurator</span>
@@ -2405,39 +2543,79 @@ export const AdminWorkspacePage: React.FC = () => {
         {/* ===================================================================
             TAB 5: USERS, RUBRICS & AUDIT CONSOLE
            =================================================================== */}
-        {activeTab === 'governance' && (
-          <>
-            <div className="workspace-grid-2">
-              <div>
-                <div className="panel-card">
-                  <span className="micro-tag accent">Role-Controlled Account Provisioning</span>
-                  <h3 style={{ fontSize: 19, margin: '6px 0 12px' }}>Users, Students, Guides &amp; Staff</h3>
+        {activeTab === 'learners' && (
+          <div className="admin-embed">
+            <GuideWorkspacePage embedded />
+          </div>
+        )}
 
-                  <table className="data-table" style={{ marginBottom: 18 }}>
-                    <thead>
-                      <tr>
-                        <th>Name / Email</th>
-                        <th>Role</th>
-                        <th>Track</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data?.users?.map((u: any) => (
-                        <tr key={u.id}>
-                          <td>
-                            <strong>{u.name}</strong>
-                            <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{u.email}</div>
-                          </td>
-                          <td><span className="micro-tag accent" style={{ fontSize: 10 }}>{u.role}</span></td>
-                          <td>{u.track === 'other' ? 'Other (self-described)' : u.track}</td>
-                          <td>
-                            <span className={`micro-tag ${u.account_status === 'ACTIVE' ? 'success' : 'danger'}`} style={{ fontSize: 10 }}>
-                              {u.account_status}
-                            </span>
-                          </td>
-                          <td>
+        {activeTab === 'staff' && (
+          <>
+            <section className="panel-card">
+              <span className="micro-tag accent">Access</span>
+              <h3 className="admin-card-title">Staff and accounts</h3>
+              <p className="admin-card-copy">
+                Change a role, suspend someone, or reset a password. Every action lands in the audit
+                trail. Suspending yourself is blocked so nobody locks the console by mistake.
+              </p>
+
+              <div className="admin-mini-stats">
+                <span><strong>{data?.metrics?.activeGuides ?? 0}</strong> active guides</span>
+                <span><strong>{data?.metrics?.activeLearners ?? 0}</strong> active learners</span>
+                <span><strong>{data?.metrics?.totalUsers ?? 0}</strong> accounts in total</span>
+              </div>
+
+              <div className="admin-table-wrap">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data?.users || []).map((u: any) => (
+                      <tr key={u.id}>
+                        <td>
+                          <strong>{u.name}</strong>
+                          {u.id === user?.id && <span className="admin-you"> you</span>}
+                        </td>
+                        <td className="admin-muted">{u.email}</td>
+                        <td>
+                          {u.id === user?.id ? (
+                            <span className="micro-tag accent" style={{ fontSize: 10 }}>{u.role}</span>
+                          ) : (
+                            <select
+                              className="form-select"
+                              style={{ width: 'auto', fontSize: 12, padding: '5px 8px' }}
+                              value={u.role}
+                              aria-label={`Role for ${u.name}`}
+                              onChange={(e) => handleRoleChange(u, e.target.value)}
+                            >
+                              <option value="LEARNER">Student</option>
+                              <option value="GUIDE">Guide</option>
+                              <option value="CURRICULUM_OWNER">Curriculum Owner</option>
+                              <option value="ADMIN">Administrator</option>
+                            </select>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`micro-tag ${u.account_status === 'ACTIVE' ? 'success' : 'danger'}`} style={{ fontSize: 10 }}>
+                            {u.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="admin-row-actions">
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleResetPassword(u)}
+                            >
+                              <KeyRound size={13} /> Reset password
+                            </button>
                             {u.id !== user?.id && (
                               <button
                                 type="button"
@@ -2447,161 +2625,229 @@ export const AdminWorkspacePage: React.FC = () => {
                                 {u.account_status === 'ACTIVE' ? 'Suspend' : 'Activate'}
                               </button>
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-
-                  <form onSubmit={handleProvisionUser} style={{ background: 'var(--bg-canvas)', padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                    <h4 style={{ fontSize: 14.5, marginBottom: 10 }}>Provision New Student or Staff Account</h4>
-                    <div className="workspace-grid-2" style={{ gap: 10 }}>
-                      <div className="form-group">
-                        <label className="form-label">Full Name</label>
-                        <input
-                          className="form-input"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          placeholder="e.g. Ananya Deshmukh"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Email Address</label>
-                        <input
-                          className="form-input"
-                          type="email"
-                          value={newEmail}
-                          onChange={(e) => setNewEmail(e.target.value)}
-                          placeholder="e.g. ananya@frins.org"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="workspace-grid-2" style={{ gap: 10 }}>
-                      <div className="form-group">
-                        <label className="form-label">Role</label>
-                        <select className="form-select" value={newRole} onChange={(e) => setNewRole(e.target.value as any)}>
-                          <option value="LEARNER">LEARNER (Student)</option>
-                          <option value="GUIDE">GUIDE (Mentor)</option>
-                          <option value="CURRICULUM_OWNER">CURRICULUM_OWNER</option>
-                          <option value="ADMIN">ADMIN</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Learning Track</label>
-                        <select className="form-select" value={newTrack} onChange={(e) => setNewTrack(e.target.value)}>
-                          <option value="student_concepts">student_concepts</option>
-                          <option value="strategy_learner">strategy_learner</option>
-                          <option value="trader">trader</option>
-                          <option value="investor">investor</option>
-                          <option value="both">both</option>
-                        </select>
-                      </div>
-                    </div>
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      + Provision Account
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              <div>
-                <div className="panel-card">
-                  <span className="micro-tag accent">Curriculum Owner Governance</span>
-                  <h3 style={{ fontSize: 19, margin: '6px 0 10px' }}>Core Competency Library &amp; Rubric Versions</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                    {data?.competencies?.map((c: any) => (
-                      <div key={c.code} style={{ padding: 12, background: 'var(--bg-canvas)', borderRadius: 6, border: '1px solid var(--border-subtle)', fontSize: 12.5 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <strong>{c.code} · {c.title}</strong>
-                          <span className="micro-tag accent" style={{ fontSize: 10 }}>Rubric v{c.rubric_version}</span>
-                        </div>
-                        <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{c.description}</div>
-                      </div>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-
-                  <form onSubmit={handleUpdateRubric} style={{ background: 'var(--bg-canvas)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                    <h4 style={{ fontSize: 14, marginBottom: 8 }}>Publish Versioned Rubric Update</h4>
-                    <div className="workspace-grid-2" style={{ gap: 10 }}>
-                      <div className="form-group">
-                        <label className="form-label">Competency Code</label>
-                        <input className="form-input" value={compCode} onChange={(e) => setCompCode(e.target.value)} required />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">New Rubric Version</label>
-                        <input className="form-input" value={rubricVer} onChange={(e) => setRubricVer(e.target.value)} required />
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Title</label>
-                      <input className="form-input" value={compTitle} onChange={(e) => setCompTitle(e.target.value)} required />
-                    </div>
-                    <button type="submit" className="btn btn-dark btn-sm">
-                      Approve &amp; Version Core Rubric
-                    </button>
-                  </form>
-                </div>
-
-                <div className="panel-card">
-                  <span className="micro-tag accent">Immutable Audit Trail</span>
-                  <h3 style={{ fontSize: 19, margin: '6px 0 10px' }}>Security &amp; Governance Audit Log</h3>
-                  <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Action</th>
-                          <th>Role</th>
-                          <th>Entity</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data?.auditEvents?.map((ev: any) => (
-                          <tr key={ev.id}>
-                            <td>
-                              <strong style={{ fontSize: 12 }}>{ev.action}</strong>
-                              <div style={{ fontSize: 10.5, color: 'var(--text-light-muted)' }}>
-                                {new Date(ev.created_at).toLocaleTimeString()}
-                              </div>
-                            </td>
-                            <td><span className="micro-tag" style={{ fontSize: 10 }}>{ev.actor_role}</span></td>
-                            <td style={{ fontSize: 12 }}>{ev.entity_type}: <code>{ev.entity_id}</code></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </section>
 
-            <div className="panel-card" style={{ marginTop: 10 }}>
-              <span className="micro-tag accent">System Verification Matrix</span>
-              <h2 style={{ fontSize: 20, margin: '6px 0 12px' }}>Requirements Verification Status</h2>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Description</th>
-                    <th>Status</th>
-                    <th>Evidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {REQUIREMENTS_MATRIX.map((r) => (
-                    <tr key={r.id}>
-                      <td><strong>{r.id}</strong></td>
-                      <td>{r.title}</td>
-                      <td><span className="micro-tag success" style={{ fontSize: 10 }}>{r.status}</span></td>
-                      <td style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>{r.evidence}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <section className="panel-card">
+              <span className="micro-tag accent">New account</span>
+              <h3 className="admin-card-title">Create a staff or learner account</h3>
+              <p className="admin-card-copy">
+                A random password is generated and shown once. Pass it on, and ask them to change it
+                after their first sign-in.
+              </p>
+
+              <form onSubmit={handleProvisionUser} className="admin-form">
+                <div className="admin-form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="newStaffName">Full name</label>
+                    <input
+                      id="newStaffName"
+                      className="form-input"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="e.g. Ananya Deshmukh"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="newStaffEmail">Email</label>
+                    <input
+                      id="newStaffEmail"
+                      className="form-input"
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      placeholder="e.g. ananya@frins.in"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="admin-form-row">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="newStaffRole">Role</label>
+                    <select
+                      id="newStaffRole"
+                      className="form-select"
+                      value={newRole}
+                      onChange={(e) => setNewRole(e.target.value as any)}
+                    >
+                      <option value="LEARNER">Student</option>
+                      <option value="GUIDE">Guide</option>
+                      <option value="CURRICULUM_OWNER">Curriculum Owner</option>
+                      <option value="ADMIN">Administrator</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="newStaffTrack">Learning track</label>
+                    <select
+                      id="newStaffTrack"
+                      className="form-select"
+                      value={newTrack}
+                      onChange={(e) => setNewTrack(e.target.value)}
+                    >
+                      <option value="student_concepts">Student concepts</option>
+                      <option value="strategy_learner">Strategy learner</option>
+                      <option value="trader">Trader</option>
+                      <option value="investor">Investor</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button type="submit" className="btn btn-primary">
+                  Create account
+                </button>
+              </form>
+            </section>
           </>
         )}
+
+        {activeTab === 'notifications' && <AdminNotifications />}
+
+        {activeTab === 'settings' && (
+          <div className="admin-split">
+            <div>
+              <section className="panel-card">
+                <span className="micro-tag accent">Your account</span>
+                <h3 className="admin-card-title">Update your password</h3>
+                <p className="admin-card-copy">
+                  You stay signed in here. Any other device signed in as you is signed out.
+                </p>
+
+                <form onSubmit={handleChangeOwnPassword} className="admin-form">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="ownCurrent">Current password</label>
+                    <input
+                      id="ownCurrent"
+                      type="password"
+                      className="form-input"
+                      autoComplete="current-password"
+                      value={ownCurrentPassword}
+                      onChange={(e) => setOwnCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="admin-form-row">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="ownNew">New password</label>
+                      <input
+                        id="ownNew"
+                        type="password"
+                        className="form-input"
+                        autoComplete="new-password"
+                        value={ownNewPassword}
+                        onChange={(e) => setOwnNewPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="ownConfirm">New password again</label>
+                      <input
+                        id="ownConfirm"
+                        type="password"
+                        className="form-input"
+                        autoComplete="new-password"
+                        value={ownConfirmPassword}
+                        onChange={(e) => setOwnConfirmPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {passwordError && <div className="admin-inline-error">{passwordError}</div>}
+
+                  <button type="submit" className="btn btn-primary" disabled={passwordBusy}>
+                    {passwordBusy ? 'Updating...' : 'Update password'}
+                  </button>
+                </form>
+              </section>
+
+              <section className="panel-card">
+                <span className="micro-tag accent">Competency library</span>
+                <h3 className="admin-card-title">Rubrics and versions</h3>
+                <div className="admin-comp-list">
+                  {(data?.competencies || []).map((c: any) => (
+                    <div key={c.code} className="admin-comp-item">
+                      <div className="admin-comp-head">
+                        <strong>{c.code} · {c.title}</strong>
+                        <span className="micro-tag accent" style={{ fontSize: 10 }}>v{c.rubric_version}</span>
+                      </div>
+                      <p className="admin-muted">{c.description}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <form onSubmit={handleUpdateRubric} className="admin-form admin-form-tight">
+                  <div className="admin-form-row">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="rubricCode">Competency code</label>
+                      <input
+                        id="rubricCode"
+                        className="form-input"
+                        value={compCode}
+                        onChange={(e) => setCompCode(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="rubricVersion">New version</label>
+                      <input
+                        id="rubricVersion"
+                        className="form-input"
+                        value={rubricVer}
+                        onChange={(e) => setRubricVer(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="rubricTitle">Title</label>
+                    <input
+                      id="rubricTitle"
+                      className="form-input"
+                      value={compTitle}
+                      onChange={(e) => setCompTitle(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-dark btn-sm">
+                    Publish rubric version
+                  </button>
+                </form>
+              </section>
+            </div>
+
+            <section className="panel-card">
+              <span className="micro-tag accent">Audit trail</span>
+              <h3 className="admin-card-title">Every change, in order</h3>
+              <p className="admin-card-copy">Read only. Nothing here can be edited or deleted.</p>
+              <div className="admin-audit">
+                {(data?.auditEvents || []).map((ev: any) => (
+                  <div key={ev.id} className="admin-audit-row">
+                    <div>
+                      <strong>{ev.action.replaceAll('_', ' ').toLowerCase()}</strong>
+                      <small>{ev.entity_type}: {ev.entity_id}</small>
+                    </div>
+                    <div className="admin-audit-meta">
+                      <span className="micro-tag" style={{ fontSize: 10 }}>{ev.actor_role}</span>
+                      <small>{new Date(ev.created_at).toLocaleString()}</small>
+                    </div>
+                  </div>
+                ))}
+                {(data?.auditEvents || []).length === 0 && <p className="admin-muted">Nothing recorded yet.</p>}
+              </div>
+            </section>
+          </div>
+        )}
+          </div>
+        </div>
       </div>
 
       <ConfirmDialog

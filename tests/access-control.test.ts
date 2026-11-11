@@ -175,4 +175,128 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     expect(data.personas).toBeUndefined();
     expect(data.questions.every((q: any) => q.isActive !== false)).toBe(true);
   });
+
+  it('FRI-ADMIN-002: an admin has the same access as a guide', async () => {
+    const adminToken = await login('admin@frins.org');
+    for (const path of ['/api/guide/workspace', '/api/guide/learners/usr_learner_aarav']) {
+      const res = await fetch(`${base}${path}`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      expect(res.status, path).toBe(200);
+    }
+  });
+
+  it('FRI-AUTH-003: password changes need the current password', async () => {
+    const token = await login('priya@example.com');
+
+    const wrong = await fetch(`${base}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword: 'not-the-password', newPassword: 'LongEnough123' })
+    });
+    expect(wrong.status).toBe(401);
+
+    const short = await fetch(`${base}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword: 'frins123', newPassword: 'short' })
+    });
+    expect(short.status).toBe(400);
+
+    const ok = await fetch(`${base}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ currentPassword: 'frins123', newPassword: 'LongEnough123' })
+    });
+    expect(ok.status).toBe(200);
+
+    // The old password is dead, the new one works.
+    const oldLogin = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'priya@example.com', password: 'frins123' })
+    });
+    expect(oldLogin.status).toBe(401);
+    const newLogin = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: 'priya@example.com', password: 'LongEnough123' })
+    });
+    expect(newLogin.status).toBe(200);
+
+    // Put the seed password back so the rest of the suite is unaffected.
+    const backToken = (await newLogin.json()).token as string;
+    await fetch(`${base}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${backToken}` },
+      body: JSON.stringify({ currentPassword: 'LongEnough123', newPassword: 'frins123' })
+    });
+  });
+
+  it('FRI-NOTIF-001: notices reach the audience they were sent to', async () => {
+    const adminToken = await login('admin@frins.org');
+    const learnerToken = await login('rohan@example.com');
+
+    const createRes = await fetch(`${base}/api/admin/notifications`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'QA notice',
+        message: 'This goes to learners only.',
+        audience: 'LEARNERS'
+      })
+    });
+    expect(createRes.status).toBe(201);
+    const noticeId = (await createRes.json()).id as string;
+
+    const learnerInbox = await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const learnerData = await learnerInbox.json();
+    expect(learnerData.notifications.some((n: any) => n.id === noticeId)).toBe(true);
+
+    const adminInbox = await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const adminData = await adminInbox.json();
+    expect(adminData.notifications.some((n: any) => n.id === noticeId)).toBe(false);
+
+    await fetch(`${base}/api/notifications/${noticeId}/read`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const afterRead = await (await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    })).json();
+    const marked = afterRead.notifications.find((n: any) => n.id === noticeId);
+    expect(marked?.isRead).toBe(true);
+
+    await fetch(`${base}/api/admin/notifications/${noticeId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+  });
+
+  it('FRI-ADMIN-003: booking status only accepts known values', async () => {
+    const adminToken = await login('admin@frins.org');
+    const overview = await (await fetch(`${base}/api/admin/overview`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    })).json();
+    const booking = (overview.callBookings || [])[0];
+    if (!booking) return;
+
+    const bad = await fetch(`${base}/api/admin/bookings/${booking.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'WHATEVER' })
+    });
+    expect(bad.status).toBe(400);
+
+    const good = await fetch(`${base}/api/admin/bookings/${booking.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'CONFIRMED' })
+    });
+    expect(good.status).toBe(200);
+  });
 });

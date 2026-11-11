@@ -1023,6 +1023,24 @@ export function initDatabaseAndSeed() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      audience TEXT NOT NULL,
+      target_user_id TEXT,
+      created_by_id TEXT,
+      created_by_name TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_reads (
+      notification_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      read_at TEXT NOT NULL,
+      PRIMARY KEY (notification_id, user_id)
+    );
+
     CREATE TABLE IF NOT EXISTS course_questions (
       id TEXT PRIMARY KEY,
       course_id TEXT NOT NULL,

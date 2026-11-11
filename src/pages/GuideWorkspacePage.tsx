@@ -2,7 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { StaffSignInGate } from '../components/StaffSignInGate';
 
-export const GuideWorkspacePage: React.FC = () => {
+/**
+ * The learner review desk. `embedded` drops the page padding and the sign-in
+ * gate so the same component can sit inside the Admin Console.
+ */
+export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, authFetch } = useAuth();
   const [workspaceData, setWorkspaceData] = useState<any>(null);
   const [selectedLearnerId, setSelectedLearnerId] = useState<string>('usr_learner_aarav');
@@ -217,7 +221,7 @@ export const GuideWorkspacePage: React.FC = () => {
     }
   };
 
-  if (!user || (user.role !== 'GUIDE' && user.role !== 'ADMIN' && user.role !== 'CURRICULUM_OWNER') || rbacError) {
+  if (!embedded && (!user || (user.role !== 'GUIDE' && user.role !== 'ADMIN' && user.role !== 'CURRICULUM_OWNER') || rbacError)) {
     return (
       <StaffSignInGate
         consoleName="Guide Console"
@@ -243,8 +247,8 @@ export const GuideWorkspacePage: React.FC = () => {
   const suffEval = learnerDossier?.sufficiencyEvaluation;
 
   return (
-    <div className="workspace-shell">
-      <div className="container-wide">
+    <div className={embedded ? 'guide-embedded' : 'workspace-shell'}>
+      <div className={embedded ? '' : 'container-wide'}>
         <div className="workspace-header-banner">
           <div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
