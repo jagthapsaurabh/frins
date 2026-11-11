@@ -27,3 +27,9 @@ previews/
 # Playwright / browser test leftovers
 .cache/
 .pki/
+
+# Local screenshots from browser checks
+shots/
+
+# Files the user uploaded for reference
+uploads/

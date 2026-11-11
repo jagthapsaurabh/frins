@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  Globe,
   LayoutDashboard,
   Users,
   ShieldCheck,
@@ -13,12 +12,14 @@ import {
   X,
   BookOpenCheck,
   ArrowLeft,
-  KeyRound
+  KeyRound,
+  Sparkles as SparklesIcon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
 import { NotificationBell } from './NotificationBell';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
+import { ADMIN_SECTIONS, ADMIN_GROUPS } from '../pages/adminSections';
 
 export type ShellRole = 'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRICULUM_OWNER';
 
@@ -26,7 +27,8 @@ interface NavItem {
   path: string;
   label: string;
   icon: React.ReactNode;
-  staffOnly?: boolean;
+  group?: string;
+  exact?: boolean;
 }
 
 const ROLE_LABEL: Record<string, string> = {
@@ -37,33 +39,46 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 /**
- * Each role sees only the workspaces that belong to it. Staff do not get a
- * "My Learning" item, because /dashboard is the learner area and would bounce
- * them to a sign-in page. Everything an admin needs, including the guide work,
- * lives inside the Admin Console.
+ * Each role sees only the workspaces that belong to it.
+ *
+ * An admin gets one sidebar with every section of the console in it, grouped the
+ * same way the page groups them. There is no second menu inside the page and no
+ * "public website" entry, because the top bar already has a way back to the site.
  */
 const navForRole = (role: string | undefined): NavItem[] => {
   const isAdmin = role === 'ADMIN' || role === 'CURRICULUM_OWNER';
 
   if (isAdmin) {
     return [
-      { path: '/admin', label: 'Admin Console', icon: <ShieldCheck size={17} /> },
-      { path: '/ai-pipeline', label: 'AI Engine', icon: <Sparkles size={17} /> },
-      { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
+      ...ADMIN_SECTIONS.map((section) => ({
+        path: section.path,
+        label: section.label,
+        icon: section.icon,
+        group: section.group,
+        exact: section.key === 'overview'
+      })),
+      { path: '/ai-pipeline', label: 'AI Engine', icon: <SparklesIcon size={17} />, group: 'Tools' }
     ];
   }
 
   if (role === 'GUIDE') {
     return [
-      { path: '/guide', label: 'Learner Reviews', icon: <Users size={17} /> },
-      { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
+      { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace' }
     ];
   }
 
   return [
-    { path: '/dashboard', label: 'My Learning', icon: <LayoutDashboard size={17} /> },
-    { path: '/', label: 'Public Website', icon: <Globe size={17} /> }
+    { path: '/dashboard', label: 'My learning', icon: <LayoutDashboard size={17} />, group: 'Workspace' }
   ];
+};
+
+const groupsOf = (items: NavItem[]): string[] => {
+  const seen: string[] = [];
+  for (const item of items) {
+    const group = item.group || 'Workspace';
+    if (!seen.includes(group)) seen.push(group);
+  }
+  return seen;
 };
 
 const initialsOf = (name?: string) =>
@@ -100,8 +115,20 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [location.pathname]);
 
   const nav = navForRole(user?.role);
-  const current = nav.find((n) => n.path === location.pathname) ||
+  const isActivePath = (item: NavItem) => {
+    if (item.path === '/dashboard' && (location.pathname === '/prototype' || location.pathname === '/learner')) {
+      return true;
+    }
+    if (item.exact) return location.pathname === item.path;
+    return location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
+  };
+  const current = nav.find(isActivePath) ||
     (location.pathname === '/prototype' ? nav[0] : undefined);
+  const homeLabel = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER'
+    ? 'Admin console'
+    : user?.role === 'GUIDE'
+      ? 'Guide'
+      : 'Dashboard';
 
   return (
     <div className="app-shell">
@@ -111,8 +138,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           <button
             type="button"
             className="app-brand-button"
-            onClick={() => navigate('/dashboard')}
-            aria-label="FRINS dashboard home"
+            onClick={() => navigate(nav[0]?.path || '/')}
+            aria-label="FRINS home"
           >
             <span className="app-brand-mark" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
@@ -136,26 +163,29 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
         </div>
 
         <nav className="app-sidebar-nav" aria-label="Dashboard navigation">
-          <span className="app-nav-section">Workspace</span>
-          {nav.map((item) => {
-            const active =
-              location.pathname === item.path ||
-              (item.path === '/dashboard' && (location.pathname === '/prototype' || location.pathname === '/learner'));
-            return (
-              <button
-                key={item.path}
-                type="button"
-                className={`app-nav-item ${active ? 'active' : ''}`}
-                onClick={() => navigate(item.path)}
-              >
-                <span className="app-nav-icon">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+          {groupsOf(nav).map((group) => (
+            <div key={group} className="app-nav-group">
+              <span className="app-nav-section">{group}</span>
+              {nav
+                .filter((item) => (item.group || 'Workspace') === group)
+                .map((item) => (
+                  <button
+                    key={item.path}
+                    type="button"
+                    className={`app-nav-item ${isActivePath(item) ? 'active' : ''}`}
+                    aria-current={isActivePath(item) ? 'page' : undefined}
+                    onClick={() => navigate(item.path)}
+                  >
+                    <span className="app-nav-icon">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+            </div>
+          ))}
         </nav>
 
         <div className="app-sidebar-footer">
+          {user?.role === 'LEARNER' && (
           <div className="app-sidebar-card">
             <BookOpenCheck size={16} />
             <div>
@@ -166,6 +196,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </button>
             </div>
           </div>
+          )}
           <button type="button" className="app-nav-item subtle" onClick={() => setSignOutOpen(true)}>
             <span className="app-nav-icon">
               <LogOut size={17} />
@@ -190,7 +221,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <Menu size={19} />
             </button>
             <div className="app-breadcrumb">
-              <span>Dashboard</span>
+              <span>{homeLabel}</span>
               <span className="app-breadcrumb-sep">/</span>
               <strong>{current?.label || 'Workspace'}</strong>
             </div>
@@ -231,9 +262,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     </div>
                   </div>
 
-                  <button type="button" className="app-menu-item" onClick={() => navigate('/')}>
-                    <Globe size={16} /> View public website
-                  </button>
                   {user?.role === 'LEARNER' && (
                     <button type="button" className="app-menu-item" onClick={() => navigate('/dashboard')}>
                       <LayoutDashboard size={16} /> My learning dashboard

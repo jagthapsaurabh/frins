@@ -97,16 +97,19 @@ export const EcosystemShell: React.FC = () => {
       />
 
       {/* Staff consoles */}
-      <Route
-        path="/admin"
-        element={
-          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
-            <AppShell>
-              <AdminWorkspacePage />
-            </AppShell>
-          </RequireStaff>
-        }
-      />
+      {['/admin', '/admin/:section'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+              <AppShell>
+                <AdminWorkspacePage />
+              </AppShell>
+            </RequireStaff>
+          }
+        />
+      ))}
       <Route
         path="/guide"
         element={

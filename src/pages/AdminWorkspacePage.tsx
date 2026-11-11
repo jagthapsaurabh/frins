@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -18,37 +19,7 @@ import {
 import { StaffSignInGate } from '../components/StaffSignInGate';
 import { GuideWorkspacePage } from './GuideWorkspacePage';
 import { AdminNotifications } from './admin/AdminNotifications';
-
-type AdminTabKey =
-  | 'overview'
-  | 'tasks'
-  | 'courses'
-  | 'learners'
-  | 'staff'
-  | 'leads'
-  | 'bookings'
-  | 'discovery'
-  | 'notifications'
-  | 'settings';
-
-const ADMIN_SECTIONS: Array<{
-  key: AdminTabKey;
-  label: string;
-  hint: string;
-  icon: React.ReactNode;
-  group: 'Work' | 'People' | 'Growth' | 'Setup';
-}> = [
-  { key: 'overview', label: 'Overview', hint: 'Today at a glance', icon: <LayoutDashboard size={17} />, group: 'Work' },
-  { key: 'tasks', label: 'Task review', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work' },
-  { key: 'courses', label: 'Courses & tasks', hint: 'Build, assign, give work', icon: <BookOpen size={17} />, group: 'Work' },
-  { key: 'learners', label: 'Learners', hint: 'Full guide access', icon: <GraduationCap size={17} />, group: 'People' },
-  { key: 'staff', label: 'Staff & access', hint: 'Roles, status, passwords', icon: <UserCog size={17} />, group: 'People' },
-  { key: 'leads', label: 'Leads', hint: 'Website form inbox', icon: <Contact size={17} />, group: 'Growth' },
-  { key: 'bookings', label: 'Bookings', hint: 'Calls with the team', icon: <CalendarCheck size={17} />, group: 'Growth' },
-  { key: 'notifications', label: 'Notifications', hint: 'Send notices', icon: <BellRing size={17} />, group: 'Growth' },
-  { key: 'discovery', label: 'Discovery', hint: 'Questions and answers', icon: <HelpCircle size={17} />, group: 'Setup' },
-  { key: 'settings', label: 'Settings', hint: 'Password, rubrics, audit', icon: <SettingsIcon size={17} />, group: 'Setup' }
-];
+import { ADMIN_SECTIONS, adminKeyFromPath, findAdminSection, type AdminSectionKey } from './adminSections';
 
 const BOOKING_STATUSES = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
 const BOOKING_STATUS_LABEL: Record<string, string> = {
@@ -72,10 +43,25 @@ const LEAD_STATUS_LABEL: Record<string, string> = {
 
 export const AdminWorkspacePage: React.FC = () => {
   const { user, authFetch } = useAuth();
+  const navigate = useNavigate();
+  const params = useParams<{ section?: string }>();
+
+  // The sidebar owns navigation, so the current section comes from the URL.
+  // That also makes every section linkable and survives a refresh.
+  const activeTab: AdminSectionKey = params.section
+    ? adminKeyFromPath(`/admin/${params.section}`)
+    : 'overview';
+
+  const section = findAdminSection(activeTab);
+
+  const setActiveTab = (key: AdminSectionKey) => {
+    const target = ADMIN_SECTIONS.find((section) => section.key === key);
+    navigate(target ? target.path : '/admin');
+  };
   const [data, setData] = useState<any>(null);
   const [rbacError, setRbacError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<AdminTabKey>('overview');
+
 
   // Confirmation dialog state for destructive / state-changing actions
   const [confirmState, setConfirmState] = useState<{
@@ -796,37 +782,16 @@ export const AdminWorkspacePage: React.FC = () => {
   return (
     <div className="workspace-shell">
       <div className="container-wide">
-        {/* Section rail: every admin workspace, one level deep */}
-        <div className="admin-layout">
-          <nav className="admin-rail" aria-label="Admin sections">
-            {(['Work', 'People', 'Growth', 'Setup'] as const).map((group) => (
-              <div key={group} className="admin-rail-group">
-                <span className="admin-rail-heading">{group}</span>
-                {ADMIN_SECTIONS.filter((section) => section.group === group).map((section) => {
-                  const isActive = activeTab === section.key;
-                  return (
-                    <button
-                      key={section.key}
-                      type="button"
-                      className={`admin-rail-item ${isActive ? 'active' : ''}`}
-                      aria-current={isActive ? 'page' : undefined}
-                      onClick={() => setActiveTab(section.key)}
-                    >
-                      <span className="admin-rail-icon">{section.icon}</span>
-                      <span className="admin-rail-text">
-                        <strong>{section.label}</strong>
-                        <small>{section.hint}</small>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
+        <div className="admin-body">
+          {activeTab !== 'overview' && (
+            <header className="admin-page-head">
+              <span className="admin-page-eyebrow">Admin console</span>
+              <h1>{section.label}</h1>
+              <p>{section.hint}.</p>
+            </header>
+          )}
 
-          <div className="admin-body">
-
-        {activeTab === 'overview' && (
+          {activeTab === 'overview' && (
           <>
         <div className="dash-hero">
           <div className="dash-hero-tags">
@@ -852,7 +817,7 @@ export const AdminWorkspacePage: React.FC = () => {
             <div className="dash-stat-body">
               <span className="dash-stat-label">Website Leads</span>
               <span className="dash-stat-value">{data?.metrics?.totalLeads ?? 0}</span>
-              <span className="dash-stat-hint">Form submissions captured</span>
+              <span className="dash-stat-hint">From the website form</span>
             </div>
           </div>
           <div className="dash-stat">
@@ -915,7 +880,7 @@ export const AdminWorkspacePage: React.FC = () => {
           <div className="admin-quick-grid">
             {[
               {
-                key: 'tasks' as AdminTabKey,
+                key: 'tasks' as AdminSectionKey,
                 title: 'Review uploads',
                 body: (() => {
                   const n = allStudentTasks.filter((t) => t.status === 'SUBMITTED').length;
@@ -924,7 +889,7 @@ export const AdminWorkspacePage: React.FC = () => {
                 cta: 'Open task review'
               },
               {
-                key: 'leads' as AdminTabKey,
+                key: 'leads' as AdminSectionKey,
                 title: 'New leads',
                 body: (() => {
                   const n = leadsList.filter((l) => l.status === 'NEW' || l.status === 'DISCOVERY_STARTED').length;
@@ -936,7 +901,7 @@ export const AdminWorkspacePage: React.FC = () => {
                 cta: 'Open leads'
               },
               {
-                key: 'bookings' as AdminTabKey,
+                key: 'bookings' as AdminSectionKey,
                 title: 'Upcoming calls',
                 body: (() => {
                   const n = (data?.callBookings || []).filter(
@@ -948,7 +913,7 @@ export const AdminWorkspacePage: React.FC = () => {
                 cta: 'Open bookings'
               },
               {
-                key: 'learners' as AdminTabKey,
+                key: 'learners' as AdminSectionKey,
                 title: 'Learner reviews',
                 body: (() => {
                   const n = data?.metrics?.pendingPDPReviews ?? 0;
@@ -971,6 +936,61 @@ export const AdminWorkspacePage: React.FC = () => {
                 <span>{card.cta} &rarr;</span>
               </button>
             ))}
+          </div>
+
+          <div className="admin-overview-grid">
+            <section className="panel-card">
+              <span className="micro-tag accent">Latest activity</span>
+              <h3 className="admin-card-title">What just happened</h3>
+              <p className="admin-card-copy">The last few actions across the console.</p>
+              <div className="admin-audit">
+                {(() => {
+                  const events: any[] = data?.auditEvents || [];
+                  // Logins are routine. Show the things that changed something first.
+                  const meaningful = events.filter((ev) => ev.action !== 'USER_LOGIN_SUCCESS');
+                  const shown = (meaningful.length >= 3 ? meaningful : events).slice(0, 5);
+                  if (shown.length === 0) {
+                    return <p className="admin-muted">No activity yet. It will show up here as the team works.</p>;
+                  }
+                  return shown.map((ev: any) => (
+                    <div key={ev.id} className="admin-audit-row">
+                      <div>
+                        <strong>{ev.action.replaceAll('_', ' ').toLowerCase()}</strong>
+                        <small>{ev.entity_type} &middot; {String(ev.entity_id).replaceAll('_', ' ')}</small>
+                      </div>
+                      <div className="admin-audit-meta">
+                        <span className="micro-tag" style={{ fontSize: 10 }}>{ev.actor_role}</span>
+                        <small>{new Date(ev.created_at).toLocaleDateString()}</small>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </section>
+
+            <section className="panel-card">
+              <span className="micro-tag accent">Pipeline</span>
+              <h3 className="admin-card-title">Newest leads</h3>
+              <p className="admin-card-copy">People who filled the form on the website.</p>
+              {leadsList.length === 0 ? (
+                <p className="admin-muted">No leads yet.</p>
+              ) : (
+                <div className="admin-mini-list">
+                  {leadsList.slice(0, 5).map((lead: any) => (
+                    <div key={lead.id} className="admin-mini-row">
+                      <div>
+                        <strong>{lead.name}</strong>
+                        <small>{lead.track === 'other' ? lead.custom_track || 'Other' : lead.track}</small>
+                      </div>
+                      <span className="micro-tag">{String(lead.status).replaceAll('_', ' ').toLowerCase()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button type="button" className="admin-link-button" onClick={() => setActiveTab('leads')}>
+                Open the leads inbox
+              </button>
+            </section>
           </div>
           </>
         )}
@@ -2218,7 +2238,7 @@ export const AdminWorkspacePage: React.FC = () => {
                       className={`btn btn-sm ${isSel ? 'btn-primary' : 'btn-secondary'}`}
                       onClick={() => setSelectedSessionId(sess.id)}
                     >
-                      {sess.participant_name} ({sess.answeredCount} Ans &middot; {sess.candidateResult?.readinessScore || 65}%)
+                      {sess.participant_name} ({sess.answeredCount} answers &middot; {sess.candidateResult?.readinessScore || 65}%)
                     </button>
                   );
                 })}
@@ -2846,7 +2866,6 @@ export const AdminWorkspacePage: React.FC = () => {
             </section>
           </div>
         )}
-          </div>
         </div>
       </div>
 

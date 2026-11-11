@@ -4444,3 +4444,189 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Turn 19: one sidebar. Admin groups live in the app rail ---- */
+.app-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-nav-group + .app-nav-group {
+  margin-top: 14px;
+}
+
+.app-nav-item {
+  position: relative;
+}
+
+.app-nav-item.active {
+  background: rgba(59, 130, 246, 0.16);
+  color: #FFFFFF;
+  box-shadow: none;
+}
+
+.app-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #60A5FA;
+}
+
+.app-sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+
+.app-sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+}
+
+/* The page header that opens every admin section. The sidebar says where you
+   are; this says what the section does, so the two never feel disconnected. */
+.admin-page-head {
+  margin: 4px 0 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-page-eyebrow {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.admin-page-head h1 {
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.2;
+  margin: 0 0 6px;
+  color: var(--text-strong);
+}
+
+.admin-page-head p {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin: 0;
+  max-width: 680px;
+}
+
+.admin-body {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .admin-page-head h1 {
+    font-size: 22px;
+  }
+}
+
+/* Balanced stat row and tidy in-page headers now that the console is wider. */
+@media (min-width: 1101px) {
+  .admin-body .dash-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.admin-body .dash-stat-hint {
+  white-space: normal;
+}
+
+/* The queue header sits in a narrow column: keep the label on one line and let
+   the filter buttons drop below it instead of crushing the text. */
+.workspace-sidebar-layout .micro-tag {
+  white-space: nowrap;
+}
+
+.workspace-sidebar-layout > .panel-card:first-child > div:first-child {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Full-width primary buttons look heavy in a settings card. */
+.admin-form > .btn,
+.admin-form .btn-primary {
+  align-self: flex-start;
+  width: auto;
+  min-width: 210px;
+}
+
+/* Overview: activity feed and newest leads sit side by side. */
+.admin-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.admin-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 10px;
+}
+
+.admin-mini-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-mini-row:last-child {
+  border-bottom: none;
+}
+
+.admin-mini-row strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-strong);
+}
+
+.admin-mini-row small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.admin-mini-row .micro-tag {
+  flex: 0 0 auto;
+  text-transform: capitalize;
+}
+
+.admin-link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #1D4ED8;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-link-button:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1100px) {
+  .admin-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A heading right under a tag needs a little air, everywhere. */
+.panel-card > .micro-tag + h3,
+.panel-card > .micro-tag + h2 {
+  margin-top: 8px;
+}

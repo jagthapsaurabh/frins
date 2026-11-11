@@ -95,8 +95,10 @@ The purge refuses to run if it would leave the database with no active administr
 
 ## 7b. The Admin Console
 
-Admin and Curriculum Owner sign in at `/admin/login` and land on `/admin`. The console is a rail of
-sections, not one long page.
+Admin and Curriculum Owner sign in at `/admin/login` and land on `/admin`. The console is a set of
+pages, not one long scrolling page. There is one sidebar: the same app sidebar every role gets, with
+the admin sections grouped inside it. No second menu inside the page, and no "public website" entry,
+because the top bar already has "Back to website".
 
 | Group | Section | What it does |
 | --- | --- | --- |
@@ -115,8 +117,12 @@ Notes:
 
 - An admin can do everything a guide can. The guide API routes accept `GUIDE`, `ADMIN` and
   `CURRICULUM_OWNER`, and the Learners section renders the same review desk a guide sees.
+- Each section has its own URL, so `/admin/tasks` or `/admin/bookings` can be bookmarked, shared,
+  and survives a refresh. The sidebar highlights whatever section you are on.
 - Staff no longer see a "My Learning" item, because `/dashboard` is the learner area and would
   bounce them to a sign-in page.
+- The nav list lives in one file, `src/pages/adminSections.tsx`. The sidebar and the page both read
+  it, so a section cannot exist in one and be missing in the other.
 - The bell in the top bar shows unread notices and marks them read as they are opened.
 - "Update password" is in the account menu for every role. Changing it signs out other devices.
 - Resetting someone else's password requires no current password, returns a one-time password, and
