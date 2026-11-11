@@ -52,6 +52,14 @@ export const AdminWorkspacePage: React.FC = () => {
     ? adminKeyFromPath(`/admin/${params.section}`)
     : 'overview';
 
+  // A typed or stale URL like /admin/payroll should not sit on the overview
+  // while the address bar says something else.
+  const unknownSection =
+    Boolean(params.section) && !ADMIN_SECTIONS.some((section) => section.key === params.section);
+  useEffect(() => {
+    if (unknownSection) navigate('/admin', { replace: true });
+  }, [unknownSection, navigate]);
+
   const section = findAdminSection(activeTab);
 
   const setActiveTab = (key: AdminSectionKey) => {
