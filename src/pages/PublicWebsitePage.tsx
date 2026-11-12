@@ -1233,13 +1233,67 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
            ================================================================= */}
         {currentPath === '/how-it-works' && (
           <>
-            <section className="page-hero-banner">
-              <div className="container">
-                <span className="micro-tag accent">How it works</span>
-                <h1>Four steps from signing up to a course that fits you.</h1>
-                <p>
-                  Either book a call right away or answer a few Discovery questions. Both routes end in the same place: a plan written for you.
-                </p>
+            <section className="page-intro">
+              <div className="container page-intro-grid">
+                <div className="page-intro-copy">
+                  <p className="page-intro-eyebrow">How it works</p>
+                  <h1>Four steps, and the first one is just a conversation.</h1>
+                  <p className="page-intro-lede">
+                    Book a call right away, or answer a few Discovery questions first. Both routes land in
+                    the same place: a plan written around what you already know.
+                  </p>
+
+                  <ul className="page-intro-points">
+                    <li>
+                      <strong>Nothing to pay to start.</strong> The call and the questions are both free.
+                    </li>
+                    <li>
+                      <strong>You speak to a person.</strong> A mentor reads your answers before the call.
+                    </li>
+                    <li>
+                      <strong>Written after we meet.</strong> No module list exists until we know where you are.
+                    </li>
+                  </ul>
+
+                  <div className="page-intro-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
+                      Start Discovery &rarr;
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
+                      Book a Call
+                    </button>
+                  </div>
+                </div>
+
+                <aside className="page-intro-aside" aria-label="Two ways in, one outcome">
+                  <div className="route-diagram">
+                    <button type="button" className="route-entry" onClick={() => openDirectCallModal()}>
+                      <span className="route-entry-num">A</span>
+                      <span className="route-entry-body">
+                        <strong>Book a call</strong>
+                        <small>Skip the questions. Talk it through.</small>
+                      </span>
+                    </button>
+                    <button type="button" className="route-entry" onClick={() => openModalWithTrack()}>
+                      <span className="route-entry-num">B</span>
+                      <span className="route-entry-body">
+                        <strong>Answer Discovery</strong>
+                        <small>See your readiness, then we call.</small>
+                      </span>
+                    </button>
+
+                    <div className="route-join" aria-hidden="true">
+                      <span>same destination</span>
+                    </div>
+
+                    <div className="route-outcome">
+                      <span className="route-outcome-label">Step 4</span>
+                      <strong>Your own course</strong>
+                      <small>Modules, exercises and calls built around your answers.</small>
+                    </div>
+                  </div>
+                  <p className="intro-compare-note">Different order, same destination. Neither route costs anything.</p>
+                </aside>
               </div>
             </section>
 
@@ -1335,13 +1389,75 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
            ================================================================= */}
         {currentPath === '/tracks' && (
           <>
-            <section className="page-hero-banner">
-              <div className="container">
-                <span className="micro-tag accent">Who can join</span>
-                <h1>Four starting points. One platform.</h1>
-                <p>
-                  Pick the one that sounds most like you. It only sets your starting point, not your ceiling. You can move between tracks later as your goals change.
-                </p>
+            <section className="page-intro">
+              <div className="container page-intro-grid">
+                <div className="page-intro-copy">
+                  <p className="page-intro-eyebrow">Who can join</p>
+                  <h1>Four starting points. One platform.</h1>
+                  <p className="page-intro-lede">
+                    Pick the one that sounds most like you. It sets where you begin, not how far you can go.
+                  </p>
+
+                  <ul className="page-intro-points">
+                    <li>
+                      <strong>Nothing to qualify for.</strong> No entrance test and no minimum experience.
+                    </li>
+                    <li>
+                      <strong>The work sets your level.</strong> You move up when your guide signs off, not on a calendar.
+                    </li>
+                    <li>
+                      <strong>You can switch.</strong> Change track later if your goal changes. Nothing is locked.
+                    </li>
+                  </ul>
+
+                  <div className="page-intro-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
+                      Start Discovery &rarr;
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
+                      Not sure? Book a Call
+                    </button>
+                  </div>
+                </div>
+
+                <aside className="page-intro-aside" aria-label="The four tracks on this page">
+                  <div className="track-index">
+                    <p className="track-index-heading">On this page</p>
+                    <ul>
+                      <li>
+                        <span className="track-index-num">01</span>
+                        <span>
+                          <strong>Students and beginners</strong>
+                          <small>How markets actually work, before any risk.</small>
+                        </span>
+                      </li>
+                      <li>
+                        <span className="track-index-num">02</span>
+                        <span>
+                          <strong>Strategy learners</strong>
+                          <small>Rules you can explain out loud.</small>
+                        </span>
+                      </li>
+                      <li>
+                        <span className="track-index-num">03</span>
+                        <span>
+                          <strong>Active traders</strong>
+                          <small>Execution under pressure.</small>
+                        </span>
+                      </li>
+                      <li>
+                        <span className="track-index-num">04</span>
+                        <span>
+                          <strong>Long-term investors</strong>
+                          <small>Patience, sizing and review.</small>
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                  <p className="intro-compare-note">
+                    Unsure which one? Discovery picks the closest match for you.
+                  </p>
+                </aside>
               </div>
             </section>
 
