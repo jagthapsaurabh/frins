@@ -1376,36 +1376,57 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
           </>
         )}
 
-        {/* Shared Final Call to Action Banner */}
-        <section className="final-cta-section">
+        {/* Shared final call to action. Two ways in, each written as what happens
+            next rather than a label, so nobody has to guess which one to pick. */}
+        <section className="closing-section">
           <div className="container">
-            <div className="final-cta-content">
-              <span className="micro-tag dark">Ready when you are</span>
-              <h2>Book a call, or start with the Discovery questions.</h2>
-              <p>
-                Either way it is free, and either way you end up with a plan built for your level. Pick whichever feels easier today.
+            <div className="closing-head">
+              <p className="closing-eyebrow">Ready when you are</p>
+              <h2>Pick the way in that suits you.</h2>
+              <p className="closing-lede">
+                Both are free. One is a conversation, the other is a few questions. Either way you end up
+                with a plan built for your level, not a template.
               </p>
-              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center', marginTop: 8 }}>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-lg"
-                  onClick={() => openDirectCallModal()}
-                >
-                  Book a Call Directly &rarr;
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-lg"
-                  onClick={() => openModalWithTrack()}
-                >
-                  Start Discovery Questions &rarr;
-                </button>
-                {(onOpenSignIn || user) && (
-                  <button type="button" className="btn btn-secondary btn-lg" onClick={openAccount}>
+            </div>
+
+            <div className="closing-grid">
+              <button type="button" className="closing-card" onClick={() => openDirectCallModal()}>
+                <span className="closing-card-top">
+                  <span className="closing-step">Fastest</span>
+                  <span className="closing-card-go" aria-hidden="true">&rarr;</span>
+                </span>
+                <strong>Talk to a person</strong>
+                <span className="closing-card-body">
+                  Book a 1-on-1 call and tell us where you are. No questionnaire first.
+                </span>
+                <span className="closing-card-foot">Book a call directly</span>
+              </button>
+
+              <button type="button" className="closing-card primary" onClick={() => openModalWithTrack()}>
+                <span className="closing-card-top">
+                  <span className="closing-step">Most useful</span>
+                  <span className="closing-card-go" aria-hidden="true">&rarr;</span>
+                </span>
+                <strong>Answer the Discovery questions</strong>
+                <span className="closing-card-body">
+                  A short set of questions about how you work. We read your answers before anyone calls.
+                </span>
+                <span className="closing-card-foot">Start Discovery</span>
+              </button>
+            </div>
+
+            <div className="closing-foot">
+              <span>Free, and no card needed.</span>
+              <span aria-hidden="true">·</span>
+              <span>Nobody calls you unless you ask.</span>
+              {(onOpenSignIn || user) && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button type="button" className="closing-link" onClick={openAccount}>
                     {accountLabel}
                   </button>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
         </section>

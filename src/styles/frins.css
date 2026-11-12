@@ -7108,3 +7108,183 @@ button.stage-row .stage-desc {
   .hero-eyebrow { line-height: 1.45; margin-bottom: 4px; }
   .hero-title { line-height: 1.12; letter-spacing: -0.025em; }
 }
+
+/* ---------------------------------------------------------------------------
+   Closing call to action
+
+   Two doors, not one banner. Each card says what the step is, what happens, and
+   what it is called, so the choice is obvious at a glance. The Discovery card is
+   the primary one because it gives the team something to read before a call.
+   --------------------------------------------------------------------------- */
+
+.closing-section {
+  background: #0B1220;
+  border-top: 1px solid #1B2434;
+  color: #E7EDF6;
+  padding: clamp(48px, 6vw, 84px) 0;
+}
+
+.closing-head {
+  max-width: 620px;
+  margin-bottom: clamp(22px, 3vw, 32px);
+}
+
+.closing-eyebrow {
+  margin: 0 0 12px;
+  padding-left: 14px;
+  border-left: 2px solid #35C4B3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #35C4B3;
+}
+
+.closing-head h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.65rem, 2.6vw, 2.25rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+}
+
+.closing-lede {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #9FB0C7;
+  max-width: 560px;
+}
+
+.closing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.closing-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  padding: 20px 22px;
+  background: #101828;
+  border: 1px solid #24314A;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  min-width: 0;
+}
+
+.closing-card:hover {
+  border-color: #3A4C6B;
+  background: #131D30;
+}
+
+.closing-card:focus-visible {
+  outline: 2px solid #35C4B3;
+  outline-offset: 2px;
+}
+
+.closing-card.primary {
+  border-color: #2A4E8A;
+  background: #0F1B33;
+}
+
+.closing-card.primary:hover {
+  border-color: #3B6BC0;
+  background: #12203B;
+}
+
+.closing-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.closing-step {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8FA0B8;
+}
+
+.closing-card.primary .closing-step {
+  color: #7FB2FF;
+}
+
+.closing-card-go {
+  font-size: 15px;
+  color: #6E86A6;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.closing-card:hover .closing-card-go {
+  transform: translateX(3px);
+  color: #FFFFFF;
+}
+
+.closing-card strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #FFFFFF;
+  line-height: 1.3;
+}
+
+.closing-card-body {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #9FB0C7;
+}
+
+.closing-card-foot {
+  display: block;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid #1E2A40;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #E7EDF6;
+}
+
+.closing-card.primary .closing-card-foot {
+  color: #9CC4FF;
+}
+
+.closing-foot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: #7C8CA3;
+}
+
+.closing-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #C7D5E8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.closing-link:hover { color: #FFFFFF; }
+
+@media (max-width: 760px) {
+  .closing-grid { grid-template-columns: minmax(0, 1fr); }
+  .closing-card { padding: 18px; }
+  .closing-section { padding: 40px 0 44px; }
+}
