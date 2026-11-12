@@ -1222,7 +1222,12 @@ export function initDatabaseAndSeed() {
     'ALTER TABLE learning_tasks ADD COLUMN ai_review_json TEXT',
     'ALTER TABLE leads ADD COLUMN custom_track TEXT',
     'ALTER TABLE call_bookings ADD COLUMN custom_track TEXT',
-    'ALTER TABLE discovery_sessions ADD COLUMN custom_track TEXT'
+    'ALTER TABLE discovery_sessions ADD COLUMN custom_track TEXT',
+    "ALTER TABLE discovery_sessions ADD COLUMN review_state TEXT NOT NULL DEFAULT 'NEW'",
+    'ALTER TABLE discovery_sessions ADD COLUMN review_note TEXT',
+    'ALTER TABLE discovery_sessions ADD COLUMN reviewed_by TEXT',
+    'ALTER TABLE discovery_sessions ADD COLUMN reviewed_at TEXT',
+    'ALTER TABLE discovery_sessions ADD COLUMN converted_user_id TEXT'
   ];
   for (const sql of extraTaskColumns) {
     try {
@@ -1842,8 +1847,12 @@ export function initDatabaseAndSeed() {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
+    // Only the questions the persona actually answered. Seeding a row for every
+    // question in the bank made finished sessions look longer than the flow the
+    // admin had configured.
     for (const q of CANONICAL_QUESTIONS) {
-      const val = persona.answers[q.id] || '';
+      const val = persona.answers[q.id];
+      if (!val) continue;
       insertResp.run(
         `resp_${sessionId}_${q.id}`,
         sessionId,

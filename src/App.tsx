@@ -15,7 +15,8 @@ import { CoursesDirectory } from './pages/admin/CoursesDirectory';
 import { MessagesPage } from './pages/MessagesPage';
 import { NewNotificationPage } from './pages/admin/AdminNotifications';
 import { NewStaffPage, StaffAccountPage } from './pages/admin/StaffPages';
-import { DiscoveryQuestionPage } from './pages/admin/DiscoveryPages';
+import { DiscoveryQuestionPage, DiscoveryQuestionsPage } from './pages/admin/DiscoveryPages';
+import { DiscoveryResultPage } from './pages/admin/DiscoveryResults';
 import { TaskDetailPage } from './pages/admin/TaskDetailPage';
 import { AssignTaskPage } from './pages/admin/AssignTaskPage';
 import {
@@ -199,11 +200,31 @@ export const EcosystemShell: React.FC = () => {
         }
       />
       <Route
+        path="/admin/discovery/questions"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <DiscoveryQuestionsPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
         path="/admin/discovery/questions/:questionId"
         element={
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
             <AppShell>
               <DiscoveryQuestionPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/discovery/results/:sessionId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <DiscoveryResultPage />
             </AppShell>
           </RequireStaff>
         }

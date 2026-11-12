@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { PageHead } from '../../components/console/ConsoleUI';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 interface Question {
@@ -86,11 +87,14 @@ export const DiscoveryQuestionsPage: React.FC = () => {
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <h1>Discovery</h1>
-        </div>
-        <div className="page-head-actions">
+      <button type="button" className="back-link" onClick={() => navigate('/admin/discovery')}>
+        <ArrowLeft size={14} /> Discovery results
+      </button>
+
+      <PageHead
+        title="Question bank"
+        meta={`${activeCount} live`}
+        actions={
           <button
             type="button"
             className="btn btn-primary"
@@ -98,8 +102,8 @@ export const DiscoveryQuestionsPage: React.FC = () => {
           >
             <Plus size={14} /> Add question
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {error && <div className="governance-alert danger">{error}</div>}
       {banner && <div className="governance-alert success">{banner}</div>}
@@ -287,14 +291,14 @@ export const DiscoveryQuestionPage: React.FC = () => {
       setError(json.error || 'Could not save the question.');
       return;
     }
-    navigate('/admin/discovery');
+    navigate('/admin/discovery/questions');
   };
 
   if (loading) return <p className="section-note">Loading the question.</p>;
 
   return (
     <div>
-      <button type="button" className="back-link" onClick={() => navigate('/admin/discovery')}>
+      <button type="button" className="back-link" onClick={() => navigate('/admin/discovery/questions')}>
         <ArrowLeft size={14} /> Discovery questions
       </button>
 

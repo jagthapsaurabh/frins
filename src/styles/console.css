@@ -1897,3 +1897,92 @@ a.kpi:hover { background: #FCFCFD; }
   .work-actions .btn { flex: 1 1 auto; justify-content: center; }
   .work-actions .btn-primary { margin-left: 0; }
 }
+
+/* ==========================================================================
+   Discovery results
+
+   Every submission is readable as a page: the readout on the left, the answers
+   below it, and the review panel on the right.
+   ========================================================================== */
+
+.pillar-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.pillar { min-width: 0; }
+.pillar-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.pillar-head strong { font-size: 12px; color: var(--text-main); font-variant-numeric: tabular-nums; }
+.pillar small { font-size: 10.5px; color: var(--text-light-muted); text-transform: lowercase; }
+
+.readout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+.readout-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light-muted);
+  margin: 0 0 6px;
+}
+.readout-list { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 5px; }
+.readout-list li { font-size: 12.5px; line-height: 1.5; color: var(--text-main); }
+
+.contradictions { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+
+.answer-groups { display: flex; flex-direction: column; gap: 18px; }
+.answer-domain {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-light-muted);
+  margin: 0 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.answer-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid #F2F4F7;
+}
+.answer-row:last-child { border-bottom: 0; }
+.answer-prompt { font-size: 12.5px; line-height: 1.5; color: var(--text-muted); margin: 0; }
+.answer-value { font-size: 12.5px; line-height: 1.5; color: var(--text-main); font-weight: 550; margin: 0; }
+
+.review-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.review-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+@media (max-width: 900px) {
+  .readout-grid { grid-template-columns: minmax(0, 1fr); }
+  .answer-row { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .answer-prompt { font-size: 12px; }
+  .answer-value { font-weight: 600; }
+}
+
+.readout-domain {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-light-muted);
+  margin-bottom: 1px;
+}
+
+/* Six facts: three across reads better than four with a hole. */
+.facts-six { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 900px) {
+  .facts-six { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

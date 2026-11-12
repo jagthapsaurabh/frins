@@ -11,7 +11,7 @@ import { LeadsDirectory } from './admin/LeadsDirectory';
 import { BookingsDirectory } from './admin/BookingsDirectory';
 import { SettingsPage } from './admin/SettingsPage';
 import { AdminNotifications } from './admin/AdminNotifications';
-import { DiscoveryQuestionsPage } from './admin/DiscoveryPages';
+import { DiscoveryResultsPage } from './admin/DiscoveryResults';
 import { ADMIN_SECTIONS, adminKeyFromPath, type AdminSectionKey } from './adminSections';
 
 /**
@@ -55,7 +55,7 @@ export const AdminWorkspacePage: React.FC = () => {
       {activeTab === 'bookings' && <BookingsDirectory />}
       {activeTab === 'settings' && <SettingsPage />}
       {activeTab === 'notifications' && <AdminNotifications />}
-      {activeTab === 'discovery' && <DiscoveryQuestionsPage />}
+      {activeTab === 'discovery' && <DiscoveryResultsPage />}
       {activeTab === 'courses' && <Navigate to="/admin/courses" replace />}
       {activeTab === 'communities' && <Navigate to="/admin/communities" replace />}
       {activeTab === 'messages' && <Navigate to="/admin/messages" replace />}

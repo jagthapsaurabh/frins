@@ -2860,8 +2860,24 @@ const likeTerm = (value: unknown) => `%${String(value ?? '').trim().replace(/[\\
 
 const hasSearch = (value: unknown) => String(value ?? '').trim().length > 0;
 
-const paged = (req: Request, res: Response, rows: any[], total: number, page: number, limit: number) =>
-  res.json({ success: true, rows, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
+const paged = (
+  req: Request,
+  res: Response,
+  rows: any[],
+  total: number,
+  page: number,
+  limit: number,
+  extra: Record<string, unknown> = {}
+) =>
+  res.json({
+    success: true,
+    rows,
+    total,
+    page,
+    limit,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    ...extra
+  });
 
 // Reference data and counts for the whole console. Small and cheap on purpose:
 // the per-learner and per-task detail is fetched by the section that needs it.
@@ -3330,12 +3346,63 @@ app.get('/api/admin/audit', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, re
   return paged(req, res, rows, total, page, limit);
 });
 
+const discoveryAnswersFor = (sessionId: string) => {
+  const questions = getAllDiscoveryQuestions();
+  const rows = db
+    .prepare(
+      'SELECT question_id, domain, answer_value, answer_text, answered_at FROM discovery_responses WHERE session_id = ? ORDER BY answered_at ASC, question_id ASC'
+    )
+    .all(sessionId) as any[];
+
+  const answers = rows.map((row) => {
+    const def =
+      questions.find((q) => q.id === row.question_id) ||
+      CANONICAL_QUESTIONS.find((q) => q.id === row.question_id);
+    let readable = row.answer_text || row.answer_value;
+    if (def && Array.isArray(def.options)) {
+      const match = def.options.find((option: any) => option.value === row.answer_value);
+      if (match) readable = typeof match === 'string' ? match : match.label;
+    }
+    return {
+      questionId: row.question_id,
+      domain: def?.domainTitle || row.domain,
+      prompt: def?.prompt || row.question_id,
+      answerValue: row.answer_value,
+      answerLabel: readable,
+      answeredAt: row.answered_at
+    };
+  });
+
+  return answers;
+};
+
 app.get('/api/admin/discovery-sessions', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
-  const { page, limit, offset } = readPaging(req, 12);
-  const total = (db.prepare('SELECT COUNT(*) AS c FROM discovery_sessions').get() as any).c as number;
+  const { page, limit, offset } = readPaging(req, 20);
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const status = String(req.query.status || 'ALL').toUpperCase();
+
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (q) {
+    where.push('(lower(participant_name) LIKE ? OR lower(participant_email) LIKE ?)');
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  if (status === 'NEW') where.push("(review_state IS NULL OR review_state = 'NEW')");
+  else if (status === 'REVIEWED') where.push("review_state = 'REVIEWED'");
+  else if (status === 'FOLLOW_UP') where.push("review_state = 'FOLLOW_UP'");
+  else if (status === 'COMPLETED') where.push("status = 'COMPLETED'");
+  else if (status === 'IN_PROGRESS') where.push("status = 'IN_PROGRESS'");
+
+  const whereSql = where.join(' AND ');
+  const total = (
+    db.prepare(`SELECT COUNT(*) AS c FROM discovery_sessions WHERE ${whereSql}`).get(...params) as any
+  ).c as number;
   const sessions = db
-    .prepare('SELECT * FROM discovery_sessions ORDER BY updated_at DESC LIMIT ? OFFSET ?')
-    .all(limit, offset) as any[];
+    .prepare(`SELECT * FROM discovery_sessions WHERE ${whereSql} ORDER BY updated_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset) as any[];
+  const newCount = (
+    db.prepare("SELECT COUNT(*) AS c FROM discovery_sessions WHERE review_state IS NULL OR review_state = 'NEW'").get() as any
+  ).c as number;
   const discoveryQuestions = getAllDiscoveryQuestions();
 
   const rows = sessions.map((sess) => {
@@ -3362,15 +3429,153 @@ app.get('/api/admin/discovery-sessions', requireRole(['ADMIN', 'CURRICULUM_OWNER
         answeredAt: r.answered_at
       };
     });
+    const activeIds = new Set(discoveryQuestions.filter((q) => q.isActive).map((q) => q.id));
+    const activeAnswers = detailedAnswers.filter((answer) => activeIds.has(answer.questionId));
     return {
       ...sess,
-      answeredCount: detailedAnswers.length,
-      detailedAnswers,
+      answeredCount: activeAnswers.length,
+      totalQuestions: activeIds.size,
+      detailedAnswers: activeAnswers,
       candidateResult: evaluateCandidateDiscoveryResult(flatAnswers, sess.track, sess.custom_track || '')
     };
   });
 
-  return paged(req, res, rows, total, page, limit);
+  return paged(req, res, rows, total, page, limit, { newCount });
+});
+
+app.get('/api/admin/discovery-sessions/:sessionId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const sessionId = String(req.params.sessionId);
+  const session = db.prepare('SELECT * FROM discovery_sessions WHERE id = ?').get(sessionId) as any;
+  if (!session) return res.status(404).json({ success: false, error: 'Discovery session not found.' });
+
+  const answers = discoveryAnswersFor(sessionId);
+  const activeIds = new Set(getAllDiscoveryQuestions().filter((q) => q.isActive).map((q) => q.id));
+  const activeAnswers = answers.filter((answer) => activeIds.has(answer.questionId));
+  const flat: Record<string, string> = {};
+  for (const answer of activeAnswers) flat[answer.questionId] = answer.answerValue || answer.answerLabel || '';
+
+  const existingUser = db
+    .prepare('SELECT id, name, email, role FROM users WHERE lower(email) = ?')
+    .get(String(session.participant_email || '').toLowerCase()) as any;
+
+  const guide = session.reviewed_by
+    ? db.prepare('SELECT id, name FROM users WHERE id = ?').get(session.reviewed_by)
+    : null;
+
+  res.json({
+    success: true,
+    session: {
+      ...session,
+      contradictions: (() => {
+        try {
+          return JSON.parse(session.contradiction_flags_json || '[]');
+        } catch {
+          return [];
+        }
+      })(),
+      candidateResult: evaluateCandidateDiscoveryResult(flat, session.track, session.custom_track || ''),
+      answeredCount: activeAnswers.length,
+      answers,
+      existingUser: existingUser || null,
+      reviewedBy: guide || null
+    }
+  });
+});
+
+app.patch('/api/admin/discovery-sessions/:sessionId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const sessionId = String(req.params.sessionId);
+  const session = db.prepare('SELECT * FROM discovery_sessions WHERE id = ?').get(sessionId) as any;
+  if (!session) return res.status(404).json({ success: false, error: 'Discovery session not found.' });
+
+  const state = String(req.body?.reviewState || '').toUpperCase();
+  if (!['NEW', 'REVIEWED', 'FOLLOW_UP'].includes(state)) {
+    return res.status(400).json({ success: false, error: 'Choose Reviewed or Follow up.' });
+  }
+  const note = String(req.body?.reviewNote || '').trim() || null;
+  if (state === 'FOLLOW_UP' && !note) {
+    return res.status(400).json({ success: false, error: 'Add a note saying what to follow up on.' });
+  }
+
+  db.prepare(
+    'UPDATE discovery_sessions SET review_state = ?, review_note = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?'
+  ).run(state, note, req.user!.id, new Date().toISOString(), new Date().toISOString(), sessionId);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'DISCOVERY_RESULT_REVIEWED',
+    entityType: 'DISCOVERY_SESSION',
+    entityId: sessionId,
+    details: { state, note }
+  });
+
+  res.json({ success: true });
+});
+
+/** Turn a completed Discovery into a learner account, using the answers they gave. */
+app.post('/api/admin/discovery-sessions/:sessionId/create-learner', requireRole(['ADMIN']), (req, res) => {
+  const sessionId = String(req.params.sessionId);
+  const session = db.prepare('SELECT * FROM discovery_sessions WHERE id = ?').get(sessionId) as any;
+  if (!session) return res.status(404).json({ success: false, error: 'Discovery session not found.' });
+
+  const email = String(session.participant_email || '').trim().toLowerCase();
+  const name = String(session.participant_name || '').trim();
+  if (!email || !name) {
+    return res.status(400).json({ success: false, error: 'This session has no name or email to build an account from.' });
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email) as any;
+  if (existing) {
+    db.prepare('UPDATE discovery_sessions SET converted_user_id = ?, participant_user_id = ? WHERE id = ?').run(
+      existing.id,
+      existing.id,
+      sessionId
+    );
+    return res.status(409).json({
+      success: false,
+      error: 'Someone already signs in with this email. Open their learner file instead.',
+      userId: existing.id
+    });
+  }
+
+  const guideId = defaultGuideId();
+  const id = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const password = generateTemporaryPassword();
+  const now = new Date().toISOString();
+  const track = String(session.custom_track || session.track || 'trader').toLowerCase();
+
+  db.prepare(`
+    INSERT INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'LEARNER', 'ACTIVE', ?, ?, ?, ?)
+  `).run(id, name, email, hashPassword(password), track, guideId, now, now);
+
+  db.prepare(`
+    INSERT INTO student_learning_profiles (
+      id, learner_id, approved_level, proposed_level, level_review_state, primary_track,
+      evidence_status, market_context_summary, rubric_version, updated_at
+    ) VALUES (?, ?, 'L1', NULL, 'APPROVED', ?, 'INSUFFICIENT', ?, '1.2.0', ?)
+  `).run(
+    `slp_${id}`,
+    id,
+    track,
+    `Created from their Discovery answers on ${now.slice(0, 10)}.`,
+    now
+  );
+
+  db.prepare(
+    'UPDATE discovery_sessions SET converted_user_id = ?, participant_user_id = ?, review_state = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ? WHERE id = ?'
+  ).run(id, id, 'REVIEWED', req.user!.id, now, now, sessionId);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'DISCOVERY_CONVERTED_TO_LEARNER',
+    entityType: 'DISCOVERY_SESSION',
+    entityId: sessionId,
+    details: { userId: id, email }
+  });
+
+  res.status(201).json({ success: true, userId: id, temporaryPassword: password });
 });
 
 app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
