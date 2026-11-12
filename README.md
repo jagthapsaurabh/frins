@@ -115,6 +115,23 @@ workspace stays a workspace.
 | Setup | Discovery | Question bank, how many questions are active, add or retire questions |
 | Setup | Settings | Your own password, rubric versions, full audit trail |
 
+### Built for a thousand learners
+
+The roster starts at a thousand people, so the console is paged from the first day.
+
+- Every long list has its own endpoint with `page` and `limit`, plus search and a status filter that
+  run in SQL: `/api/admin/learners`, `/tasks`, `/leads`, `/bookings`, `/users`, `/student-courses`,
+  `/audit`, `/discovery-sessions`. A page is at most twenty rows, and the response carries `total`
+  and `pages` so the UI can show "21-40 of 1,003 learners".
+- `/api/admin/overview` is no longer used by the console. `/api/admin/metrics` returns counts and the
+  small reference tables only. One learner's full detail comes from
+  `/api/admin/learners/:id/progress`; one task's submission, AI pre-check and chat come from
+  `/api/admin/tasks/:id`.
+- The top bar has a learner search for admins. Type two letters, pick a person, and you land on
+  their progress page.
+- Tables and the audit log scroll inside a bounded box with a sticky header, so the page itself does
+  not grow with the data.
+
 Notes:
 
 - An admin can do everything a guide can. The guide API routes accept `GUIDE`, `ADMIN` and

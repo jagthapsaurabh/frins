@@ -4553,7 +4553,8 @@ a {
 }
 
 .progress-roster-list {
-  max-height: 560px;
+  /* Keep the pager on screen: the list scrolls, the panel does not grow. */
+  max-height: min(560px, calc(100vh - 300px));
   overflow-y: auto;
   padding: 8px;
   display: flex;
@@ -5122,5 +5123,202 @@ a {
   .learner-overview-grid,
   .learner-quick-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- Filters and pagers for long lists ---- */
+.list-tools {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+}
+
+.list-search {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 380px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
+.list-filter {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 160px;
+  padding: 8px 11px;
+  font-size: 13px;
+}
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 2px 2px;
+  border-top: 1px solid var(--border-subtle);
+  margin-top: 12px;
+}
+
+.progress-roster .pager {
+  padding: 10px 12px;
+}
+
+.pager-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.pager-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pager-btn {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
+  background: #FFFFFF;
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pager-btn:hover:not(:disabled) {
+  border-color: #C7D6F2;
+  background: #F7FAFF;
+}
+
+.pager-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #FFFFFF;
+}
+
+.pager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pager-gap {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 0 2px;
+}
+
+/* Long tables and logs stay readable: a bounded scroll area, not a page that
+   grows to a thousand rows. */
+.admin-table-wrap,
+.progress-table-wrap,
+.admin-audit {
+  max-height: 560px;
+  overflow: auto;
+}
+
+.admin-table-wrap thead th,
+.progress-table thead th {
+  position: sticky;
+  top: 0;
+  background: #FFFFFF;
+  z-index: 1;
+}
+
+/* ---- Global learner search in the top bar (admins only) ---- */
+.app-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 16px;
+  padding: 7px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--bg-canvas);
+  color: var(--text-muted);
+  min-width: 220px;
+}
+
+.app-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--text-main);
+  width: 180px;
+}
+
+.app-search-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 380px;
+  max-width: 92vw;
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  box-shadow: 0 18px 40px -20px rgba(15, 23, 42, 0.35);
+  padding: 6px;
+  z-index: 40;
+}
+
+.app-search-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-search-row:hover {
+  background: var(--bg-canvas);
+}
+
+.app-search-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.app-search-meta {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.app-search-empty {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  padding: 10px;
+  margin: 0;
+}
+
+.app-search-all {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 10px;
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  background: transparent;
+  color: #1D4ED8;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .app-search {
+    display: none;
   }
 }

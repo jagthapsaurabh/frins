@@ -1,13 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Search, BookOpen, ClipboardList, Upload, TrendingUp } from 'lucide-react';
+import { usePagedList } from '../../hooks/usePagedList';
+import { Pager } from '../../components/Pager';
 
 interface Props {
-  learners: any[];
   courses: any[];
-  courseQuestions: any[];
-  studentCourses: any[];
-  studentTasks: any[];
-  attempts: any[];
   authFetch: (path: string, init?: RequestInit) => Promise<Response>;
   onChanged: () => void;
 }
@@ -22,60 +20,77 @@ const STATUS_CLASS: Record<string, string> = {
 const pct = (done: number, total: number) => (total === 0 ? 0 : Math.round((done / total) * 100));
 
 /**
- * One place to answer "how is this learner actually doing?".
+ * How one learner is doing, and what they were given.
  *
- * Pick a learner, see every course they were given, how much of each one is done,
- * every task with its status and whether it was uploaded, and a course can be
- * assigned from here without leaving the page.
+ * The roster is paged and searched on the server, so a thousand learners is
+ * twenty pages, not one wall of names. Picking a name loads just that person.
  */
-export const LearnerProgress: React.FC<Props> = ({
-  learners,
-  courses,
-  courseQuestions,
-  studentCourses,
-  studentTasks,
-  attempts,
-  authFetch,
-  onChanged
-}) => {
+export const LearnerProgress: React.FC<Props> = ({ courses, authFetch, onChanged }) => {
+  const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
-  const [selectedId, setSelectedId] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState('');
+  const [detail, setDetail] = useState<any>(null);
+  // The top-bar search can deep-link straight to one learner.
+  const [params] = useSearchParams();
+  const linkedLearner = params.get('learner') || '';
+  const [detailLoading, setDetailLoading] = useState(false);
   const [assignCourseId, setAssignCourseId] = useState('');
   const [assignNotes, setAssignNotes] = useState('');
   const [assignBusy, setAssignBusy] = useState(false);
   const [assignMessage, setAssignMessage] = useState('');
 
-  const rows = useMemo(() => {
-    return learners.map((learner) => {
-      const myCourses = studentCourses.filter((sc) => sc.learner_id === learner.id);
-      const myTasks = studentTasks.filter((t) => t.learner_id === learner.id);
-      const submitted = myTasks.filter((t) => Boolean(t.learner_submission)).length;
-      const reviewed = myTasks.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
-      const myAttempts = attempts.filter((a) => a.learner_id === learner.id);
-      const lastTouched = myTasks
-        .map((t) => t.submitted_at || t.assigned_at || t.created_at)
-        .filter(Boolean)
-        .sort()
-        .reverse()[0];
-      return { learner, myCourses, myTasks, submitted, reviewed, myAttempts, lastTouched };
-    });
-  }, [learners, studentCourses, studentTasks, attempts]);
+  // Debounce typing so the list does not refetch on every keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setQuery(search.trim());
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const filtered = rows.filter((row) => {
-    const q = query.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      row.learner.name.toLowerCase().includes(q) || row.learner.email.toLowerCase().includes(q)
-    );
-  });
+  const list = usePagedList(authFetch, '/api/admin/learners', { q: query, page, limit: 20 });
 
-  const selected = rows.find((row) => row.learner.id === selectedId) || filtered[0] || null;
+  // A learner picked in the top-bar search wins over the first row.
+  useEffect(() => {
+    if (linkedLearner && linkedLearner !== selectedId) setSelectedId(linkedLearner);
+  }, [linkedLearner]);
 
-  if (learners.length === 0) {
-    return <p className="admin-muted">No learners on the platform yet. Create one in Staff &amp; access.</p>;
-  }
+  // Pick the first row of the page when nothing is selected.
+  useEffect(() => {
+    if (list.rows.length === 0) {
+      // Keep a learner that came in from the top-bar search; only clear an
+      // empty roster when nothing was asked for.
+      if (!linkedLearner) {
+        setSelectedId('');
+        setDetail(null);
+      }
+      return;
+    }
+    if (!list.rows.some((row: any) => row.id === selectedId) && !linkedLearner) {
+      setSelectedId(list.rows[0].id);
+    }
+  }, [list.rows, selectedId]);
 
-  const handleAssign = async (learnerId: string) => {
+  useEffect(() => {
+    if (!selectedId) return;
+    let cancelled = false;
+    setDetailLoading(true);
+    (async () => {
+      try {
+        const res = await authFetch(`/api/admin/learners/${selectedId}/progress`);
+        const json = await res.json();
+        if (!cancelled && json.success) setDetail(json);
+      } finally {
+        if (!cancelled) setDetailLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedId, authFetch]);
+
+  const handleAssign = async () => {
     if (!assignCourseId) {
       setAssignMessage('Pick a course first.');
       return;
@@ -85,13 +100,18 @@ export const LearnerProgress: React.FC<Props> = ({
     try {
       const res = await authFetch('/api/admin/courses/assign', {
         method: 'POST',
-        body: JSON.stringify({ courseId: assignCourseId, learnerId, customNotes: assignNotes.trim() })
+        body: JSON.stringify({ courseId: assignCourseId, learnerId: selectedId, customNotes: assignNotes.trim() })
       });
       const out = await res.json();
       if (res.ok && out.success) {
         setAssignMessage('Course assigned.');
         setAssignNotes('');
         onChanged();
+        // Refresh just this learner, no full page reload.
+        const refreshed = await authFetch(`/api/admin/learners/${selectedId}/progress`);
+        const json = await refreshed.json();
+        if (json.success) setDetail(json);
+        list.reload();
       } else {
         setAssignMessage(out.error || 'Could not assign the course.');
       }
@@ -100,16 +120,22 @@ export const LearnerProgress: React.FC<Props> = ({
     }
   };
 
+  const learner = detail?.learner;
+  const learnerCourses: any[] = detail?.courses || [];
+  const learnerTasks: any[] = detail?.tasks || [];
+  const reviewed = learnerTasks.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
+  const uploaded = learnerTasks.filter((t) => t.submitted_at).length;
+
   return (
     <div className="progress-layout">
       <aside className="panel-card progress-roster">
         <div className="progress-roster-head">
-          <span className="micro-tag accent">Learners</span>
+          <span className="micro-tag accent">Learners ({list.total.toLocaleString()})</span>
           <div className="progress-search">
             <Search size={14} />
             <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search name or email"
               aria-label="Search learners"
             />
@@ -117,241 +143,265 @@ export const LearnerProgress: React.FC<Props> = ({
         </div>
 
         <div className="progress-roster-list">
-          {filtered.map((row) => {
-            const isSel = selected?.learner.id === row.learner.id;
+          {list.loading && list.rows.length === 0 && <p className="admin-muted">Loading learners...</p>}
+          {!list.loading && list.rows.length === 0 && (
+            <p className="admin-muted">Nobody matches that search.</p>
+          )}
+          {list.rows.map((row: any) => {
+            const done = pct(row.reviewed_count, row.task_count);
             return (
               <button
-                key={row.learner.id}
+                key={row.id}
                 type="button"
-                className={`progress-roster-item ${isSel ? 'active' : ''}`}
+                className={`progress-roster-item ${selectedId === row.id ? 'active' : ''}`}
                 onClick={() => {
-                  setSelectedId(row.learner.id);
+                  setSelectedId(row.id);
                   setAssignCourseId('');
                   setAssignMessage('');
                 }}
               >
                 <span className="progress-avatar">
-                  {row.learner.name
+                  {row.name
                     .split(' ')
                     .map((p: string) => p[0])
                     .slice(0, 2)
                     .join('')}
                 </span>
                 <span className="progress-roster-text">
-                  <strong>{row.learner.name}</strong>
+                  <strong>{row.name}</strong>
                   <small>
-                    {row.myCourses.length} course{row.myCourses.length === 1 ? '' : 's'} &middot;{' '}
-                    {row.myTasks.length} task{row.myTasks.length === 1 ? '' : 's'}
+                    {row.course_count} course{row.course_count === 1 ? '' : 's'} &middot; {row.task_count} task
+                    {row.task_count === 1 ? '' : 's'}
                   </small>
                 </span>
-                <span className="progress-roster-pct">{pct(row.reviewed, row.myTasks.length)}%</span>
+                <span className="progress-roster-pct">{done}%</span>
               </button>
             );
           })}
-          {filtered.length === 0 && <p className="admin-muted">Nobody matches that search.</p>}
         </div>
+
+        <Pager
+          page={list.page}
+          pages={list.pages}
+          total={list.total}
+          limit={20}
+          onChange={setPage}
+          noun="learners"
+        />
       </aside>
 
-      {selected && (
-        <div className="progress-detail">
-          <section className="panel-card progress-person">
-            <div>
-              <span className="micro-tag accent">{selected.learner.track || 'Learner'}</span>
-              <h3 className="admin-card-title">{selected.learner.name}</h3>
-              <p className="admin-card-copy">
-                {selected.learner.email} &middot; joined{' '}
-                {new Date(selected.learner.created_at).toLocaleDateString()} &middot;{' '}
-                {selected.learner.account_status === 'ACTIVE' ? 'Active' : selected.learner.account_status}
-              </p>
-            </div>
-            <span className="micro-tag">
-              {selected.lastTouched
-                ? `Last activity ${new Date(selected.lastTouched).toLocaleDateString()}`
-                : 'No activity yet'}
-            </span>
-          </section>
-
-          <div className="progress-stats">
-            <div>
-              <BookOpen size={16} />
-              <strong>{selected.myCourses.length}</strong>
-              <span>Courses assigned</span>
-            </div>
-            <div>
-              <ClipboardList size={16} />
-              <strong>{selected.myTasks.length}</strong>
-              <span>Tasks given</span>
-            </div>
-            <div>
-              <Upload size={16} />
-              <strong>{selected.submitted}</strong>
-              <span>Uploaded</span>
-            </div>
-            <div>
-              <CheckCircle2 size={16} />
-              <strong>{selected.reviewed}</strong>
-              <span>Reviewed</span>
-            </div>
-            <div>
-              <TrendingUp size={16} />
-              <strong>{pct(selected.reviewed, selected.myTasks.length)}%</strong>
-              <span>Task completion</span>
-            </div>
-          </div>
-
+      <div className="progress-detail">
+        {!learner && (
           <section className="panel-card">
-            <span className="micro-tag accent">Course progress</span>
-            <h3 className="admin-card-title">Courses and how far along they are</h3>
-            <p className="admin-card-copy">
-              A course counts a task as done when it has been uploaded or reviewed. Questions count when they
-              were answered once.
+            <p className="admin-muted">
+              {list.loading ? 'Loading this learner...' : 'Pick a learner to see their courses and tasks.'}
             </p>
+          </section>
+        )}
 
-            {selected.myCourses.length === 0 ? (
-              <p className="admin-muted">No course assigned yet. Use the box below to give one.</p>
-            ) : (
-              <div className="progress-course-list">
-                {selected.myCourses.map((sc) => {
-                  const course = courses.find((c) => c.id === sc.course_id);
-                  const courseTasks = selected.myTasks.filter((t) => t.course_id === sc.course_id);
-                  const doneTasks = courseTasks.filter(
-                    (t) => t.status === 'SUBMITTED' || t.status === 'REVIEWED' || t.status === 'APPROVED'
-                  ).length;
-                  const questions = courseQuestions.filter((q) => q.course_id === sc.course_id);
-                  const answeredIds = new Set(
-                    selected.myAttempts
-                      .filter((a) => questions.some((q) => q.id === a.question_id))
-                      .map((a) => a.question_id)
-                  );
-                  const taskPct = pct(doneTasks, courseTasks.length);
-                  const questionPct = pct(answeredIds.size, questions.length);
+        {learner && (
+          <>
+            <section className="panel-card progress-person">
+              <div>
+                <span className="micro-tag accent">{learner.track || 'Learner'}</span>
+                <h3 className="admin-card-title">{learner.name}</h3>
+                <p className="admin-card-copy">
+                  {learner.email} &middot; joined {new Date(learner.created_at).toLocaleDateString()} &middot;{' '}
+                  {learner.account_status === 'ACTIVE' ? 'Active' : learner.account_status}
+                </p>
+              </div>
+              <span className="micro-tag">
+                {learnerTasks.length === 0
+                  ? 'No tasks yet'
+                  : `Last upload ${new Date(
+                      learnerTasks
+                        .map((t: any) => t.submitted_at)
+                        .filter(Boolean)
+                        .sort()
+                        .reverse()[0] || learnerTasks[0].due_date || new Date().toISOString()
+                    ).toLocaleDateString()}`}
+              </span>
+            </section>
 
-                  return (
-                    <div key={sc.id} className="progress-course">
-                      <div className="progress-course-top">
-                        <div>
-                          <strong>{sc.course_title || course?.title}</strong>
+            <div className="progress-stats">
+              <div>
+                <BookOpen size={16} />
+                <strong>{learnerCourses.length}</strong>
+                <span>Courses assigned</span>
+              </div>
+              <div>
+                <ClipboardList size={16} />
+                <strong>{learnerTasks.length}</strong>
+                <span>Tasks given</span>
+              </div>
+              <div>
+                <Upload size={16} />
+                <strong>{uploaded}</strong>
+                <span>Uploaded</span>
+              </div>
+              <div>
+                <CheckCircle2 size={16} />
+                <strong>{reviewed}</strong>
+                <span>Reviewed</span>
+              </div>
+              <div>
+                <TrendingUp size={16} />
+                <strong>{pct(reviewed, learnerTasks.length)}%</strong>
+                <span>Task completion</span>
+              </div>
+            </div>
+
+            <section className="panel-card">
+              <span className="micro-tag accent">Course progress</span>
+              <h3 className="admin-card-title">Courses and how far along they are</h3>
+              <p className="admin-card-copy">
+                A course counts a task as done when it was uploaded or reviewed. Questions count when they
+                were answered once.
+              </p>
+
+              {learnerCourses.length === 0 ? (
+                <p className="admin-muted">No course assigned yet. Use the box below to give one.</p>
+              ) : (
+                <div className="progress-course-list">
+                  {learnerCourses.map((sc: any) => {
+                    const taskPct = pct(sc.tasks_started, sc.task_count);
+                    const questionPct = pct(sc.answered_count, sc.question_count);
+                    const complete = sc.task_count > 0 && sc.tasks_started === sc.task_count;
+                    return (
+                      <div key={sc.id} className="progress-course">
+                        <div className="progress-course-top">
+                          <div>
+                            <strong>{sc.course_title}</strong>
+                            <small>
+                              Assigned {new Date(sc.assigned_at).toLocaleDateString()}
+                              {sc.custom_notes ? ` · ${sc.custom_notes}` : ''}
+                            </small>
+                          </div>
+                          <span className={`status-pill ${complete ? 'approved' : 'pending'}`}>
+                            {complete ? 'Complete' : 'In progress'}
+                          </span>
+                        </div>
+
+                        <div className="progress-bar-row">
+                          <span>Tasks</span>
+                          <div className="progress-bar">
+                            <span style={{ width: `${taskPct}%` }} />
+                          </div>
                           <small>
-                            Assigned {new Date(sc.assigned_at).toLocaleDateString()}
-                            {sc.custom_notes ? ` · ${sc.custom_notes}` : ''}
+                            {sc.tasks_started}/{sc.task_count}
                           </small>
                         </div>
-                        <span className={`status-pill ${taskPct === 100 && courseTasks.length > 0 ? 'approved' : 'pending'}`}>
-                          {taskPct === 100 && courseTasks.length > 0 ? 'Complete' : 'In progress'}
-                        </span>
-                      </div>
-
-                      <div className="progress-bar-row">
-                        <span>Tasks</span>
-                        <div className="progress-bar">
-                          <span style={{ width: `${taskPct}%` }} />
+                        <div className="progress-bar-row">
+                          <span>Questions</span>
+                          <div className="progress-bar">
+                            <span style={{ width: `${questionPct}%` }} />
+                          </div>
+                          <small>
+                            {sc.answered_count}/{sc.question_count}
+                          </small>
                         </div>
-                        <small>
-                          {doneTasks}/{courseTasks.length}
-                        </small>
                       </div>
-                      <div className="progress-bar-row">
-                        <span>Questions</span>
-                        <div className="progress-bar">
-                          <span style={{ width: `${questionPct}%` }} />
-                        </div>
-                        <small>
-                          {answeredIds.size}/{questions.length}
-                        </small>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
 
-            <div className="progress-assign">
-              <div className="form-group">
-                <label className="form-label" htmlFor="assignCourse">Assign another course</label>
-                <select
-                  id="assignCourse"
-                  className="form-select"
-                  value={assignCourseId}
-                  onChange={(e) => setAssignCourseId(e.target.value)}
-                >
-                  <option value="">Pick a course</option>
-                  {courses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} ({c.level})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label" htmlFor="assignNotes">Note for this learner</label>
-                <input
-                  id="assignNotes"
-                  className="form-input"
-                  value={assignNotes}
-                  onChange={(e) => setAssignNotes(e.target.value)}
-                  placeholder="Optional. Why this course, what to focus on."
-                />
-              </div>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={assignBusy}
-                onClick={() => handleAssign(selected.learner.id)}
-              >
-                {assignBusy ? 'Assigning...' : 'Assign course'}
-              </button>
-              {assignMessage && <span className="progress-assign-msg">{assignMessage}</span>}
-            </div>
-          </section>
-
-          <section className="panel-card">
-            <span className="micro-tag accent">Task history</span>
-            <h3 className="admin-card-title">Every task given to this learner</h3>
-            <p className="admin-card-copy">
-              Uploaded means the learner sent something. Reviewed means the team has looked at it.
-            </p>
-
-            {selected.myTasks.length === 0 ? (
-              <p className="admin-muted">No task given yet. Give one from Courses &amp; tasks.</p>
-            ) : (
-              <div className="progress-table-wrap">
-                <table className="progress-table">
-                  <thead>
-                    <tr>
-                      <th>Task</th>
-                      <th>Course</th>
-                      <th>Status</th>
-                      <th>AI pre-check</th>
-                      <th>Uploaded</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selected.myTasks.map((t) => (
-                      <tr key={t.id}>
-                        <td>
-                          <strong>{t.title}</strong>
-                        </td>
-                        <td>{t.course_title || '—'}</td>
-                        <td>
-                          <span className={`status-pill ${STATUS_CLASS[t.status] || 'pending'}`}>
-                            {String(t.status).toLowerCase()}
-                          </span>
-                        </td>
-                        <td>
-                          {t.ai_review?.verdict
-                            ? `${t.ai_review.verdict.replaceAll('_', ' ')} (${t.ai_review.confidence ?? 0}%)`
-                            : '—'}
-                        </td>
-                        <td>{t.submitted_at ? new Date(t.submitted_at).toLocaleDateString() : 'Not yet'}</td>
-                      </tr>
+              <div className="progress-assign">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="assignCourse">
+                    Assign another course
+                  </label>
+                  <select
+                    id="assignCourse"
+                    className="form-select"
+                    value={assignCourseId}
+                    onChange={(e) => setAssignCourseId(e.target.value)}
+                  >
+                    <option value="">Pick a course</option>
+                    {courses.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} ({c.level})
+                      </option>
                     ))}
-                  </tbody>
-                </table>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="assignNotes">
+                    Note for this learner
+                  </label>
+                  <input
+                    id="assignNotes"
+                    className="form-input"
+                    value={assignNotes}
+                    onChange={(e) => setAssignNotes(e.target.value)}
+                    placeholder="Optional. Why this course, what to focus on."
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={assignBusy}
+                  onClick={handleAssign}
+                >
+                  {assignBusy ? 'Assigning...' : 'Assign course'}
+                </button>
+                {assignMessage && <span className="progress-assign-msg">{assignMessage}</span>}
               </div>
-            )}
-          </section>
-        </div>
-      )}
+            </section>
+
+            <section className="panel-card">
+              <span className="micro-tag accent">Task history</span>
+              <h3 className="admin-card-title">Every task given to this learner</h3>
+              <p className="admin-card-copy">
+                Uploaded means the learner sent something. Reviewed means the team has looked at it.
+              </p>
+
+              {learnerTasks.length === 0 ? (
+                <p className="admin-muted">No task given yet. Give one from Courses &amp; tasks.</p>
+              ) : (
+                <div className="progress-table-wrap">
+                  <table className="progress-table">
+                    <thead>
+                      <tr>
+                        <th>Task</th>
+                        <th>Course</th>
+                        <th>Status</th>
+                        <th>AI pre-check</th>
+                        <th>Uploaded</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {learnerTasks.map((t: any) => (
+                        <tr key={t.id}>
+                          <td>
+                            <strong>{t.title}</strong>
+                          </td>
+                          <td>{t.course_title || '—'}</td>
+                          <td>
+                            <span className={`status-pill ${STATUS_CLASS[t.status] || 'pending'}`}>
+                              {String(t.status).toLowerCase()}
+                            </span>
+                          </td>
+                          <td>
+                            {t.aiVerdict
+                              ? `${String(t.aiVerdict).replaceAll('_', ' ').toLowerCase()}${
+                                  t.aiConfidence != null ? ` (${t.aiConfidence}%)` : ''
+                                }`
+                              : '—'}
+                          </td>
+                          <td>{t.submitted_at ? new Date(t.submitted_at).toLocaleDateString() : 'Not yet'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {detailLoading && <p className="admin-muted">Updating...</p>}
+          </>
+        )}
+      </div>
     </div>
   );
 };

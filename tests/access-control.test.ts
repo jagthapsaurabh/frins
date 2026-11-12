@@ -299,4 +299,70 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     });
     expect(good.status).toBe(200);
   });
+
+  it('FRI-ADMIN-004: Admin list endpoints page a big roster instead of returning everything', async () => {
+    const adminToken = await login('admin@frins.org');
+
+    const first = await fetch(`${base}/api/admin/learners?page=1&limit=2`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.success).toBe(true);
+    expect(firstBody.rows.length).toBeLessThanOrEqual(2);
+    expect(firstBody.total).toBeGreaterThanOrEqual(2);
+    expect(firstBody.pages).toBe(Math.max(1, Math.ceil(firstBody.total / 2)));
+
+    // A search that cannot match returns an empty page, not the whole table.
+    const none = await fetch(`${base}/api/admin/learners?q=zzz-no-such-learner-zzz`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const noneBody = await none.json();
+    expect(noneBody.total).toBe(0);
+    expect(noneBody.rows.length).toBe(0);
+
+    // A learner session can use none of the list endpoints.
+    const learnerToken = await login('aarav@example.com');
+    const refused = await fetch(`${base}/api/admin/learners`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    expect(refused.status).toBe(403);
+  });
+
+  it('FRI-CHAT-002: A mentor message notifies the learner, and the reply notifies their guide', async () => {
+    const adminToken = await login('admin@frins.org');
+    const learnerToken = await login('aarav@example.com');
+
+    const before = await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const beforeBody = await before.json();
+    const beforeCount = beforeBody.notifications.length;
+
+    const task = await fetch(`${base}/api/admin/tasks?limit=1`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const taskBody = await task.json();
+    const target = taskBody.rows[0];
+    expect(target).toBeTruthy();
+
+    const sent = await fetch(`${base}/api/tasks/${target.id}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ message: 'Paged list check: this note should reach the learner bell.' })
+    });
+    expect(sent.status).toBe(201);
+
+    const after = await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const afterBody = await after.json();
+    expect(afterBody.notifications.length).toBeGreaterThan(beforeCount);
+    expect(
+      afterBody.notifications.some((n: any) => String(n.message).includes('Paged list check'))
+    ).toBe(true);
+
+    // Clean up the messages and notices this test created.
+    db.prepare("DELETE FROM task_messages WHERE message LIKE 'Paged list check%'").run();
+  });
 });

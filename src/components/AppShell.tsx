@@ -7,7 +7,6 @@ import {
   Sparkles,
   LogOut,
   ChevronDown,
-  Repeat,
   Menu,
   X,
   BookOpenCheck,
@@ -23,6 +22,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 import { NotificationBell } from './NotificationBell';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { ADMIN_SECTIONS } from '../pages/adminSections';
+import { LearnerSearch } from './LearnerSearch';
 
 export type ShellRole = 'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRICULUM_OWNER';
 
@@ -235,6 +235,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <span className="app-breadcrumb-sep">/</span>
               <strong>{current?.label || 'Workspace'}</strong>
             </div>
+
+            {(user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER') && <LearnerSearch />}
           </div>
 
           <div className="app-topbar-right">
@@ -292,18 +294,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                   >
                     <KeyRound size={16} /> Update password
                   </button>
-                  <button
-                    type="button"
-                    className="app-menu-item"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setSignOutOpen(true);
-                    }}
-                  >
-                    <Repeat size={16} /> Switch account
-                  </button>
-                  <p className="app-menu-hint">You will be signed out so you can sign in with another account.</p>
-
                   <div className="app-menu-divider" />
                   <button
                     type="button"

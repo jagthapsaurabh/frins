@@ -20,6 +20,8 @@ import { StaffSignInGate } from '../components/StaffSignInGate';
 import { GuideWorkspacePage } from './GuideWorkspacePage';
 import { AdminNotifications } from './admin/AdminNotifications';
 import { LearnerProgress } from './admin/LearnerProgress';
+import { Pager } from '../components/Pager';
+import { usePagedList } from '../hooks/usePagedList';
 import { ADMIN_SECTIONS, adminKeyFromPath, findAdminSection, type AdminSectionKey } from './adminSections';
 
 const BOOKING_STATUSES = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
@@ -68,8 +70,34 @@ export const AdminWorkspacePage: React.FC = () => {
     navigate(target ? target.path : '/admin');
   };
   const [data, setData] = useState<any>(null);
+  const [dataVersion, setDataVersion] = useState(0);
   const [rbacError, setRbacError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string>('');
+
+  // ---- Paged lists. Every long list keeps its own query and page. ----
+  const [taskQuery, setTaskQuery] = useState('');
+  const [taskStatus, setTaskStatus] = useState('ALL');
+  const [taskPage, setTaskPage] = useState(1);
+  const [taskDetail, setTaskDetail] = useState<any>(null);
+
+  const [leadQuery, setLeadQuery] = useState('');
+  const [leadStatus, setLeadStatus] = useState('ALL');
+  const [leadPage, setLeadPage] = useState(1);
+
+  const [bookingQuery, setBookingQuery] = useState('');
+  const [bookingStatus, setBookingStatus] = useState('ALL');
+  const [bookingPage, setBookingPage] = useState(1);
+
+  const [staffQueryText, setStaffQueryText] = useState('');
+  const [staffRole, setStaffRole] = useState('ALL');
+  const [staffPage, setStaffPage] = useState(1);
+
+  const [auditQuery, setAuditQuery] = useState('');
+  const [auditPage, setAuditPage] = useState(1);
+
+  const [sessionPage, setSessionPage] = useState(1);
+  const [scQuery, setScQuery] = useState('');
+  const [scPage, setScPage] = useState(1);
 
 
   // Confirmation dialog state for destructive / state-changing actions
@@ -162,9 +190,14 @@ export const AdminWorkspacePage: React.FC = () => {
   const [compDesc, setCompDesc] = useState('Defining written qualification and invalidation criteria prior to capital commitment.');
   const [rubricVer, setRubricVer] = useState('1.3.0');
 
+  /**
+   * Only counts and the small reference tables are loaded up front. Every long
+   * list (learners, tasks, leads, bookings, staff, audit) has its own paged
+   * endpoint, so the console stays quick with a thousand learners on it.
+   */
   const loadAdminOverview = async () => {
     setRbacError(null);
-    const res = await authFetch('/api/admin/overview');
+    const res = await authFetch('/api/admin/metrics');
     if (res.status === 403 || res.status === 401) {
       const err = await res.json();
       setRbacError(err.error || 'Administrator authorisation required.');
@@ -173,17 +206,9 @@ export const AdminWorkspacePage: React.FC = () => {
     if (res.ok) {
       const json = await res.json();
       setData(json);
+      setDataVersion((v) => v + 1);
       if (typeof json.activeQuestionsCount === 'number') {
         setCustomCountN(json.activeQuestionsCount);
-      }
-      if (!selectedSessionId && json.solvedDiscoverySessions?.length > 0) {
-        setSelectedSessionId(json.solvedDiscoverySessions[0].id);
-      }
-      if (json.studentTasks?.length > 0) {
-        const haTask = json.studentTasks.find((t: any) => t.id === 'tsk_heikin_ashi_01') || json.studentTasks[0];
-        if (!selectedTaskId || !json.studentTasks.some((t: any) => t.id === selectedTaskId)) {
-          setSelectedTaskId(haTask.id);
-        }
       }
     }
   };
@@ -194,8 +219,8 @@ export const AdminWorkspacePage: React.FC = () => {
 
   // Pre-fill Admin review feedback when switching selected task
   useEffect(() => {
-    if (!data?.studentTasks) return;
-    const curr = data.studentTasks.find((t: any) => t.id === selectedTaskId);
+    if (!taskDetail) return;
+    const curr = taskDetail;
     if (curr) {
       setAdminReviewFeedback(
         curr.guide_feedback ||
@@ -203,7 +228,7 @@ export const AdminWorkspacePage: React.FC = () => {
           'Reviewed your uploaded result. Good work on the core concepts!'
       );
     }
-  }, [selectedTaskId, data?.studentTasks]);
+  }, [selectedTaskId, taskDetail]);
 
   const handleSetQuestionCountN = async (targetCount: number) => {
     const res = await authFetch('/api/admin/discovery-questions/set-count', {
@@ -559,6 +584,11 @@ export const AdminWorkspacePage: React.FC = () => {
     });
     if (res.ok) {
       setChatMessageText('');
+      const fresh = await authFetch(`/api/admin/tasks/${selectedTaskId}`);
+      if (fresh.ok) {
+        const json = await fresh.json();
+        setTaskDetail(json.task);
+      }
       loadAdminOverview();
     }
   };
@@ -744,6 +774,80 @@ export const AdminWorkspacePage: React.FC = () => {
     }
   };
 
+  // ---- Paged data. Hooks run before any early return. ----
+  const tasksQuery = usePagedList(authFetch, '/api/admin/tasks', {
+    q: taskQuery,
+    v: dataVersion,
+    status: taskStatus,
+    page: taskPage,
+    limit: 20
+  });
+  const leadsQuery = usePagedList(authFetch, '/api/admin/leads', {
+    q: leadQuery,
+    v: dataVersion,
+    status: leadStatus,
+    page: leadPage,
+    limit: 20
+  });
+  const bookingsQuery = usePagedList(authFetch, '/api/admin/bookings', {
+    q: bookingQuery,
+    v: dataVersion,
+    status: bookingStatus,
+    page: bookingPage,
+    limit: 20
+  });
+  const staffQuery = usePagedList(authFetch, '/api/admin/users', {
+    q: staffQueryText,
+    v: dataVersion,
+    role: staffRole,
+    page: staffPage,
+    limit: 20
+  });
+  const auditQueryList = usePagedList(authFetch, '/api/admin/audit', {
+    q: auditQuery,
+    v: dataVersion,
+    page: auditPage,
+    limit: 25
+  });
+  const sessionsQuery = usePagedList(authFetch, '/api/admin/discovery-sessions', {
+    page: sessionPage,
+    v: dataVersion,
+    limit: 12
+  });
+  const studentCoursesQuery = usePagedList(authFetch, '/api/admin/student-courses', {
+    q: scQuery,
+    v: dataVersion,
+    page: scPage,
+    limit: 20
+  });
+  const directoryQuery = usePagedList(authFetch, '/api/admin/learners/directory', { v: dataVersion });
+  const recentAuditQuery = usePagedList(authFetch, '/api/admin/audit', { limit: 5, v: dataVersion });
+  const recentLeadsQuery = usePagedList(authFetch, '/api/admin/leads', { limit: 5, v: dataVersion });
+
+  // The list is light on purpose. Open one task to get the submission, the AI
+  // pre-check and the chat.
+  useEffect(() => {
+    if (!selectedTaskId) return;
+    let cancelled = false;
+    (async () => {
+      const res = await authFetch(`/api/admin/tasks/${selectedTaskId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (!cancelled) setTaskDetail(json.task);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTaskId, authFetch]);
+
+  useEffect(() => {
+    if (tasksQuery.rows.length === 0) return;
+    if (!tasksQuery.rows.some((t: any) => t.id === selectedTaskId)) {
+      setSelectedTaskId(tasksQuery.rows[0].id);
+    }
+  }, [tasksQuery.rows, selectedTaskId]);
+
   const hasAdminAccess = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER';
 
   if (!hasAdminAccess) {
@@ -770,23 +874,30 @@ export const AdminWorkspacePage: React.FC = () => {
   const activeQuestions = allQuestions.filter((q) => q.isActive);
   const displayedQuestions = showAllBankQuestions ? allQuestions : activeQuestions;
 
-  const solvedSessions: any[] = data?.solvedDiscoverySessions || [];
+  const solvedSessions: any[] = sessionsQuery.rows;
   const selectedSession =
     solvedSessions.find((s) => s.id === selectedSessionId) || solvedSessions[0] || null;
 
-  const learnersList: any[] = (data?.users || []).filter((u: any) => u.role === 'LEARNER');
+  const learnersList: any[] = directoryQuery.rows;
   const coursesList: any[] = data?.courses || [];
-  const studentCoursesList: any[] = data?.studentCourses || [];
+  const studentCoursesList: any[] = studentCoursesQuery.rows;
   const courseQuestionsList: any[] = data?.courseQuestions || [];
-  const leadsList: any[] = data?.leads || [];
+  const leadsList: any[] = leadsQuery.rows;
   const cqOptionList = cqOptionsText.split('\n').map((o) => o.trim()).filter(Boolean);
-  const allStudentTasks: any[] = data?.studentTasks || [];
-  const filteredTasks =
-    taskFilter === 'SUBMITTED'
-      ? allStudentTasks.filter((t) => t.status === 'SUBMITTED')
-      : allStudentTasks;
+  const allStudentTasks: any[] = tasksQuery.rows;
+  const filteredTasks = allStudentTasks;
   const selectedTask =
-    allStudentTasks.find((t) => t.id === selectedTaskId) || filteredTasks[0] || allStudentTasks[0] || null;
+    (taskDetail && taskDetail.id === selectedTaskId ? taskDetail : null) ||
+    allStudentTasks.find((t) => t.id === selectedTaskId) ||
+    null;
+
+  // Counts come from the metrics endpoint, not from the rows on screen.
+  const metrics = data?.metrics || {};
+  const bookingsList: any[] = bookingsQuery.rows;
+  const staffList: any[] = staffQuery.rows;
+  const auditList: any[] = auditQueryList.rows;
+  const latestAudit: any[] = recentAuditQuery.rows;
+  const latestLeads: any[] = recentLeadsQuery.rows;
 
   return (
     <div className="workspace-shell">
@@ -866,7 +977,7 @@ export const AdminWorkspacePage: React.FC = () => {
             <div className="dash-stat-body">
               <span className="dash-stat-label">Discovery Solved</span>
               <span className="dash-stat-value">
-                {(data?.solvedDiscoverySessions || []).filter((x: any) => x.answeredCount > 0).length}
+                {data?.metrics?.completedDiscoveries ?? 0}
               </span>
               <span className="dash-stat-hint">Candidates with answers</span>
             </div>
@@ -901,7 +1012,7 @@ export const AdminWorkspacePage: React.FC = () => {
                 key: 'leads' as AdminSectionKey,
                 title: 'New leads',
                 body: (() => {
-                  const n = leadsList.filter((l) => l.status === 'NEW' || l.status === 'DISCOVERY_STARTED').length;
+                  const n = data?.metrics?.newLeads ?? 0;
                   if (n === 0) return 'Everyone who came in from the website has been contacted.';
                   return n === 1
                     ? '1 person came in from the website and has not been contacted yet.'
@@ -913,9 +1024,7 @@ export const AdminWorkspacePage: React.FC = () => {
                 key: 'bookings' as AdminSectionKey,
                 title: 'Upcoming calls',
                 body: (() => {
-                  const n = (data?.callBookings || []).filter(
-                    (b: any) => b.status !== 'CANCELLED' && b.status !== 'COMPLETED'
-                  ).length;
+                  const n = data?.metrics?.totalCallBookings ?? 0;
                   if (n === 0) return 'No calls are booked right now.';
                   return n === 1 ? '1 call is on the calendar.' : `${n} calls are on the calendar.`;
                 })(),
@@ -954,7 +1063,7 @@ export const AdminWorkspacePage: React.FC = () => {
               <p className="admin-card-copy">The last few actions across the console.</p>
               <div className="admin-audit">
                 {(() => {
-                  const events: any[] = data?.auditEvents || [];
+                  const events: any[] = latestAudit;
                   // Logins are routine. Show the things that changed something first.
                   const meaningful = events.filter((ev) => ev.action !== 'USER_LOGIN_SUCCESS');
                   const shown = (meaningful.length >= 3 ? meaningful : events).slice(0, 5);
@@ -981,11 +1090,11 @@ export const AdminWorkspacePage: React.FC = () => {
               <span className="micro-tag accent">Pipeline</span>
               <h3 className="admin-card-title">Newest leads</h3>
               <p className="admin-card-copy">People who filled the form on the website.</p>
-              {leadsList.length === 0 ? (
+              {latestLeads.length === 0 ? (
                 <p className="admin-muted">No leads yet.</p>
               ) : (
                 <div className="admin-mini-list">
-                  {leadsList.slice(0, 5).map((lead: any) => (
+                  {latestLeads.map((lead: any) => (
                     <div key={lead.id} className="admin-mini-row">
                       <div>
                         <strong>{lead.name}</strong>
@@ -1011,28 +1120,40 @@ export const AdminWorkspacePage: React.FC = () => {
             {/* Left Sidebar: List of Student Tasks & Uploaded Submissions */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span className="micro-tag accent">Student Task Queue</span>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${taskFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ padding: '4px 10px', fontSize: 11.5 }}
-                    onClick={() => setTaskFilter('ALL')}
-                  >
-                    All ({allStudentTasks.length})
-                  </button>
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${taskFilter === 'SUBMITTED' ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ padding: '4px 10px', fontSize: 11.5 }}
-                    onClick={() => setTaskFilter('SUBMITTED')}
-                  >
-                    Uploaded ({allStudentTasks.filter((t) => t.status === 'SUBMITTED').length})
-                  </button>
-                </div>
+                <span className="micro-tag accent">Task queue ({tasksQuery.total.toLocaleString()})</span>
               </div>
 
-              <h3 style={{ fontSize: 17, marginBottom: 12 }}>Select a Student Task to Review</h3>
+              <div className="list-tools">
+                <input
+                  className="form-input list-search"
+                  placeholder="Search task, learner or email"
+                  value={taskQuery}
+                  onChange={(e) => {
+                    setTaskQuery(e.target.value);
+                    setTaskPage(1);
+                  }}
+                  aria-label="Search tasks"
+                />
+                <select
+                  className="form-select list-filter"
+                  value={taskStatus}
+                  onChange={(e) => {
+                    setTaskStatus(e.target.value);
+                    setTaskPage(1);
+                  }}
+                  aria-label="Filter by status"
+                >
+                  <option value="ALL">Every status</option>
+                  <option value="SUBMITTED">Waiting for review</option>
+                  <option value="ASSIGNED">Not started</option>
+                  <option value="REVIEWED">Reviewed</option>
+                </select>
+              </div>
+
+              <h3 style={{ fontSize: 16, marginBottom: 10 }}>
+                Pick a task to review{' '}
+                {tasksQuery.loading && <span className="admin-muted">(loading...)</span>}
+              </h3>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {filteredTasks.map((t: any) => {
@@ -1073,7 +1194,7 @@ export const AdminWorkspacePage: React.FC = () => {
                         </div>
                       )}
 
-                      {t.aiReview && (
+                      {aiVerdict && (
                         <div
                           style={{
                             fontSize: 11,
@@ -1095,13 +1216,26 @@ export const AdminWorkspacePage: React.FC = () => {
                             display: 'inline-block'
                           }}
                         >
-                          🔒 AI Check: {aiVerdict} ({t.aiReview.accuracyScore}%)
+                          AI pre-check: {String(aiVerdict).replaceAll('_', ' ').toLowerCase()}
+                          {t.aiConfidence != null ? ` (${t.aiConfidence}%)` : ''}
                         </div>
                       )}
                     </div>
                   );
                 })}
+                {!tasksQuery.loading && allStudentTasks.length === 0 && (
+                  <p className="admin-muted">No task matches this search and filter.</p>
+                )}
               </div>
+
+              <Pager
+                page={tasksQuery.page}
+                pages={tasksQuery.pages}
+                total={tasksQuery.total}
+                limit={20}
+                onChange={setTaskPage}
+                noun="tasks"
+              />
             </div>
 
             {/* Right Main Panel: Uploaded Result + Internal AI Review (Admin/Team Only) + Direct Chat + Official Review */}
@@ -1760,8 +1894,20 @@ export const AdminWorkspacePage: React.FC = () => {
 
                 {/* Active Assigned Student Courses List */}
                 <h4 style={{ fontSize: 15, marginBottom: 8 }}>
-                  Currently Assigned Student Courses ({studentCoursesList.length})
+                  Course assignments ({studentCoursesQuery.total.toLocaleString()})
                 </h4>
+                <div className="list-tools">
+                  <input
+                    className="form-input list-search"
+                    placeholder="Search learner or course"
+                    value={scQuery}
+                    onChange={(e) => {
+                      setScQuery(e.target.value);
+                      setScPage(1);
+                    }}
+                    aria-label="Search course assignments"
+                  />
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {studentCoursesList.map((sc: any) => (
                     <div
@@ -1782,6 +1928,15 @@ export const AdminWorkspacePage: React.FC = () => {
                     </div>
                   ))}
                 </div>
+
+                <Pager
+                  page={studentCoursesQuery.page}
+                  pages={studentCoursesQuery.pages}
+                  total={studentCoursesQuery.total}
+                  limit={20}
+                  onChange={setScPage}
+                  noun="assignments"
+                />
               </div>
             </div>
 
@@ -2083,16 +2238,46 @@ export const AdminWorkspacePage: React.FC = () => {
           <div>
             {/* Right: Book a Call Leads (Both Direct & Post-Discovery) */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">Book a Call Leads &amp; Consultations</span>
+              <span className="micro-tag accent">Book a call leads &amp; consultations</span>
               <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
-                Scheduled Team Calls &amp; Website Leads ({(data?.callBookings || []).length})
+                Calls on the calendar ({bookingsQuery.total.toLocaleString()})
               </h3>
               <p style={{ fontSize: 13, marginBottom: 14 }}>
-                Includes candidates who booked a 1-on-1 call after viewing their Discovery Result as well as visitors who booked directly from the Home page.
+                People who booked a call after Discovery, and visitors who booked straight from the website.
               </p>
 
+              <div className="list-tools">
+                <input
+                  className="form-input list-search"
+                  placeholder="Search name or email"
+                  value={bookingQuery}
+                  onChange={(e) => {
+                    setBookingQuery(e.target.value);
+                    setBookingPage(1);
+                  }}
+                  aria-label="Search bookings"
+                />
+                <select
+                  className="form-select list-filter"
+                  value={bookingStatus}
+                  onChange={(e) => {
+                    setBookingStatus(e.target.value);
+                    setBookingPage(1);
+                  }}
+                  aria-label="Filter bookings by status"
+                >
+                  <option value="ALL">Every status</option>
+                  <option value="NEW">New</option>
+                  <option value="DIRECT_CALL_BOOKED">Booked directly</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="NO_SHOW">No show</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </select>
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                {(data?.callBookings || []).map((b: any) => (
+                {bookingsList.map((b: any) => (
                   <div
                     key={b.id}
                     style={{
@@ -2154,6 +2339,15 @@ export const AdminWorkspacePage: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              <Pager
+                page={bookingsQuery.page}
+                pages={bookingsQuery.pages}
+                total={bookingsQuery.total}
+                limit={20}
+                onChange={setBookingPage}
+                noun="calls"
+              />
             </div>
           </div>
         )}
@@ -2164,12 +2358,42 @@ export const AdminWorkspacePage: React.FC = () => {
           <div className="panel-card" style={{ marginTop: 24 }}>
             <span className="micro-tag accent">Website Form Data &middot; Leads Inbox</span>
             <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
-              All Website Leads Captured ({leadsList.length})
+              Website leads ({leadsQuery.total.toLocaleString()})
             </h3>
             <p style={{ fontSize: 13, marginBottom: 14 }}>
-              Every form submitted on the public website appears here with the contact details and the focus the
-              visitor picked: Basic Details and Discovery starts, Book a Call requests, and sign-ups.
+              Every form filled on the website, with the contact details and the focus the visitor picked. Move
+              one along as you work it.
             </p>
+
+            <div className="list-tools">
+              <input
+                className="form-input list-search"
+                placeholder="Search name, email or track"
+                value={leadQuery}
+                onChange={(e) => {
+                  setLeadQuery(e.target.value);
+                  setLeadPage(1);
+                }}
+                aria-label="Search leads"
+              />
+              <select
+                className="form-select list-filter"
+                value={leadStatus}
+                onChange={(e) => {
+                  setLeadStatus(e.target.value);
+                  setLeadPage(1);
+                }}
+                aria-label="Filter leads by status"
+              >
+                <option value="ALL">Every status</option>
+                <option value="NEW">New</option>
+                <option value="DISCOVERY_STARTED">Discovery started</option>
+                <option value="CONTACTED">Contacted</option>
+                <option value="QUALIFIED">Qualified</option>
+                <option value="CONVERTED">Converted</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
 
             {leadsList.length === 0 ? (
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
@@ -2224,6 +2448,15 @@ export const AdminWorkspacePage: React.FC = () => {
                 </table>
               </div>
             )}
+
+            <Pager
+              page={leadsQuery.page}
+              pages={leadsQuery.pages}
+              total={leadsQuery.total}
+              limit={20}
+              onChange={setLeadPage}
+              noun="leads"
+            />
           </div>
 
             <div style={{ marginTop: 24 }}>
@@ -2231,7 +2464,7 @@ export const AdminWorkspacePage: React.FC = () => {
             <div className="panel-card" style={{ marginBottom: 0 }}>
               <span className="micro-tag accent">Solved Discovery Profiles &amp; Answers</span>
               <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
-                Users Who Solved Discovery Questions ({solvedSessions.length})
+                Discovery answers ({sessionsQuery.total.toLocaleString()})
               </h3>
               <p style={{ fontSize: 13, marginBottom: 14 }}>
                 Select any candidate below to view every Discovery question they solved along with their exact answers and Readiness Score.
@@ -2252,6 +2485,15 @@ export const AdminWorkspacePage: React.FC = () => {
                   );
                 })}
               </div>
+
+              <Pager
+                page={sessionsQuery.page}
+                pages={sessionsQuery.pages}
+                total={sessionsQuery.total}
+                limit={12}
+                onChange={setSessionPage}
+                noun="profiles"
+              />
 
               {selectedSession && (
                 <div
@@ -2594,6 +2836,34 @@ export const AdminWorkspacePage: React.FC = () => {
                 <span><strong>{data?.metrics?.totalUsers ?? 0}</strong> accounts in total</span>
               </div>
 
+              <div className="list-tools">
+                <input
+                  className="form-input list-search"
+                  placeholder="Search name or email"
+                  value={staffQueryText}
+                  onChange={(e) => {
+                    setStaffQueryText(e.target.value);
+                    setStaffPage(1);
+                  }}
+                  aria-label="Search accounts"
+                />
+                <select
+                  className="form-select list-filter"
+                  value={staffRole}
+                  onChange={(e) => {
+                    setStaffRole(e.target.value);
+                    setStaffPage(1);
+                  }}
+                  aria-label="Filter by role"
+                >
+                  <option value="ALL">Every role</option>
+                  <option value="LEARNER">Learners</option>
+                  <option value="GUIDE">Guides</option>
+                  <option value="ADMIN">Admins</option>
+                  <option value="CURRICULUM_OWNER">Curriculum owners</option>
+                </select>
+              </div>
+
               <div className="admin-table-wrap">
                 <table className="data-table">
                   <thead>
@@ -2606,7 +2876,7 @@ export const AdminWorkspacePage: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(data?.users || []).map((u: any) => (
+                    {staffList.map((u: any) => (
                       <tr key={u.id}>
                         <td>
                           <strong>{u.name}</strong>
@@ -2661,6 +2931,15 @@ export const AdminWorkspacePage: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              <Pager
+                page={staffQuery.page}
+                pages={staffQuery.pages}
+                total={staffQuery.total}
+                limit={20}
+                onChange={setStaffPage}
+                noun="accounts"
+              />
             </section>
 
             <section className="panel-card">
@@ -2739,16 +3018,7 @@ export const AdminWorkspacePage: React.FC = () => {
         )}
 
         {activeTab === 'progress' && (
-          <LearnerProgress
-            learners={learnersList}
-            courses={coursesList}
-            courseQuestions={courseQuestionsList}
-            studentCourses={studentCoursesList}
-            studentTasks={allStudentTasks}
-            attempts={data?.courseQuestionAttempts || []}
-            authFetch={authFetch}
-            onChanged={loadAdminOverview}
-          />
+          <LearnerProgress courses={coursesList} authFetch={authFetch} onChanged={loadAdminOverview} />
         )}
 
         {activeTab === 'notifications' && <AdminNotifications />}
@@ -2870,8 +3140,22 @@ export const AdminWorkspacePage: React.FC = () => {
               <span className="micro-tag accent">Audit trail</span>
               <h3 className="admin-card-title">Every change, in order</h3>
               <p className="admin-card-copy">Read only. Nothing here can be edited or deleted.</p>
+
+              <div className="list-tools">
+                <input
+                  className="form-input list-search"
+                  placeholder="Search action, user or record"
+                  value={auditQuery}
+                  onChange={(e) => {
+                    setAuditQuery(e.target.value);
+                    setAuditPage(1);
+                  }}
+                  aria-label="Search audit trail"
+                />
+              </div>
+
               <div className="admin-audit">
-                {(data?.auditEvents || []).map((ev: any) => (
+                {auditList.map((ev: any) => (
                   <div key={ev.id} className="admin-audit-row">
                     <div>
                       <strong>{ev.action.replaceAll('_', ' ').toLowerCase()}</strong>
@@ -2883,8 +3167,17 @@ export const AdminWorkspacePage: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {(data?.auditEvents || []).length === 0 && <p className="admin-muted">Nothing recorded yet.</p>}
+                {auditList.length === 0 && <p className="admin-muted">Nothing recorded yet.</p>}
               </div>
+
+              <Pager
+                page={auditQueryList.page}
+                pages={auditQueryList.pages}
+                total={auditQueryList.total}
+                limit={25}
+                onChange={setAuditPage}
+                noun="events"
+              />
             </section>
           </div>
         )}

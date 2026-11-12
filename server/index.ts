@@ -1627,6 +1627,39 @@ app.post('/api/learner/tasks/:taskId/submit', requireRole(['LEARNER', 'GUIDE', '
   res.json({ success: true, taskId, evidenceItemId: evId });
 });
 
+/**
+ * Nudge one person. Used when a task is reviewed or a message is written, so the
+ * other side sees it in the bell instead of having to open the task to find out.
+ */
+const notifyUser = (
+  userId: string | null | undefined,
+  title: string,
+  message: string,
+  actor: { id: string; name: string }
+) => {
+  if (!userId) return;
+  db.prepare(
+    `INSERT INTO notifications (id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at)
+     VALUES (?, ?, ?, 'USER', ?, ?, ?, ?)`
+  ).run(
+    `ntf_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+    title.slice(0, 120),
+    message.slice(0, 500),
+    userId,
+    actor.id,
+    actor.name,
+    new Date().toISOString()
+  );
+};
+
+/** Everyone who should answer a learner: their guide, and admins as a fallback. */
+const staffToNudge = (learnerId: string) => {
+  const learner = db.prepare('SELECT assigned_guide_id FROM users WHERE id = ?').get(learnerId) as any;
+  if (learner?.assigned_guide_id) return [learner.assigned_guide_id];
+  const admins = db.prepare("SELECT id FROM users WHERE role = 'ADMIN' AND account_status = 'ACTIVE'").all() as any[];
+  return admins.map((a) => a.id);
+};
+
 app.post('/api/tasks/:taskId/chat', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { taskId } = req.params;
   const message = String(req.body?.message || '').trim();
@@ -1649,6 +1682,26 @@ app.post('/api/tasks/:taskId/chat', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'C
     INSERT INTO task_messages (id, task_id, sender_user_id, sender_name, sender_role, message, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(msgId, taskId, req.user!.id, req.user!.name, req.user!.role, message, now);
+
+  // Tell the other side. A learner's message goes to their guide; a mentor's
+  // reply goes back to the learner on that task.
+  if (req.user!.role === 'LEARNER') {
+    for (const staffId of staffToNudge(task.learner_id)) {
+      notifyUser(
+        staffId,
+        `New message from ${req.user!.name}`,
+        `${req.user!.name} wrote about "${task.title}": ${message.slice(0, 180)}`,
+        { id: req.user!.id, name: req.user!.name }
+      );
+    }
+  } else {
+    notifyUser(
+      task.learner_id,
+      `New message about "${task.title}"`,
+      `${req.user!.name}: ${message.slice(0, 180)}`,
+      { id: req.user!.id, name: req.user!.name }
+    );
+  }
 
   const messages = db
     .prepare('SELECT * FROM task_messages WHERE task_id = ? ORDER BY created_at ASC')
@@ -2491,6 +2544,475 @@ app.post('/api/ai/benchmark/run', requireGuideOrTrainingKey, (req, res) => {
 // ============================================================================
 // 9. ADMIN & CURRICULUM OWNER WORKSPACE ENDPOINTS (RBAC: ADMIN / CURRICULUM_OWNER)
 // ============================================================================
+/**
+ * Paged list helpers.
+ *
+ * The console is built for a roster that starts at a thousand learners, so the
+ * big lists are never sent in one go. Every list endpoint here takes `page` and
+ * `limit`, answers with the rows for that page plus the total, and the UI shows
+ * a pager. Search and status filters run in SQL, not in the browser.
+ */
+const readPaging = (req: Request, defaultLimit = 25, maxLimit = 200) => {
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(maxLimit, Math.max(1, Number(req.query.limit) || defaultLimit));
+  return { page, limit, offset: (page - 1) * limit };
+};
+
+/** Escape a user's search text for a LIKE, so % and _ stay literal. */
+const likeTerm = (value: unknown) => `%${String(value ?? '').trim().replace(/[\\%_]/g, '')}%`;
+
+const hasSearch = (value: unknown) => String(value ?? '').trim().length > 0;
+
+const paged = (req: Request, res: Response, rows: any[], total: number, page: number, limit: number) =>
+  res.json({ success: true, rows, total, page, limit, pages: Math.max(1, Math.ceil(total / limit)) });
+
+// Reference data and counts for the whole console. Small and cheap on purpose:
+// the per-learner and per-task detail is fetched by the section that needs it.
+app.get('/api/admin/metrics', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
+  const count = (sql: string) => (db.prepare(sql).get() as any).c as number;
+
+  const discoveryQuestions = getAllDiscoveryQuestions();
+  const courses = (db.prepare('SELECT * FROM courses ORDER BY created_at DESC').all() as any[]).map((c) => ({
+    ...c,
+    modules: JSON.parse(c.modules_json || '[]')
+  }));
+  const courseQuestions = (db.prepare('SELECT * FROM course_questions ORDER BY created_at ASC').all() as any[]).map((q) => ({
+    ...q,
+    options: JSON.parse(q.options_json || '[]')
+  }));
+
+  return res.json({
+    success: true,
+    metrics: {
+      totalUsers: count('SELECT COUNT(*) AS c FROM users'),
+      activeLearners: count("SELECT COUNT(*) AS c FROM users WHERE role = 'LEARNER' AND account_status = 'ACTIVE'"),
+      activeGuides: count("SELECT COUNT(*) AS c FROM users WHERE role = 'GUIDE' AND account_status = 'ACTIVE'"),
+      totalLeads: count('SELECT COUNT(*) AS c FROM leads'),
+      newLeads: count("SELECT COUNT(*) AS c FROM leads WHERE status = 'NEW'"),
+      totalCallBookings: count('SELECT COUNT(*) AS c FROM call_bookings'),
+      activeDiscoveryQuestionsCount: discoveryQuestions.filter((q) => q.isActive).length,
+      completedDiscoveries: count(
+        'SELECT COUNT(DISTINCT session_id) AS c FROM discovery_responses'
+      ),
+      totalCourses: courses.length,
+      totalCourseQuestions: courseQuestions.length,
+      assignedStudentCourses: count('SELECT COUNT(*) AS c FROM student_courses'),
+      submittedTasksForReview: count("SELECT COUNT(*) AS c FROM learning_tasks WHERE status = 'SUBMITTED'"),
+      totalTasks: count('SELECT COUNT(*) AS c FROM learning_tasks'),
+      pendingPDPReviews: count("SELECT COUNT(*) AS c FROM pdp_versions WHERE status = 'PENDING_GUIDE_REVIEW'")
+    },
+    courses,
+    courseQuestions,
+    competencies: db.prepare('SELECT * FROM core_competencies ORDER BY code ASC').all(),
+    discoveryQuestions,
+    activeQuestionsCount: discoveryQuestions.filter((q) => q.isActive).length
+  });
+});
+
+// Learners, one page at a time, with their course and task counts worked out in SQL.
+app.get('/api/admin/learners/directory', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, name, email, track FROM users WHERE role = 'LEARNER' AND account_status = 'ACTIVE' ORDER BY name ASC"
+    )
+    .all();
+  res.json({ success: true, rows });
+});
+
+app.get('/api/admin/learners', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const q = req.query.q;
+  const status = String(req.query.status || '').trim();
+
+  const where: string[] = ["u.role = 'LEARNER'"];
+  const params: any[] = [];
+  if (hasSearch(q)) {
+    where.push('(u.name LIKE ? OR u.email LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q));
+  }
+  if (status && status !== 'ALL') {
+    where.push('u.account_status = ?');
+    params.push(status);
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (
+    db.prepare(`SELECT COUNT(*) AS c FROM users u ${whereSql}`).get(...params) as any
+  ).c as number;
+
+  const rows = db
+    .prepare(
+      `SELECT u.id, u.name, u.email, u.track, u.account_status, u.created_at,
+              (SELECT COUNT(*) FROM student_courses sc WHERE sc.learner_id = u.id) AS course_count,
+              (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id) AS task_count,
+              (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.learner_submission IS NOT NULL) AS submitted_count,
+              (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.status IN ('REVIEWED', 'APPROVED')) AS reviewed_count,
+              (SELECT MAX(COALESCE(t.submitted_at, t.reviewed_at, t.due_date)) FROM learning_tasks t WHERE t.learner_id = u.id) AS last_activity
+       FROM users u
+       ${whereSql}
+       ORDER BY (last_activity IS NULL) ASC, last_activity DESC, u.name ASC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, offset);
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+// One learner's course and task detail, used by the progress screen and dossiers.
+app.get('/api/admin/learners/:learnerId/progress', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const learnerId = String(req.params.learnerId);
+  const learner = db
+    .prepare('SELECT id, name, email, role, track, account_status, created_at FROM users WHERE id = ?')
+    .get(learnerId) as any;
+  if (!learner) {
+    return res.status(404).json({ success: false, error: 'Learner not found.' });
+  }
+
+  const courses = db
+    .prepare(
+      `SELECT sc.id, sc.course_id, sc.custom_notes, sc.status, sc.assigned_at,
+              c.title AS course_title, c.level AS course_level, c.description AS course_description,
+              (SELECT COUNT(*) FROM course_questions q WHERE q.course_id = sc.course_id) AS question_count,
+              (SELECT COUNT(DISTINCT cqa.question_id) FROM course_question_attempts cqa
+                 JOIN course_questions q ON q.id = cqa.question_id
+                WHERE q.course_id = sc.course_id AND cqa.learner_id = sc.learner_id) AS answered_count,
+              (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = sc.learner_id AND t.course_id = sc.course_id) AS task_count,
+              (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = sc.learner_id AND t.course_id = sc.course_id
+                 AND t.status IN ('SUBMITTED', 'REVIEWED', 'APPROVED')) AS tasks_started
+       FROM student_courses sc
+       JOIN courses c ON c.id = sc.course_id
+       WHERE sc.learner_id = ?
+       ORDER BY sc.assigned_at DESC`
+    )
+    .all(learnerId);
+
+  const tasks = db
+    .prepare(
+      `SELECT t.id, t.title, t.status, t.course_id, t.submitted_at, t.reviewed_at, t.due_date,
+              t.learner_submission, t.uploaded_file_name, t.guide_feedback, t.ai_review_json,
+              c.title AS course_title
+       FROM learning_tasks t
+       LEFT JOIN courses c ON c.id = t.course_id
+       WHERE t.learner_id = ?
+       ORDER BY COALESCE(t.submitted_at, t.reviewed_at, t.due_date) DESC`
+    )
+    .all(learnerId) as any[];
+
+  const withVerdicts = tasks.map((t) => {
+    let verdict: string | null = null;
+    let confidence: number | null = null;
+    if (t.ai_review_json) {
+      try {
+        const parsed = JSON.parse(t.ai_review_json);
+        verdict = parsed.verdict || null;
+        confidence = parsed.confidence ?? null;
+      } catch {
+        /* leave it empty */
+      }
+    }
+    const { ai_review_json, learner_submission, ...rest } = t;
+    return {
+      ...rest,
+      submission_preview: learner_submission ? String(learner_submission).slice(0, 220) : null,
+      aiVerdict: verdict,
+      aiConfidence: confidence
+    };
+  });
+
+  const attempts = db
+    .prepare('SELECT question_id, is_correct, attempted_at FROM course_question_attempts WHERE learner_id = ? ORDER BY attempted_at DESC')
+    .all(learnerId);
+
+  res.json({ success: true, learner, courses, tasks: withVerdicts, attempts });
+});
+
+// The review queue. Rows are light: no file blobs, no full submissions.
+app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const status = String(req.query.status || '').trim();
+  const q = req.query.q;
+
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (status && status !== 'ALL') {
+    where.push('t.status = ?');
+    params.push(status);
+  }
+  if (hasSearch(q)) {
+    where.push('(t.title LIKE ? OR u.name LIKE ? OR u.email LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (
+    db
+      .prepare(`SELECT COUNT(*) AS c FROM learning_tasks t JOIN users u ON u.id = t.learner_id ${whereSql}`)
+      .get(...params) as any
+  ).c as number;
+
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.title, t.status, t.course_id, t.learner_id, t.submitted_at, t.reviewed_at, t.due_date,
+              t.uploaded_file_name, t.guide_feedback, t.ai_review_json,
+              u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
+              c.title AS course_title,
+              (SELECT COUNT(*) FROM task_messages m WHERE m.task_id = t.id) AS message_count
+       FROM learning_tasks t
+       JOIN users u ON u.id = t.learner_id
+       LEFT JOIN courses c ON c.id = t.course_id
+       ${whereSql}
+       ORDER BY CASE WHEN t.status = 'SUBMITTED' THEN 0 WHEN t.status = 'ASSIGNED' THEN 1 ELSE 2 END,
+                COALESCE(t.submitted_at, t.reviewed_at, t.due_date) DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, offset) as any[];
+
+  const light = rows.map((t) => {
+    let verdict: string | null = null;
+    let confidence: number | null = null;
+    let preview: string | null = null;
+    if (t.ai_review_json) {
+      try {
+        const parsed = JSON.parse(t.ai_review_json);
+        verdict = parsed.verdict || null;
+        confidence = parsed.confidence ?? null;
+      } catch {
+        /* ignore */
+      }
+    }
+    const submission = db.prepare('SELECT learner_submission FROM learning_tasks WHERE id = ?').get(t.id) as any;
+    if (submission?.learner_submission) preview = String(submission.learner_submission).slice(0, 160);
+    const { ai_review_json, ...rest } = t;
+    return { ...rest, aiVerdict: verdict, aiConfidence: confidence, submission_preview: preview };
+  });
+
+  return paged(req, res, light, total, page, limit);
+});
+
+// Everything about one task: the submission, the AI pre-check and the chat.
+app.get('/api/admin/tasks/:taskId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const taskId = String(req.params.taskId);
+  const task = db
+    .prepare(
+      `SELECT t.*, u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
+              c.title AS course_title
+       FROM learning_tasks t
+       JOIN users u ON u.id = t.learner_id
+       LEFT JOIN courses c ON c.id = t.course_id
+       WHERE t.id = ?`
+    )
+    .get(taskId) as any;
+  if (!task) {
+    return res.status(404).json({ success: false, error: 'Task not found.' });
+  }
+
+  let aiReview = null;
+  if (task.ai_review_json) {
+    try {
+      aiReview = JSON.parse(task.ai_review_json);
+    } catch {
+      aiReview = null;
+    }
+  } else if (task.learner_submission) {
+    aiReview = analyzeStudentTaskSubmissionWithAI({
+      taskTitle: task.title,
+      instructions: task.instructions,
+      expectedCriteria: task.expected_criteria || '',
+      learnerSubmission: task.learner_submission,
+      uploadedFileName: task.uploaded_file_name || undefined
+    });
+  }
+
+  const messages = db.prepare('SELECT * FROM task_messages WHERE task_id = ? ORDER BY created_at ASC').all(taskId);
+  res.json({ success: true, task: { ...task, aiReview, messages } });
+});
+
+app.get('/api/admin/leads', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const status = String(req.query.status || '').trim();
+  const q = req.query.q;
+
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (status && status !== 'ALL') {
+    where.push('status = ?');
+    params.push(status);
+  }
+  if (hasSearch(q)) {
+    where.push('(name LIKE ? OR email LIKE ? OR track LIKE ? OR custom_track LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM leads ${whereSql}`).get(...params) as any).c as number;
+  const rows = db
+    .prepare(`SELECT * FROM leads ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset);
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+app.get('/api/admin/bookings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const status = String(req.query.status || '').trim();
+  const q = req.query.q;
+
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (status && status !== 'ALL') {
+    where.push('status = ?');
+    params.push(status);
+  }
+  if (hasSearch(q)) {
+    where.push('(participant_name LIKE ? OR participant_email LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM call_bookings ${whereSql}`).get(...params) as any).c as number;
+  const rows = (db
+    .prepare(`SELECT * FROM call_bookings ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset) as any[]).map((b) => ({
+    ...b,
+    phone: b.participant_phone,
+    preferred_time_slot: b.preferred_time,
+    result_summary: b.recommended_focus
+  }));
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+app.get('/api/admin/users', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const role = String(req.query.role || '').trim();
+  const q = req.query.q;
+
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (role && role !== 'ALL') {
+    where.push('role = ?');
+    params.push(role);
+  }
+  if (hasSearch(q)) {
+    where.push('(name LIKE ? OR email LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).get(...params) as any).c as number;
+  const rows = db
+    .prepare(
+      `SELECT id, name, email, role, account_status, track, created_at
+       FROM users ${whereSql}
+       ORDER BY CASE role WHEN 'ADMIN' THEN 0 WHEN 'CURRICULUM_OWNER' THEN 1 WHEN 'GUIDE' THEN 2 ELSE 3 END, name ASC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, offset);
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+app.get('/api/admin/student-courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 20);
+  const q = req.query.q;
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (hasSearch(q)) {
+    where.push('(u.name LIKE ? OR c.title LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM student_courses sc
+         JOIN courses c ON c.id = sc.course_id JOIN users u ON u.id = sc.learner_id ${whereSql}`
+      )
+      .get(...params) as any
+  ).c as number;
+
+  const rows = db
+    .prepare(
+      `SELECT sc.*, c.title AS course_title, c.track AS course_track, c.level AS course_level,
+              u.name AS learner_name, u.email AS learner_email
+       FROM student_courses sc
+       JOIN courses c ON c.id = sc.course_id
+       JOIN users u ON u.id = sc.learner_id
+       ${whereSql}
+       ORDER BY sc.assigned_at DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(...params, limit, offset);
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+app.get('/api/admin/audit', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 25);
+  const q = req.query.q;
+  const where: string[] = ['1 = 1'];
+  const params: any[] = [];
+  if (hasSearch(q)) {
+    where.push('(action LIKE ? OR entity_id LIKE ? OR actor_role LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q));
+  }
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c FROM audit_events ${whereSql}`).get(...params) as any).c as number;
+  const rows = (db
+    .prepare(`SELECT * FROM audit_events ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset) as any[]).map((a) => ({
+    ...a,
+    details: JSON.parse(a.details_json || '{}')
+  }));
+
+  return paged(req, res, rows, total, page, limit);
+});
+
+app.get('/api/admin/discovery-sessions', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const { page, limit, offset } = readPaging(req, 12);
+  const total = (db.prepare('SELECT COUNT(*) AS c FROM discovery_sessions').get() as any).c as number;
+  const sessions = db
+    .prepare('SELECT * FROM discovery_sessions ORDER BY updated_at DESC LIMIT ? OFFSET ?')
+    .all(limit, offset) as any[];
+  const discoveryQuestions = getAllDiscoveryQuestions();
+
+  const rows = sessions.map((sess) => {
+    const respRows = db
+      .prepare('SELECT question_id, domain, answer_value, answer_text, answered_at FROM discovery_responses WHERE session_id = ? ORDER BY question_id ASC')
+      .all(sess.id) as any[];
+    const flatAnswers: Record<string, string> = {};
+    const detailedAnswers = respRows.map((r) => {
+      flatAnswers[r.question_id] = r.answer_value || r.answer_text || '';
+      const qDef =
+        discoveryQuestions.find((q) => q.id === r.question_id) ||
+        CANONICAL_QUESTIONS.find((q) => q.id === r.question_id);
+      let readableAnswer = r.answer_text || r.answer_value;
+      if (qDef && Array.isArray(qDef.options)) {
+        const matchedOpt = qDef.options.find((o: any) => o.value === r.answer_value);
+        if (matchedOpt) readableAnswer = matchedOpt.label;
+      }
+      return {
+        questionId: r.question_id,
+        domainTitle: qDef?.domainTitle || r.domain,
+        prompt: qDef?.prompt || r.question_id,
+        answerValue: r.answer_value,
+        answerLabel: readableAnswer,
+        answeredAt: r.answered_at
+      };
+    });
+    return {
+      ...sess,
+      answeredCount: detailedAnswers.length,
+      detailedAnswers,
+      candidateResult: evaluateCandidateDiscoveryResult(flatAnswers, sess.track, sess.custom_track || '')
+    };
+  });
+
+  return paged(req, res, rows, total, page, limit);
+});
+
 app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
   const users = db
     .prepare('SELECT id, name, email, role, account_status, track, assigned_guide_id, created_at, updated_at FROM users ORDER BY created_at DESC')
@@ -2878,6 +3400,16 @@ app.post('/api/admin/courses/assign', requireRole(['ADMIN', 'CURRICULUM_OWNER', 
     VALUES (?, ?, ?, ?, 0, 'ACTIVE', ?, ?)
   `).run(id, courseId, learnerId, customNotes || 'Customised course assigned by Admin.', req.user!.id, now);
 
+  const assignedCourse = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId) as any;
+  notifyUser(
+    learnerId,
+    'A new course is on your dashboard',
+    `${req.user!.name} assigned "${assignedCourse?.title || 'a course'}" to you.${
+      customNotes ? ` Note: ${customNotes}` : ''
+    }`,
+    { id: req.user!.id, name: req.user!.name }
+  );
+
   writeAuditEvent({
     actorUserId: req.user!.id,
     actorRole: req.user!.role,
@@ -3164,6 +3696,13 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
     req.user!.role,
     `[Official Task Review: ${status === 'REVIEWED' ? 'APPROVED ✓' : 'REVISION REQUESTED'}] ${guideFeedback}`,
     now
+  );
+
+  notifyUser(
+    task.learner_id,
+    status === 'REVIEWED' ? `Task reviewed: ${task.title}` : `Changes asked on: ${task.title}`,
+    guideFeedback,
+    { id: req.user!.id, name: req.user!.name }
   );
 
   writeAuditEvent({
