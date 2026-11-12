@@ -10,6 +10,12 @@ interface StaffSignInGateProps {
   currentRole?: string | null;
   /** Called after the credentials are accepted. Defaults to a full page reload. */
   onSuccess?: () => void;
+  /**
+   * "panel" keeps the boxed card used inside the workspaces.
+   * "plain" renders only the fields, for the standalone sign-in pages that
+   * supply their own heading and layout.
+   */
+  layout?: 'panel' | 'plain';
 }
 
 /**
@@ -22,11 +28,13 @@ export const StaffSignInGate: React.FC<StaffSignInGateProps> = ({
   consoleName,
   allowedRoles,
   currentRole,
-  onSuccess
+  onSuccess,
+  layout = 'panel'
 }) => {
   const { user, loginWithEmail, logout } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,6 +53,78 @@ export const StaffSignInGate: React.FC<StaffSignInGateProps> = ({
     else window.location.reload();
   };
 
+  const form = (
+    <>
+      {user && (
+        <div className="gate-session">
+          <p>
+            You are signed in as <strong>{user.name}</strong> ({currentRole || user.role}). That role cannot
+            open this page.
+          </p>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => logout()}>
+            Sign out
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} noValidate={false}>
+        <div className="gate-field">
+          <label className="gate-label" htmlFor={`${consoleName}-email`}>
+            Work email
+          </label>
+          <input
+            id={`${consoleName}-email`}
+            type="email"
+            className="form-input gate-input"
+            autoComplete="username"
+            placeholder="you@frins.in"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoFocus
+            required
+          />
+        </div>
+
+        <div className="gate-field">
+          <div className="gate-label-row">
+            <label className="gate-label" htmlFor={`${consoleName}-password`}>
+              Password
+            </label>
+            <button
+              type="button"
+              className="gate-reveal"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <input
+            id={`${consoleName}-password`}
+            type={showPassword ? 'text' : 'password'}
+            className="form-input gate-input"
+            autoComplete="current-password"
+            placeholder="Your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
+        {error && <div className="gate-error">{error}</div>}
+
+        <button type="submit" className="btn btn-primary gate-submit" disabled={busy}>
+          {busy ? 'Checking credentials…' : `Sign in to ${consoleName}`}
+        </button>
+      </form>
+    </>
+  );
+
+  if (layout === 'plain') {
+    return <div className="gate-plain">{form}</div>;
+  }
+
   return (
     <div className="workspace-shell">
       <div className="container">
@@ -54,63 +134,7 @@ export const StaffSignInGate: React.FC<StaffSignInGateProps> = ({
           <p style={{ fontSize: 13.5, marginBottom: 14 }}>
             This page is for FRINS staff only. Sign in with your work email to continue.
           </p>
-
-          {user && (
-            <div
-              style={{
-                padding: '8px 12px',
-                background: 'var(--bg-canvas)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 8,
-                fontSize: 12.5,
-                marginBottom: 14
-              }}
-            >
-              You are signed in as <strong>{user.name}</strong> ({currentRole || user.role}). That role cannot open
-              this page.
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                style={{ marginTop: 8, display: 'block' }}
-                onClick={() => logout()}
-              >
-                Sign out
-              </button>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Staff Email</label>
-              <input
-                type="email"
-                className="form-input"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-input"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            {error && (
-              <div style={{ color: 'var(--danger-text)', fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>
-                {error}
-              </div>
-            )}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
-              {busy ? 'Verifying credentials...' : `Sign In to ${consoleName}`}
-            </button>
-          </form>
+          {form}
         </div>
       </div>
     </div>

@@ -7663,3 +7663,283 @@ button.stage-row .stage-desc {
   .route-entry { padding: 12px; }
   .track-index { padding: 2px 12px 4px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Standalone staff sign-in (/admin/login, /guide/login, /ai-pipeline/login)
+
+   The page used to be a small card floating in a mostly empty screen, under a
+   line telling staff to bookmark the URL. It is now two halves: what is behind
+   the door on the left, the form on the right, and nothing on the page that is
+   not useful to someone signing in.
+   --------------------------------------------------------------------------- */
+
+.staff-auth-page {
+  background: var(--bg-white);
+}
+
+.staff-auth-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.staff-auth-pane {
+  position: relative;
+  background: #0B1524;
+  color: #E7EDF6;
+  padding: clamp(32px, 4.5vw, 64px);
+  display: flex;
+  align-items: center;
+  border-right: 1px solid #1B2434;
+}
+
+.staff-auth-pane-inner {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+}
+
+.staff-auth-eyebrow {
+  margin: 0 0 16px;
+  padding-left: 12px;
+  border-left: 2px solid #35C4B3;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #35C4B3;
+  line-height: 1.4;
+}
+
+.staff-auth-pane h1 {
+  margin: 0 0 12px;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.5vw, 33px);
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  color: #FFFFFF;
+  max-width: 15em;
+}
+
+.staff-auth-lede {
+  margin: 0 0 26px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #9FB0C7;
+  max-width: 36em;
+}
+
+.staff-auth-points {
+  list-style: none;
+  margin: 0;
+  padding: 22px 0 0;
+  border-top: 1px solid #1B2434;
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+}
+
+.staff-auth-points li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-left: 14px;
+  border-left: 1px solid #2A3A52;
+}
+
+.staff-auth-points strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #F2F6FB;
+  line-height: 1.4;
+}
+
+.staff-auth-points span {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #8FA0B8;
+}
+
+.staff-auth-foot {
+  margin: 26px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #1B2434;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #7488A3;
+}
+
+.staff-auth-form-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: clamp(28px, 4vw, 56px) clamp(20px, 3vw, 40px);
+  background: #FBFCFD;
+}
+
+.staff-auth-card {
+  width: 100%;
+  max-width: 424px;
+  background: #FFFFFF;
+  border: 1px solid #DFE5EC;
+  border-radius: 8px;
+  padding: clamp(22px, 2.6vw, 32px);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.staff-auth-kicker {
+  margin: 0 0 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--accent);
+  line-height: 1.4;
+}
+
+.staff-auth-card h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+}
+
+.staff-auth-help {
+  margin: 0 0 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.staff-auth-assist {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #EDF1F5;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-light-muted);
+}
+
+.staff-auth-legal {
+  margin: 0;
+  max-width: 424px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #9AA7B6;
+  text-align: left;
+}
+
+/* The fields themselves, shared with the in-console gate. */
+.gate-field { margin-bottom: 14px; }
+
+.gate-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.gate-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--text-main);
+}
+
+.gate-label-row .gate-label { margin-bottom: 0; }
+
+.gate-reveal {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.gate-reveal:hover { text-decoration: underline; }
+
+.gate-input {
+  height: 44px;
+  padding: 0 12px;
+  font-size: 14.5px;
+  border-radius: 6px;
+  border-color: #D8DFE8;
+}
+
+.gate-input::placeholder { color: #A9B4C2; }
+
+.gate-submit {
+  width: 100%;
+  height: 44px;
+  margin-top: 6px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.gate-submit:disabled { opacity: 0.65; cursor: default; }
+
+.gate-error {
+  margin-bottom: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--danger-border);
+  border-left-width: 2px;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.gate-session {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #E3D9BF;
+  border-left: 2px solid #C99A2E;
+  border-radius: 4px;
+  background: #FDF9EE;
+}
+
+.gate-session p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #6B5420;
+}
+
+.gate-session .btn { border-radius: 4px; }
+
+@media (max-width: 900px) {
+  .staff-auth-split { grid-template-columns: minmax(0, 1fr); }
+  .staff-auth-pane {
+    border-right: none;
+    border-bottom: 1px solid #1B2434;
+    padding: 28px clamp(20px, 5vw, 36px) 30px;
+    align-items: flex-start;
+  }
+  .staff-auth-pane-inner { max-width: none; }
+  .staff-auth-pane h1 { font-size: clamp(22px, 6vw, 27px); max-width: none; }
+  .staff-auth-lede { margin-bottom: 0; font-size: 13.5px; }
+  .staff-auth-points, .staff-auth-foot { display: none; }
+  .staff-auth-form-pane { padding: 26px 18px 40px; justify-content: flex-start; }
+  .staff-auth-card { max-width: none; }
+}
+
+@media (max-width: 420px) {
+  .staff-auth-card { padding: 20px 16px; border-radius: 6px; }
+  .staff-auth-card h2 { font-size: 21px; }
+}
