@@ -642,6 +642,18 @@ a {
   line-height: 1.45;
 }
 
+/* The hero card is narrow. Drop the numbered chip so the text has room, and
+   bring the chip back when there is width to spare. */
+.artifact-stages .stage-row .stage-num {
+  display: none;
+}
+
+@media (min-width: 1500px) {
+  .artifact-stages .stage-row .stage-num {
+    display: flex;
+  }
+}
+
 .stage-row.human .stage-desc {
   color: var(--text-dark-muted);
 }
@@ -5341,4 +5353,83 @@ a {
   white-space: normal;
   overflow-wrap: anywhere;
   max-width: 100%;
+}
+
+/* Home hero: the four course steps are buttons. They keep the old look and
+   gain a hover state and a short cue on the right so people try them. */
+button.stage-row {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+button.stage-row:hover {
+  border-color: var(--accent-border);
+  box-shadow: 0 10px 24px -18px rgba(37, 99, 235, 0.7);
+}
+
+button.stage-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button.stage-row.human:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+button.stage-row:active {
+  transform: translateY(1px);
+}
+
+/* Keep the number and the cue in their columns instead of letting the flex
+   line squeeze them. */
+button.stage-row {
+  align-items: flex-start;
+}
+
+button.stage-row .stage-num,
+button.stage-row .stage-go {
+  align-self: center;
+}
+
+button.stage-row .stage-info {
+  min-width: 0;
+}
+
+button.stage-row .stage-desc {
+  max-width: 46ch;
+}
+
+/* Always visible, so the card reads as something you can press. It only gets
+   louder on hover. */
+.stage-go {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--accent);
+  white-space: nowrap;
+  opacity: 0.72;
+  transition: opacity 0.16s ease;
+}
+
+.stage-row:hover .stage-go,
+.stage-row:focus-visible .stage-go {
+  opacity: 1;
+}
+
+.stage-row.human .stage-go {
+  color: #BFD3F8;
+}
+
+@media (max-width: 720px) {
+  .stage-go {
+    display: none;
+  }
+
+  button.stage-row {
+    align-items: flex-start;
+  }
 }

@@ -658,8 +658,15 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     aria-labelledby="tab-architecture"
                     className={`artifact-panel ${activeTab === 'architecture' ? 'active' : ''}`}
                   >
+                    {/* Each step is a real button: 1 and 4 book a call, 2 and 3
+                        open Discovery. The chevron says it is clickable. */}
                     <div className="artifact-stages">
-                      <div className="stage-row">
+                      <button
+                        type="button"
+                        className="stage-row"
+                        onClick={() => openDirectCallModal()}
+                        aria-label="Step 1: book a call"
+                      >
                         <div className="stage-num">01</div>
                         <div className="stage-info">
                           <div className="stage-name">Book a Call Directly or Take Guided Discovery</div>
@@ -667,9 +674,15 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                             Speak with our team right away, or answer focused Discovery questions first to map your learning goals.
                           </div>
                         </div>
-                      </div>
+                        <span className="stage-go">Book a call &rarr;</span>
+                      </button>
 
-                      <div className="stage-row highlight">
+                      <button
+                        type="button"
+                        className="stage-row highlight"
+                        onClick={() => navigate('/discovery')}
+                        aria-label="Step 2: start Discovery"
+                      >
                         <div className="stage-num">02</div>
                         <div className="stage-info">
                           <div className="stage-name">Identify Your Concepts &amp; Strategy Goals</div>
@@ -677,9 +690,15 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                             Whether you want market concepts, strategy understanding, or execution discipline, we pinpoint what to build.
                           </div>
                         </div>
-                      </div>
+                        <span className="stage-go">Start Discovery &rarr;</span>
+                      </button>
 
-                      <div className="stage-row human">
+                      <button
+                        type="button"
+                        className="stage-row human"
+                        onClick={() => navigate('/discovery')}
+                        aria-label="Step 3: start Discovery"
+                      >
                         <div className="stage-num">03</div>
                         <div className="stage-info">
                           <div className="stage-name">1-on-1 Session With Our Learning Guide Team</div>
@@ -687,9 +706,15 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                             Meet 1-on-1 with our mentors to align on your custom course syllabus and practical milestones.
                           </div>
                         </div>
-                      </div>
+                        <span className="stage-go">Start Discovery &rarr;</span>
+                      </button>
 
-                      <div className="stage-row">
+                      <button
+                        type="button"
+                        className="stage-row"
+                        onClick={() => openDirectCallModal()}
+                        aria-label="Step 4: book a call"
+                      >
                         <div className="stage-num">04</div>
                         <div className="stage-info">
                           <div className="stage-name">Your Custom-Built Course (Never One-for-All)</div>
@@ -697,7 +722,8 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                             Work through a course that matches your level, your strategy goals and your pace.
                           </div>
                         </div>
-                      </div>
+                        <span className="stage-go">Book a call &rarr;</span>
+                      </button>
                     </div>
                   </div>
 
