@@ -18,6 +18,8 @@ import {
   Sparkles as SparklesIcon,
   PhoneCall,
   MessageSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
   UsersRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -115,6 +117,15 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // On a laptop the sidebar can fold down to a rail of icons, so wide tables get
+  // the room. The choice is remembered between visits.
+  const [rail, setRail] = useState(() => {
+    try {
+      return window.localStorage.getItem('frins.sidebar.rail') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
@@ -136,6 +147,14 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     setMenuOpen(false);
   }, [location.pathname]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('frins.sidebar.rail', rail ? '1' : '0');
+    } catch {
+      /* a private window can refuse storage, and that is fine */
+    }
+  }, [rail]);
+
   const nav = navForRole(user?.role);
   const isActivePath = (item: NavItem) => {
     if (item.path === '/dashboard' && (location.pathname === '/prototype' || location.pathname === '/learner')) {
@@ -150,7 +169,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return (
     <div className={`app-shell role-${(user?.role || "guest").toLowerCase()}`}>
       {/* ---------- Sidebar ---------- */}
-      <aside className={`app-sidebar ${sidebarOpen ? 'open' : ''}`}>
+      <aside className={`app-sidebar ${sidebarOpen ? 'open' : ''} ${rail ? 'rail' : ''}`}>
         <div className="app-sidebar-brand">
           <button
             type="button"
@@ -158,15 +177,15 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             onClick={() => navigate(nav[0]?.path || '/')}
             aria-label="FRINS home"
           >
-            <span className="app-brand-mark" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
-                <path d="M4 6h16M4 12h10M4 18h6" strokeLinecap="round" />
-                <circle cx="18" cy="15" r="3" />
-              </svg>
-            </span>
+            <img
+              className="app-brand-mark"
+              src="/brand/frins-mark-white.png"
+              alt=""
+              aria-hidden="true"
+            />
             <span className="app-brand-text">
               <strong>FRINS</strong>
-              <small>Learning Platform</small>
+              <small>Market Learning</small>
             </span>
           </button>
           <button
@@ -191,6 +210,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     type="button"
                     className={`app-nav-item ${isActivePath(item) ? 'active' : ''}`}
                     aria-current={isActivePath(item) ? 'page' : undefined}
+                    title={rail ? item.label : undefined}
                     onClick={() => navigate(item.path)}
                   >
                     <span className="app-nav-icon">{item.icon}</span>
@@ -214,7 +234,12 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             </div>
           </div>
           )}
-          <button type="button" className="app-nav-item subtle" onClick={() => setSignOutOpen(true)}>
+          <button
+            type="button"
+            className="app-nav-item subtle"
+            title={rail ? 'Sign out' : undefined}
+            onClick={() => setSignOutOpen(true)}
+          >
             <span className="app-nav-icon">
               <LogOut size={17} />
             </span>
@@ -236,6 +261,16 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               aria-label="Open menu"
             >
               <Menu size={19} />
+            </button>
+            <button
+              type="button"
+              className="app-icon-button desktop-only"
+              onClick={() => setRail((value) => !value)}
+              aria-label={rail ? 'Open the sidebar' : 'Close the sidebar'}
+              aria-expanded={!rail}
+              title={rail ? 'Open the sidebar' : 'Close the sidebar'}
+            >
+              {rail ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
             </button>
             <div className="app-breadcrumb">
               <strong>{current?.label || 'Workspace'}</strong>

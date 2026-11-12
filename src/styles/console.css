@@ -2149,3 +2149,67 @@ a.kpi:hover { background: #FCFCFD; }
 /* A notice with a destination looks and behaves like a row you can open. */
 .notif-list li.clickable { cursor: pointer; }
 .notif-list li.clickable:hover { background: #F5F8FF; }
+
+/* ==========================================================================
+   Sidebar rail and the logo
+
+   On a laptop the sidebar folds to a strip of icons, so a wide table keeps its
+   columns. The toggle lives in the top bar; on a phone the drawer behaviour is
+   unchanged and the rail rules never apply.
+   ========================================================================== */
+
+.desktop-only { display: none; }
+
+@media (min-width: 1025px) {
+  .desktop-only { display: inline-flex; }
+}
+
+.app-shell .app-brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 0;
+  background: none;
+  object-fit: contain;
+  flex: 0 0 30px;
+}
+
+.app-shell .app-brand-button { min-width: 0; }
+.app-shell .app-brand-text { min-width: 0; }
+.app-shell .app-brand-text strong { white-space: nowrap; }
+
+@media (min-width: 1025px) {
+  .app-shell .app-sidebar {
+    transition: width 0.18s ease, flex-basis 0.18s ease;
+  }
+
+  .app-shell .app-sidebar.rail {
+    width: 60px;
+    flex: 0 0 60px;
+  }
+
+  .app-shell .app-sidebar.rail .app-brand-text,
+  .app-shell .app-sidebar.rail .app-nav-section,
+  .app-shell .app-sidebar.rail .app-sidebar-card,
+  .app-shell .app-sidebar.rail .app-nav-item > span:not(.app-nav-icon) {
+    display: none;
+  }
+
+  .app-shell .app-sidebar.rail .app-sidebar-brand {
+    padding: 0 8px;
+    justify-content: center;
+  }
+
+  .app-shell .app-sidebar.rail .app-brand-button { justify-content: center; gap: 0; }
+  .app-shell .app-sidebar.rail .app-sidebar-nav { padding: 10px 0; gap: 12px; align-items: center; }
+  .app-shell .app-sidebar.rail .app-nav-group { width: 100%; }
+  .app-shell .app-sidebar.rail .app-nav-item {
+    width: 38px;
+    height: 34px;
+    margin: 0 auto;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+  .app-shell .app-sidebar.rail .app-sidebar-footer { padding: 8px 0; }
+  .app-shell .app-sidebar.rail .app-sidebar-footer .app-nav-item { width: 38px; margin: 0 auto; }
+}

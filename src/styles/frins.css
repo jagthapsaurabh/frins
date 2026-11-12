@@ -2720,14 +2720,9 @@ a {
 .auth-brand-mark {
   width: 38px;
   height: 38px;
-  border-radius: 11px;
-  background: var(--bg-dark);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 17px;
+  object-fit: contain;
+  display: block;
+  flex: none;
 }
 
 .auth-brand-text {
@@ -6833,4 +6828,30 @@ button.stage-row .stage-desc {
 
   .section-pad { padding-top: 40px; padding-bottom: 40px; }
   h2 { font-size: 1.55rem; line-height: 1.2; }
+}
+
+/* The logo, at the size a header can carry.
+   The lockup is a single image, so the wordmark and the tagline can never drift
+   apart the way separate text did. */
+.site-brand-logo {
+  display: block;
+  height: 40px;
+  width: auto;
+  max-width: 100%;
+}
+
+.footer-brand-logo {
+  display: block;
+  height: 44px;
+  width: auto;
+  max-width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .site-brand-logo { height: 34px; }
+}
+
+@media (max-width: 400px) {
+  .site-brand-logo { height: 29px; }
+  .footer-brand-logo { height: 38px; }
 }

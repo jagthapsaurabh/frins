@@ -205,16 +205,11 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
             if (e.key === 'Enter' || e.key === ' ') handleGo('/');
           }}
         >
-          <span className="brand-logo-box" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-              <path d="M4 6h16M4 12h10M4 18h6" strokeLinecap="round" />
-              <circle cx="18" cy="15" r="3" />
-            </svg>
-          </span>
-          <div className="brand-text-wrap">
-            <span className="brand-wordmark">FRINS</span>
-            <span className="brand-sub">Market Learning, Taught Properly</span>
-          </div>
+          <img
+            className="site-brand-logo"
+            src="/brand/frins-lockup.png"
+            alt="FRINS — Market Learning, Taught Properly"
+          />
         </div>
 
         {/* Center: All Multi-Page Tabs Shown Directly on Laptop & Large Screens */}
@@ -359,17 +354,11 @@ export const PublicSiteFooter: React.FC<{
       <div className="container">
         <div className="footer-grid">
           <div className="footer-brand">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="brand-logo-box" aria-hidden="true">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
-                  <path d="M4 6h16M4 12h10M4 18h6" strokeLinecap="round" />
-                  <circle cx="18" cy="15" r="3" />
-                </svg>
-              </span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: '#FFF' }}>
-                FRINS
-              </span>
-            </div>
+            <img
+              className="footer-brand-logo"
+              src="/brand/frins-lockup-white.png"
+              alt="FRINS — Market Learning, Taught Properly"
+            />
             <p>
               Market education built around you. Concepts, strategy work and 1-on-1 mentorship for students, strategy learners, traders and investors.
             </p>
