@@ -1,12 +1,27 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ImagePlus, Send, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  FileText,
+  ImagePlus,
+  Loader2,
+  MessageSquare,
+  Paperclip,
+  Send,
+  Trash2,
+  X
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { PageHead, labelFor, toneFor } from '../../components/console/ConsoleUI';
 import { formatDateTime, timeAgo } from '../../utils/dates';
+import { MAX_FILES_PER_SEND, PreparedFile, formatBytes, openStoredFile, prepareFile } from '../../utils/files';
 
 /**
- * One task, for the learner. Read the brief, send the work, talk to the mentor.
+ * One task, for the learner.
+ *
+ * The brief, the work they send, and the mentor thread. Work is not a single
+ * box: a learner can send several notes, photos and PDFs, one after another,
+ * and the whole set is what the mentor reviews.
  */
 export const LearnerTaskPage: React.FC = () => {
   const { taskId = '' } = useParams();
@@ -17,37 +32,32 @@ export const LearnerTaskPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [answer, setAnswer] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [fileData, setFileData] = useState('');
+  const [note, setNote] = useState('');
+  const [files, setFiles] = useState<PreparedFile[]>([]);
+  const [preparing, setPreparing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement | null>(null);
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const chatRef = useRef<HTMLDivElement | null>(null);
+  const workRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
-    setLoading(true);
     try {
       const res = await authFetch('/api/learner/dashboard');
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || 'Could not open this task.');
       setData(json);
-      const task = (json.tasks || []).find((row: any) => row.id === taskId);
-      if (task) {
-        setAnswer(task.learner_submission || '');
-        setFileName(task.uploaded_file_name || '');
-        setFileData(task.uploaded_file_data || '');
-      }
       setError(null);
     } catch (err: any) {
       setError(err?.message || 'Could not open this task.');
     } finally {
       setLoading(false);
     }
-  }, [authFetch, taskId]);
+  }, [authFetch]);
 
   useEffect(() => {
     load();
@@ -58,48 +68,76 @@ export const LearnerTaskPage: React.FC = () => {
     if (node) node.scrollTop = node.scrollHeight;
   }, [data?.tasks]);
 
+  useEffect(() => {
+    const node = workRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [data?.tasks, files.length]);
+
   const task = (data?.tasks || []).find((row: any) => row.id === taskId);
   const course = (data?.assignedCourses || []).find((row: any) => row.course_id === task?.course_id);
 
-  const pickChart = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 6 * 1024 * 1024) {
-      setSubmitError('That image is over 6 MB. A smaller screenshot is enough.');
-      return;
+  const pickFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const picked = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (picked.length === 0) return;
+    setSendError(null);
+    const room = MAX_FILES_PER_SEND - files.length;
+    if (picked.length > room) {
+      setSendError(`You can attach ${MAX_FILES_PER_SEND} files at a time. ${room > 0 ? `Room for ${room} more.` : ''}`);
     }
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setFileData(reader.result);
-    };
-    reader.readAsDataURL(file);
+    setPreparing(true);
+    const prepared: PreparedFile[] = [];
+    for (const file of picked.slice(0, Math.max(0, room))) {
+      try {
+        prepared.push(await prepareFile(file));
+      } catch (err: any) {
+        setSendError(err?.message || 'That file could not be read.');
+      }
+    }
+    setFiles((current) => [...current, ...prepared]);
+    setPreparing(false);
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const sendWork = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!task || !answer.trim()) return;
+    if (!task) return;
+    if (!note.trim() && files.length === 0) {
+      setSendError('Write something or attach a file first.');
+      return;
+    }
     setBusy(true);
-    setSubmitError(null);
-    const res = await authFetch(`/api/learner/tasks/${task.id}/submit`, {
+    setSendError(null);
+    const res = await authFetch(`/api/learner/tasks/${task.id}/entries`, {
       method: 'POST',
       body: JSON.stringify({
-        submissionText: answer.trim(),
-        uploadedFileName: fileName || undefined,
-        uploadedFileData: fileData || undefined
+        text: note.trim(),
+        files: files.map((file) => ({ name: file.name, mime: file.mime, data: file.data }))
       })
     });
     setBusy(false);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      setSubmitError(json.error || 'Could not send your work.');
+      setSendError(json.error || 'Could not send your work.');
       return;
     }
-    setBanner('Sent. Your mentor can see it now.');
+    setNote('');
+    setFiles([]);
+    setBanner('Sent for review. Your mentor sees it straight away.');
+    await load();
+  };
+
+  const removeEntry = async (entryId: string) => {
+    if (!task) return;
+    const res = await authFetch(`/api/learner/tasks/${task.id}/entries/${entryId}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setSendError(json.error || 'Could not remove that.');
+      return;
+    }
     load();
   };
 
-  const send = async (e: React.FormEvent) => {
+  const sendChat = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.trim() || !task) return;
     setSending(true);
@@ -118,7 +156,9 @@ export const LearnerTaskPage: React.FC = () => {
   if (!task) return <div className="governance-alert danger">{error || 'Task not found.'}</div>;
 
   const messages: any[] = task.messages || [];
-  const done = ['REVIEWED', 'APPROVED'].includes(task.status);
+  const entries: any[] = task.entries || [];
+  const sent = entries.filter((entry) => entry.kind === 'NOTE' || entry.kind === 'IMAGE' || entry.kind === 'FILE');
+  const reviewed = ['REVIEWED', 'APPROVED'].includes(task.status);
 
   return (
     <div>
@@ -174,67 +214,128 @@ export const LearnerTaskPage: React.FC = () => {
 
           <section className="panel-card">
             <div className="panel-head">
-              <h2>Your work</h2>
+              <div>
+                <h2>Your work</h2>
+                <p>Notes, photos and PDFs. Send them one by one or all together.</p>
+              </div>
               {task.submitted_at && <span className="section-note">Sent {timeAgo(task.submitted_at)}</span>}
             </div>
 
-            {done ? (
-              <>
-                <p className="prose-block">{task.learner_submission || 'No written answer.'}</p>
-                {task.uploaded_file_data?.startsWith('data:image') && (
-                  <img className="submission-image" src={task.uploaded_file_data} alt="Chart you sent" />
-                )}
-              </>
+            {sent.length > 0 ? (
+              <div className="work-stream" ref={workRef}>
+                {sent.map((entry) => (
+                  <div key={entry.id} className={`work-item ${entry.kind === 'NOTE' ? 'note' : 'file'}`}>
+                    <div className="work-item-head">
+                      {entry.kind === 'NOTE' ? <MessageSquare size={13} /> : <FileText size={13} />}
+                      <span>{entry.kind === 'NOTE' ? 'Note' : entry.kind === 'IMAGE' ? 'Photo' : 'File'}</span>
+                      <small>{timeAgo(entry.created_at)}</small>
+                      {!reviewed && (
+                        <button
+                          type="button"
+                          className="icon-quiet"
+                          title="Remove"
+                          onClick={() => removeEntry(entry.id)}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {entry.kind === 'NOTE' && <p className="work-note">{entry.body}</p>}
+
+                    {entry.kind === 'IMAGE' && (
+                      <button
+                        type="button"
+                        className="work-photo"
+                        onClick={() => openStoredFile(entry.file_data, entry.file_name || 'photo', entry.file_mime)}
+                        title="Open the full photo"
+                      >
+                        <img src={entry.file_data} alt={entry.file_name || 'Work you sent'} />
+                      </button>
+                    )}
+
+                    {entry.kind === 'FILE' && (
+                      <button
+                        type="button"
+                        className="work-file"
+                        onClick={() => openStoredFile(entry.file_data, entry.file_name || 'file', entry.file_mime)}
+                      >
+                        <Paperclip size={13} />
+                        <span>{entry.file_name || 'Attachment'}</span>
+                        <small>Open</small>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
-              <form onSubmit={submit}>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="taskAnswer">
-                    Your answer
-                  </label>
-                  <textarea
-                    id="taskAnswer"
-                    className="form-textarea"
-                    rows={6}
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    placeholder="Write what you found, the steps you took, and what the chart or result shows."
-                    required
-                  />
-                </div>
+              <p className="section-note" style={{ marginBottom: 12 }}>
+                Nothing sent yet. Your mentor sees everything you add here.
+              </p>
+            )}
 
-                {fileName && (
-                  <p className="file-chip">
-                    {fileName}
-                    <button
-                      type="button"
-                      className="icon-quiet"
-                      onClick={() => {
-                        setFileName('');
-                        setFileData('');
-                      }}
-                      aria-label="Remove the image"
-                    >
-                      <X size={12} />
-                    </button>
-                  </p>
-                )}
-
-                {submitError && <p className="form-error">{submitError}</p>}
-
-                <label className="btn btn-secondary" htmlFor="taskChart" style={{ cursor: 'pointer' }}>
-                  <ImagePlus size={14} /> {fileName ? 'Change chart' : 'Add your chart'}
-                </label>
-                <input
-                  id="taskChart"
-                  type="file"
-                  accept="image/*"
-                  onChange={pickChart}
-                  hidden
+            {reviewed ? (
+              <p className="section-note">This task is reviewed. Add a message on the right if you want to follow up.</p>
+            ) : (
+              <form className="work-composer" onSubmit={sendWork}>
+                <textarea
+                  className="form-textarea"
+                  rows={4}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Write what you did, what the chart shows, or what you are unsure about."
+                  aria-label="Your note"
                 />
 
-                <button type="submit" className="btn btn-primary" style={{ marginLeft: 8 }} disabled={busy || !answer.trim()}>
-                  {busy ? 'Sending' : task.submitted_at ? 'Send again' : 'Send to my mentor'}
-                </button>
+                {files.length > 0 && (
+                  <div className="work-pending">
+                    {files.map((file, index) => (
+                      <span key={`${file.name}-${index}`} className="work-pending-item">
+                        {file.mime.startsWith('image/') ? (
+                          <img src={file.data} alt="" />
+                        ) : (
+                          <FileText size={13} />
+                        )}
+                        <span className="work-pending-name">{file.name}</span>
+                        <small>{formatBytes(file.size)}</small>
+                        <button
+                          type="button"
+                          className="icon-quiet"
+                          onClick={() => setFiles((current) => current.filter((_, i) => i !== index))}
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {sendError && <p className="form-error">{sendError}</p>}
+
+                <div className="work-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={preparing || files.length >= MAX_FILES_PER_SEND}
+                  >
+                    {preparing ? <Loader2 size={14} className="spin" /> : <ImagePlus size={14} />}
+                    {preparing ? 'Reading' : 'Add photos or PDFs'}
+                  </button>
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/*,.pdf,.doc,.docx,.txt"
+                    multiple
+                    onChange={pickFiles}
+                    hidden
+                  />
+                  <button type="submit" className="btn btn-primary" disabled={busy || preparing}>
+                    {busy ? 'Sending' : 'Send for review'} <Send size={14} />
+                  </button>
+                </div>
+                <p className="form-hint">Up to {MAX_FILES_PER_SEND} files at once, 8 MB each.</p>
               </form>
             )}
           </section>
@@ -262,7 +363,7 @@ export const LearnerTaskPage: React.FC = () => {
                 );
               })}
             </div>
-            <form className="chat-composer" onSubmit={send}>
+            <form className="chat-composer" onSubmit={sendChat}>
               <input
                 className="form-input"
                 value={draft}

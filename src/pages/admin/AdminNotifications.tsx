@@ -112,7 +112,7 @@ export const AdminNotifications: React.FC = () => {
         columns={[
           { label: 'Notice' },
           { label: 'Audience', width: 150 },
-          { label: 'Read', width: 90, align: 'right' },
+          { label: 'Read', width: 90 },
           { label: 'Sent', width: 170 },
           { label: '', width: 44 }
         ]}

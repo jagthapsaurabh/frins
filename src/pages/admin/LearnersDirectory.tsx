@@ -101,8 +101,8 @@ export const LearnersDirectory: React.FC = () => {
         columns={[
           { label: 'Learner' },
           { label: 'Track', width: 150 },
-          { label: 'Courses', width: 90, align: 'right' },
-          { label: 'Tasks', width: 110, align: 'right' },
+          { label: 'Courses', width: 90 },
+          { label: 'Tasks', width: 110 },
           { label: 'Last activity', width: 130 },
           { label: 'Status', width: 110 },
           { label: '', width: 32 }

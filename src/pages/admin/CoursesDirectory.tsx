@@ -171,8 +171,8 @@ export const CoursesDirectory: React.FC = () => {
           { label: 'Level', width: 90 },
           { label: 'Duration', width: 110 },
           { label: 'Price', width: 90 },
-          { label: 'Steps', width: 70, align: 'right' },
-          { label: 'Learners', width: 90, align: 'right' },
+          { label: 'Steps', width: 70 },
+          { label: 'Learners', width: 90 },
           { label: 'Status', width: 110 },
           { label: '', width: 32 }
         ]}

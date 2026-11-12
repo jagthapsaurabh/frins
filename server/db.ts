@@ -1033,6 +1033,18 @@ export function initDatabaseAndSeed() {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS task_entries (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL,
+      learner_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'NOTE',
+      body TEXT,
+      file_name TEXT,
+      file_mime TEXT,
+      file_data TEXT,
+      created_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -1234,6 +1246,43 @@ export function initDatabaseAndSeed() {
     UPDATE student_courses SET amount_paid = 0 WHERE amount_paid IS NULL;
     UPDATE student_courses SET payment_status = 'NOT_APPLICABLE' WHERE payment_status IS NULL;
   `);
+
+  // Work sent before task_entries existed becomes the first entry on the task,
+  // so the learner and the mentor see the same thread either way.
+  const legacySubmissions = db
+    .prepare(
+      `SELECT id, learner_id, learner_submission, uploaded_file_name, uploaded_file_data, submitted_at
+         FROM learning_tasks
+        WHERE learner_submission IS NOT NULL
+          AND id NOT IN (SELECT DISTINCT task_id FROM task_entries)`
+    )
+    .all() as any[];
+  for (const task of legacySubmissions) {
+    const when = task.submitted_at || new Date().toISOString();
+    const noteId = `entry_${crypto.randomUUID().replace(/-/g, '').slice(0, 14)}`;
+    db.prepare(
+      `INSERT INTO task_entries (id, task_id, learner_id, kind, body, file_name, file_mime, file_data, created_at)
+       VALUES (?, ?, ?, 'NOTE', ?, NULL, NULL, NULL, ?)`
+    ).run(noteId, task.id, task.learner_id, task.learner_submission, when);
+
+    if (task.uploaded_file_data) {
+      const fileId = `entry_${crypto.randomUUID().replace(/-/g, '').slice(0, 14)}`;
+      const mime = String(task.uploaded_file_data).slice(5, String(task.uploaded_file_data).indexOf(';')) || 'image/png';
+      db.prepare(
+        `INSERT INTO task_entries (id, task_id, learner_id, kind, body, file_name, file_mime, file_data, created_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)`
+      ).run(
+        fileId,
+        task.id,
+        task.learner_id,
+        mime.startsWith('image/') ? 'IMAGE' : 'FILE',
+        task.uploaded_file_name || 'Attachment',
+        mime,
+        task.uploaded_file_data,
+        new Date(Date.parse(when) + 1).toISOString()
+      );
+    }
+  }
 
   // Seed initial custom courses if empty
   const courseCount = (db.prepare('SELECT COUNT(*) as c FROM courses').get() as any).c;

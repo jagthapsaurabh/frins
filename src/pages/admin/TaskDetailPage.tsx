@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Send, Sparkles, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, FileText, MessageSquare, Paperclip, Send, Sparkles, Undo2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead, StatusPill, labelFor, toneFor } from '../../components/console/ConsoleUI';
 import { formatDateTime, timeAgo } from '../../utils/dates';
+import { openStoredFile } from '../../utils/files';
 
 const humanLabel = (value?: string) => {
   const words = (value || 'No verdict').replace(/_/g, ' ').toLowerCase();
@@ -190,13 +191,45 @@ export const TaskDetailPage: React.FC = () => {
               {task.submitted_at && <span className="section-note">{timeAgo(task.submitted_at)}</span>}
             </div>
 
-            {task.learner_submission ? (
-              <p className="prose-block">{task.learner_submission}</p>
+            {(task.entries || []).length > 0 ? (
+              <div className="work-stream">
+                {(task.entries || []).map((entry: any) => (
+                  <div key={entry.id} className={`work-item ${entry.kind === 'NOTE' ? 'note' : 'file'}`}>
+                    <div className="work-item-head">
+                      {entry.kind === 'NOTE' ? <MessageSquare size={13} /> : <FileText size={13} />}
+                      <span>{entry.kind === 'NOTE' ? 'Note' : entry.kind === 'IMAGE' ? 'Photo' : 'File'}</span>
+                      <small>{timeAgo(entry.created_at)}</small>
+                    </div>
+
+                    {entry.kind === 'NOTE' && <p className="work-note">{entry.body}</p>}
+
+                    {entry.kind === 'IMAGE' && (
+                      <button
+                        type="button"
+                        className="work-photo"
+                        onClick={() => openStoredFile(entry.file_data, entry.file_name || 'photo', entry.file_mime)}
+                        title="Open the full photo"
+                      >
+                        <img src={entry.file_data} alt={entry.file_name || 'Work the learner sent'} />
+                      </button>
+                    )}
+
+                    {entry.kind === 'FILE' && (
+                      <button
+                        type="button"
+                        className="work-file"
+                        onClick={() => openStoredFile(entry.file_data, entry.file_name || 'file', entry.file_mime)}
+                      >
+                        <Paperclip size={13} />
+                        <span>{entry.file_name || 'Attachment'}</span>
+                        <small>Open</small>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="section-note">Nothing sent yet.</p>
-            )}
-            {task.uploaded_file_data?.startsWith('data:image') && (
-              <img className="submission-image" src={task.uploaded_file_data} alt="Chart sent with the submission" />
             )}
 
           </section>

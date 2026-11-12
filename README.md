@@ -238,8 +238,23 @@ nothing is crammed into a single scroll.
 - **My courses** (`LearnerCourses.tsx`): one card per course, with the mentor's note, the module list
   and a single Continue or Start button.
 - **Tasks** (`LearnerTasks.tsx`): a searchable, filterable table. The row opens
-  `/dashboard/tasks/:taskId` (`LearnerTaskPage.tsx`), where the learner reads the brief, sends the
-  written answer plus a chart image, and talks to the mentor in the same panel.
+  `/dashboard/tasks/:taskId` (`LearnerTaskPage.tsx`), where the learner reads the brief, sends work,
+  and talks to the mentor in the same panel.
+
+### Sending work on a task
+
+Work is a stream, not a single box. A learner can send a note, then three photos, then a PDF, and
+each send is added to the same thread for the mentor to review.
+
+- `POST /api/learner/tasks/:taskId/entries` takes `{text, files:[{name, mime, data}]}`. Files are
+  base64 data URLs; up to 8 per send at 8 MB each, and the route raises the JSON limit to 14 MB.
+- `DELETE /api/learner/tasks/:taskId/entries/:entryId` removes an item while the task is still open.
+- Photos are shrunk to 1600px on the long edge in the browser (`src/utils/files.ts`) before upload,
+  so a phone photo does not arrive as 12 MB.
+- Every send moves the task to `SUBMITTED`, notifies the guide and admins, and writes an audit event.
+- `task_entries` holds each note, image and file. Existing `learner_submission` rows are copied into
+  it once on boot, so old tasks show the same stream.
+- The mentor page shows the same stream, with images openable full size and PDFs opening in a tab.
 - **Progress** (`LearnerProgress.tsx`): the approved plan, a note form, past notes and the evidence
   table.
 - **Calls** (`LearnerCalls.tsx`): what is booked, what happened, and a cancel button per row.

@@ -41,6 +41,9 @@ app.set('trust proxy', 1);
 // frontend. Set CORS_ORIGIN (comma separated) only if the UI is hosted elsewhere.
 const corsOrigin = (process.env.CORS_ORIGIN || '').trim();
 app.use(cors(corsOrigin ? { origin: corsOrigin.split(',').map((o) => o.trim()) } : {}));
+// A learner can send several photos and a PDF with one task. Those travel as
+// base64 inside JSON, so that route gets a larger limit than the rest of the app.
+app.use('/api/learner/tasks', express.json({ limit: '14mb' }));
 app.use(express.json({ limit: '1mb' }));
 
 function defaultGuideId(): string | null {
@@ -1558,10 +1561,14 @@ app.get('/api/learner/dashboard', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (r
     const msgs = db
       .prepare('SELECT * FROM task_messages WHERE task_id = ? ORDER BY created_at ASC')
       .all(t.id);
+    const entries = db
+      .prepare('SELECT * FROM task_entries WHERE task_id = ? ORDER BY created_at ASC')
+      .all(t.id);
     const { ai_review_json, ...safeTask } = t;
     return {
       ...safeTask,
-      messages: msgs
+      messages: msgs,
+      entries
     };
   });
 
@@ -1801,6 +1808,154 @@ const staffToNudge = (learnerId: string) => {
   const admins = db.prepare("SELECT id FROM users WHERE role = 'ADMIN' AND account_status = 'ACTIVE'").all() as any[];
   return admins.map((a) => a.id);
 };
+
+const MAX_ENTRY_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_ENTRIES_PER_SEND = 8;
+
+const taskEntriesFor = (taskId: string) =>
+  db.prepare('SELECT * FROM task_entries WHERE task_id = ? ORDER BY created_at ASC').all(taskId) as any[];
+
+const notifyTaskSide = (task: any, title: string, message: string, actor: { id: string; name: string }) => {
+  const targets: string[] = [];
+  if (task.learner_id) targets.push(task.learner_id);
+  const guide = db
+    .prepare('SELECT assigned_guide_id FROM users WHERE id = ?')
+    .get(task.learner_id) as any;
+  if (guide?.assigned_guide_id) targets.push(guide.assigned_guide_id);
+  const admins = db.prepare("SELECT id FROM users WHERE role = 'ADMIN' AND account_status = 'ACTIVE'").all() as any[];
+  targets.push(...admins.map((a) => a.id));
+  for (const id of Array.from(new Set(targets))) {
+    if (id === actor.id) continue;
+    notifyUser(id, title, message, actor);
+  }
+};
+
+/**
+ * A learner sends their work on a task: any number of notes, photos and PDFs.
+ * Everything lands in task_entries and the task goes back to the reviewer.
+ */
+app.post('/api/learner/tasks/:taskId/entries', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (req, res) => {
+  const taskId = String(req.params.taskId);
+  const task = db.prepare('SELECT * FROM learning_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ success: false, error: 'Task not found.' });
+  if (req.user!.role === 'LEARNER' && task.learner_id !== req.user!.id) {
+    return res.status(403).json({ success: false, error: 'You can only send work on your own tasks.' });
+  }
+
+  const text = String(req.body?.text || '').trim();
+  const rawFiles = Array.isArray(req.body?.files) ? req.body.files : [];
+
+  if (!text && rawFiles.length === 0) {
+    return res.status(400).json({ success: false, error: 'Write something or attach a file first.' });
+  }
+  if (rawFiles.length > MAX_ENTRIES_PER_SEND) {
+    return res
+      .status(400)
+      .json({ success: false, error: `Send up to ${MAX_ENTRIES_PER_SEND} files at a time.` });
+  }
+
+  const files: Array<{ name: string; mime: string; data: string }> = [];
+  for (const file of rawFiles) {
+    const data = String(file?.data || '');
+    const name = String(file?.name || 'file').slice(0, 180);
+    const mime = String(file?.mime || '').slice(0, 120) || 'application/octet-stream';
+    if (!data.startsWith('data:')) {
+      return res.status(400).json({ success: false, error: `${name} did not upload properly. Try again.` });
+    }
+    const bytes = Math.round((data.length * 3) / 4);
+    if (bytes > MAX_ENTRY_FILE_BYTES) {
+      return res.status(413).json({ success: false, error: `${name} is over 8 MB. Compress it and try again.` });
+    }
+    files.push({ name, mime, data });
+  }
+
+  const now = new Date().toISOString();
+  const insert = db.prepare(`
+    INSERT INTO task_entries (id, task_id, learner_id, kind, body, file_name, file_mime, file_data, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const created: any[] = [];
+  const makeId = () => `entry_${crypto.randomUUID().replace(/-/g, '').slice(0, 14)}`;
+
+  if (text) {
+    const id = makeId();
+    insert.run(id, taskId, task.learner_id, 'NOTE', text, null, null, null, now);
+    created.push({ id, kind: 'NOTE', body: text });
+  }
+  files.forEach((file, index) => {
+    const id = makeId();
+    const kind = file.mime.startsWith('image/') ? 'IMAGE' : 'FILE';
+    // One millisecond apart keeps them in the order the learner picked them.
+    const stamp = new Date(Date.parse(now) + index + 1).toISOString();
+    insert.run(id, taskId, task.learner_id, kind, null, file.name, file.mime, file.data, stamp);
+    created.push({ id, kind, fileName: file.name });
+  });
+
+  // Keep the older single-submission columns in step so nothing else breaks.
+  const allEntries = taskEntriesFor(taskId);
+  const noteText = allEntries
+    .filter((entry) => entry.kind === 'NOTE' && entry.body)
+    .map((entry) => entry.body)
+    .join('\n\n');
+  const firstImage = allEntries.find((entry) => entry.kind === 'IMAGE');
+  const firstName = allEntries.find((entry) => entry.kind === 'FILE');
+
+  const nextStatus = task.status === 'REVIEWED' || task.status === 'APPROVED' ? 'REVIEWED' : 'SUBMITTED';
+
+  db.prepare(`
+    UPDATE learning_tasks
+       SET learner_submission = ?,
+           uploaded_file_name = ?,
+           uploaded_file_data = ?,
+           status = ?,
+           submitted_at = ?
+     WHERE id = ?
+  `).run(
+    noteText || task.learner_submission || null,
+    firstName?.file_name || firstImage?.file_name || task.uploaded_file_name || null,
+    firstImage?.file_data || task.uploaded_file_data || null,
+    nextStatus,
+    now,
+    taskId
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_TASK_WORK_SENT',
+    entityType: 'LEARNING_TASK',
+    entityId: taskId,
+    details: { entries: created.length }
+  });
+
+  notifyTaskSide(
+    task,
+    `${req.user!.role === 'LEARNER' ? 'Work sent' : 'Work added'}: ${task.title}`,
+    text ? text.slice(0, 140) : `${files.length} file${files.length === 1 ? '' : 's'} attached.`,
+    { id: req.user!.id, name: req.user!.name }
+  );
+
+  res.json({ success: true, entries: taskEntriesFor(taskId) });
+});
+
+app.delete('/api/learner/tasks/:taskId/entries/:entryId', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (req, res) => {
+  const taskId = String(req.params.taskId);
+  const entryId = String(req.params.entryId);
+  const task = db.prepare('SELECT * FROM learning_tasks WHERE id = ?').get(taskId) as any;
+  if (!task) return res.status(404).json({ success: false, error: 'Task not found.' });
+  if (req.user!.role === 'LEARNER' && task.learner_id !== req.user!.id) {
+    return res.status(403).json({ success: false, error: 'You can only change your own work.' });
+  }
+  if (task.status === 'REVIEWED' || task.status === 'APPROVED') {
+    return res.status(400).json({ success: false, error: 'This task is already reviewed, so it cannot change.' });
+  }
+
+  db.prepare('DELETE FROM task_entries WHERE id = ? AND task_id = ?').run(entryId, taskId);
+
+  const left = taskEntriesFor(taskId);
+  res.json({ success: true, entries: left });
+});
 
 app.post('/api/tasks/:taskId/chat', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { taskId } = req.params;
@@ -2995,7 +3150,10 @@ app.get('/api/admin/tasks/:taskId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'G
   }
 
   const messages = db.prepare('SELECT * FROM task_messages WHERE task_id = ? ORDER BY created_at ASC').all(taskId);
-  res.json({ success: true, task: { ...task, aiReview, messages } });
+  const entries = db
+    .prepare('SELECT * FROM task_entries WHERE task_id = ? ORDER BY created_at ASC')
+    .all(taskId);
+  res.json({ success: true, task: { ...task, aiReview, messages, entries } });
 });
 
 app.get('/api/admin/leads', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {

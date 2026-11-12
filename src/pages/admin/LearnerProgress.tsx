@@ -71,10 +71,10 @@ export const LearnerProgress: React.FC = () => {
         empty="No learner matches this search."
         columns={[
           { label: 'Learner' },
-          { label: 'Courses', width: 90, align: 'right' },
-          { label: 'Tasks', width: 80, align: 'right' },
-          { label: 'Sent', width: 90, align: 'right' },
-          { label: 'Reviewed', width: 90, align: 'right' },
+          { label: 'Courses', width: 90 },
+          { label: 'Tasks', width: 80 },
+          { label: 'Sent', width: 90 },
+          { label: 'Reviewed', width: 90 },
           { label: 'Completion', width: 180 },
           { label: 'Last sent', width: 130 },
           { label: '', width: 32 }

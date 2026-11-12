@@ -278,13 +278,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     </div>
                   </div>
 
-                  {user?.role === 'LEARNER' && (
-                    <button type="button" className="app-menu-item" onClick={() => navigate('/dashboard')}>
-                      <LayoutDashboard size={16} /> My learning dashboard
-                    </button>
-                  )}
-
-                  <div className="app-menu-divider" />
                   <button
                     type="button"
                     className="app-menu-item"
