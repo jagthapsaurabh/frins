@@ -1109,6 +1109,57 @@ export function initDatabaseAndSeed() {
       FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS communities (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      kind TEXT NOT NULL DEFAULT 'GENERAL',
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      archived INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS community_members (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'MEMBER',
+      joined_at TEXT NOT NULL,
+      last_read_at TEXT,
+      UNIQUE(community_id, user_id),
+      FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS community_messages (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL,
+      sender_user_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      sender_role TEXT NOT NULL,
+      parent_id TEXT,
+      body TEXT NOT NULL,
+      file_id TEXT,
+      created_at TEXT NOT NULL,
+      deleted_at TEXT,
+      FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS community_files (
+      id TEXT PRIMARY KEY,
+      community_id TEXT NOT NULL,
+      uploader_id TEXT NOT NULL,
+      file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      storage_path TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_community_messages_community
+      ON community_messages(community_id, created_at);
+
     CREATE TABLE IF NOT EXISTS learner_step_progress (
       id TEXT PRIMARY KEY,
       learner_id TEXT NOT NULL,

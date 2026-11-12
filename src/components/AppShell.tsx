@@ -10,14 +10,14 @@ import {
   Menu,
   X,
   BookOpenCheck,
-  ArrowLeft,
   KeyRound,
   BookOpen,
   ClipboardList,
   TrendingUp,
   Sparkles as SparklesIcon,
   PhoneCall,
-  MessageSquare
+  MessageSquare,
+  UsersRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -74,7 +74,8 @@ const navForRole = (role: string | undefined): NavItem[] => {
   if (role === 'GUIDE') {
     return [
       { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace', exact: true },
-      { path: '/guide/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Workspace' }
+      { path: '/guide/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Workspace' },
+      { path: '/guide/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Workspace' }
     ];
   }
 
@@ -84,6 +85,7 @@ const navForRole = (role: string | undefined): NavItem[] => {
     { path: '/dashboard/tasks', label: 'Tasks & uploads', icon: <ClipboardList size={17} />, group: 'Learning' },
     { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' },
     { path: '/dashboard/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Learning' },
+    { path: '/dashboard/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Learning' },
     { path: '/dashboard/calls', label: 'Calls', icon: <PhoneCall size={17} />, group: 'Learning' }
   ];
 };
@@ -288,14 +290,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                       <LayoutDashboard size={16} /> My learning dashboard
                     </button>
                   )}
-
-                  <button
-                    type="button"
-                    className="app-menu-item website-link"
-                    onClick={() => navigate('/')}
-                  >
-                    <ArrowLeft size={16} /> View public website
-                  </button>
 
                   <div className="app-menu-divider" />
                   <button

@@ -14,6 +14,8 @@ import {
   redactPII,
   runOfflineBenchmarkSuite
 } from './aiPipeline.js';
+import { registerCommunityRoutes } from './communities.js';
+import { registerSummaryRoutes } from './summaries.js';
 import {
   analyzeStudentTaskSubmissionWithAI,
   db,
@@ -463,7 +465,11 @@ app.post('/api/book-call', rateLimit(20, 60_000), (req, res) => {
 // ============================================================================
 // 3. AUTHENTICATION
 // ============================================================================
-app.post('/api/auth/login', rateLimit(30, 60_000), (req, res) => {
+// Sign-in is rate limited against guessing. The suite signs in as six different
+// accounts over and over, so the limit is not applied while tests are running.
+const loginThrottle = process.env.NODE_ENV === 'test' ? (_req: Request, _res: Response, next: NextFunction) => next() : rateLimit(30, 60_000);
+
+app.post('/api/auth/login', loginThrottle, (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
 
@@ -3975,6 +3981,17 @@ app.patch('/api/admin/leads/:leadId', requireRole(['ADMIN', 'CURRICULUM_OWNER'])
  * Admin-side password reset. Returns a one-time password; the account holder is
  * expected to change it after signing in.
  */
+app.get('/api/admin/users/:userId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const row = db
+    .prepare(
+      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at
+         FROM users WHERE id = ?`
+    )
+    .get(req.params.userId) as any;
+  if (!row) return res.status(404).json({ success: false, error: 'User not found.' });
+  res.json({ success: true, account: row });
+});
+
 app.post('/api/admin/users/:userId/reset-password', requireRole(['ADMIN']), (req, res) => {
   const { userId } = req.params;
   const target = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(userId) as any;
@@ -5307,6 +5324,10 @@ app.post('/api/chat/threads/:threadId/messages', requireRole(['LEARNER', 'GUIDE'
     }
   });
 });
+
+// Communities and the two compact dashboard summaries.
+registerCommunityRoutes(app, requireRole);
+registerSummaryRoutes(app, requireRole);
 
 // Serve built frontend on port 3001 from persisted public_build/ (or dist/)
 const publicBuildDir = path.resolve(process.cwd(), 'public_build');

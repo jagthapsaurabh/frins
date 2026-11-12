@@ -107,6 +107,7 @@ workspace stays a workspace.
 | Work | Tasks | Uploaded work, internal AI pre-check, direct chat, approve or send back. Give a task from the same tab |
 | Work | Messages | Every learner conversation in one place: search, open a thread, reply |
 | Work | Courses | The course list: search, paid or free, active or inactive. Open a course or add one |
+| Work | Communities | Group feeds. Create one, add learners and guides, post, reply, attach files |
 | People | Learners | The enrolled learner list: search, track and status filters, pages of twenty. Open a learner for their file, or add one |
 | People | Learner progress | One learner at a time: courses with task and question bars, every task with its status, uploads and AI pre-check, and a box to assign another course |
 | People | Staff & access | Change a role, suspend or reactivate, reset a password, create an account |
@@ -226,6 +227,54 @@ dashboard** tag. The mentor confirms, moves or cancels it from Bookings, and the
 tab shows four timestamps: given, due, uploaded, reviewed. Task review also filters by course and by
 date range (today, last 7 days, last 30 days, due in the next 3 days), and the learner's own task
 list has a search box plus status and course filters.
+
+---
+
+## 7d. The console: community, layout and routes
+
+### One design, both consoles
+
+The dashboard was rebuilt from the stylesheet up. `src/styles/console.css` loads after the public
+site's styles and gives the admin console and the learner panel one language: a single blue accent,
+hairline borders, 6px corners, no drop shadows and no decorative pills. The public website keeps its
+own look, so a student sees a marketing page outside and a plain tool inside.
+
+Rules the console follows:
+
+- A page has one title. No subtitle under it and no empty space between the title and the content.
+  The eyebrow above the title (Work, People, Setup) is enough context.
+- Lists are tables, not cards. Every long list has a search box, its filters and a pager.
+- Add, edit and open are routes. A list never grows a form inside it:
+  `/admin/courses/new`, `/admin/staff/new`, `/admin/notifications/new`,
+  `/admin/discovery/questions/new`, `/admin/communities/new`, plus the matching detail pages.
+- Buttons carry an icon. Row actions are icon buttons with an accessible label.
+- Nothing is rounded beyond 8px and no card floats above the page.
+
+### Overview screens
+
+`/admin` and `/dashboard` draw from `GET /api/admin/summary` and `GET /api/learner/summary`.
+Those endpoints return only what the screen shows, so the first paint is one small request. The
+admin overview is six counts, the review queue, and three short lists: calls, leads, and courses
+that are switched off or have nobody on them. The learner overview is what is due, how far each
+course has run, the last mentor feedback and who to talk to.
+
+### Communities
+
+A community is a group with one shared feed.
+
+- An admin or guide creates one at `/admin/communities/new` or `/guide/communities/new`, gives it a
+  name and a type, and picks the members.
+- The feed is at `/admin/communities/:communityId`, and on the learner side at
+  `/dashboard/communities/:communityId`. Both render the same room: posts in order, a quote of the
+  message being replied to, and the file under the post.
+- Anyone in the group can post, reply to one message, attach an image, PDF, Word, Excel or text
+  file, and delete their own post. Moderators can delete any post and remove people.
+- Files are stored under `data/uploads/community` and served through `GET /api/community-files/:id`
+  with a membership check, so a copied URL does not leak a screenshot.
+- New posts notify the other members. Unread counts show in the list and on the learner overview.
+- Archiving a community makes it read only.
+
+Members and settings live at `/admin/communities/:communityId/members`.
 
 ---
 

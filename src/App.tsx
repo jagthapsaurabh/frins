@@ -13,6 +13,15 @@ import { LearnerDossierPage } from './pages/admin/LearnerDossierPage';
 import { CourseBuilderPage } from './pages/admin/CourseBuilderPage';
 import { CoursesDirectory } from './pages/admin/CoursesDirectory';
 import { MessagesPage } from './pages/MessagesPage';
+import { NewNotificationPage } from './pages/admin/AdminNotifications';
+import { NewStaffPage, StaffAccountPage } from './pages/admin/StaffPages';
+import { DiscoveryQuestionPage } from './pages/admin/DiscoveryPages';
+import {
+  CommunityListPage,
+  CommunityMembersPage,
+  CommunityRoomPage,
+  NewCommunityPage
+} from './pages/CommunityPages';
 import { CoursePlayerPage } from './pages/learner/CoursePlayerPage';
 import { SignInPage } from './pages/SignInPage';
 import { StaffSignInPage } from './pages/StaffSignInPage';
@@ -157,6 +166,46 @@ export const EcosystemShell: React.FC = () => {
         }
       />
       <Route
+        path="/admin/staff/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <NewStaffPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/staff/:userId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <StaffAccountPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/discovery/questions/:questionId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <DiscoveryQuestionPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/notifications/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <NewNotificationPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
         path="/admin/messages"
         element={
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
@@ -229,6 +278,63 @@ export const EcosystemShell: React.FC = () => {
           </RequireStaff>
         }
       />
+
+
+      {['/dashboard/communities', '/dashboard/communities/:communityId'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RequireLearner>
+              <AppShell>{path.endsWith(':communityId') ? <CommunityRoomPage /> : <CommunityListPage />}</AppShell>
+            </RequireLearner>
+          }
+        />
+      ))}
+
+      {['/admin/communities', '/admin/communities/new'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+              <AppShell>{path.endsWith('/new') ? <NewCommunityPage /> : <CommunityListPage />}</AppShell>
+            </RequireStaff>
+          }
+        />
+      ))}
+      <Route
+        path="/admin/communities/:communityId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <CommunityRoomPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/communities/:communityId/members"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <CommunityMembersPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+
+      {['/guide/communities', '/guide/communities/:communityId'].map((path) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <RequireStaff roles={[...DASHBOARD_ROLES.guide]} loginPath="/guide/login">
+              <AppShell>{path.endsWith(':communityId') ? <CommunityRoomPage /> : <CommunityListPage />}</AppShell>
+            </RequireStaff>
+          }
+        />
+      ))}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

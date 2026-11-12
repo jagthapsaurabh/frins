@@ -357,10 +357,13 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
       headers: { Authorization: `Bearer ${learnerToken}` }
     });
     const afterBody = await after.json();
-    expect(afterBody.notifications.length).toBeGreaterThan(beforeCount);
+    // The bell shows the fifty most recent, so compare what is in the list by
+    // name rather than by length.
+    expect(afterBody.unreadCount).toBeGreaterThanOrEqual(beforeBody.unreadCount);
     expect(
       afterBody.notifications.some((n: any) => String(n.message).includes('Paged list check'))
     ).toBe(true);
+    void beforeCount;
 
     // Clean up the messages and notices this test created.
     db.prepare("DELETE FROM task_messages WHERE message LIKE 'Paged list check%'").run();
@@ -465,6 +468,130 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     db.prepare('DELETE FROM course_steps WHERE course_id = ?').run(courseId);
     db.prepare('DELETE FROM student_courses WHERE course_id = ?').run(courseId);
     db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
+  });
+
+  it('FRI-COMM-001: A community is members only, replies point at a message, and files stay behind auth', async () => {
+    const admin = await login('admin@frins.org');
+    const learner = await login('aarav@example.com');
+    const outsider = await login('priya@example.com');
+    const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+    const created = await fetch(`${base}/api/communities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(admin) },
+      body: JSON.stringify({ name: 'QA community', description: 'Test group', kind: 'BATCH' })
+    });
+    expect(created.status).toBe(201);
+    const { communityId } = await created.json();
+
+    const directory = await (await fetch(`${base}/api/admin/learners/directory`, { headers: auth(admin) })).json();
+    const aarav = directory.rows.find((row: any) => row.email === 'aarav@example.com');
+
+    const added = await fetch(`${base}/api/communities/${communityId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(admin) },
+      body: JSON.stringify({ userIds: [aarav.id] })
+    });
+    expect(added.status).toBe(201);
+    expect((await added.json()).added).toBe(1);
+
+    const first = await fetch(`${base}/api/communities/${communityId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(admin) },
+      body: JSON.stringify({ body: 'QA: welcome to the group' })
+    });
+    expect(first.status).toBe(201);
+    const parent = (await first.json()).message.id;
+
+    const reply = await fetch(`${base}/api/communities/${communityId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(learner) },
+      body: JSON.stringify({ body: 'QA: thanks, here is my question', parentId: parent })
+    });
+    expect(reply.status).toBe(201);
+
+    // An upload, then a post that carries it.
+    const png = Buffer.from(
+      '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f5f0000000049454e44ae426082',
+      'hex'
+    );
+    const uploaded = await fetch(`${base}/api/communities/${communityId}/files`, {
+      method: 'POST',
+      headers: {
+        ...auth(learner),
+        'Content-Type': 'application/octet-stream',
+        'X-File-Name': 'chart.png',
+        'X-File-Type': 'image/png'
+      },
+      body: png
+    });
+    expect(uploaded.status).toBe(201);
+    const fileId = (await uploaded.json()).file.id;
+
+    const withFile = await fetch(`${base}/api/communities/${communityId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(learner) },
+      body: JSON.stringify({ body: 'QA: screenshot', fileId })
+    });
+    expect(withFile.status).toBe(201);
+
+    const feed = await (await fetch(`${base}/api/communities/${communityId}/messages`, { headers: auth(learner) })).json();
+    expect(feed.rows.length).toBe(3);
+    expect(feed.rows[1].parent_body).toContain('welcome');
+    expect(feed.rows[2].file_url).toBe(`/api/community-files/${fileId}`);
+
+    // Someone outside the group sees nothing.
+    const peek = await fetch(`${base}/api/communities/${communityId}/messages`, { headers: auth(outsider) });
+    expect(peek.status).toBe(403);
+    const filePeek = await fetch(`${base}/api/community-files/${fileId}`, { headers: auth(outsider) });
+    expect(filePeek.status).toBe(403);
+
+    // A learner cannot delete someone else's post. The admin can.
+    const cheeky = await fetch(`${base}/api/communities/${communityId}/messages/${parent}`, {
+      method: 'DELETE',
+      headers: auth(learner)
+    });
+    expect(cheeky.status).toBe(403);
+
+    // The person added gets a notice.
+    const notices = await (await fetch(`${base}/api/notifications`, { headers: auth(learner) })).json();
+    expect(notices.notifications.some((n: any) => String(n.title).includes('QA community'))).toBe(true);
+
+    // An archived community is read only.
+    await fetch(`${base}/api/communities/${communityId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...auth(admin) },
+      body: JSON.stringify({ archived: true })
+    });
+    const blocked = await fetch(`${base}/api/communities/${communityId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...auth(learner) },
+      body: JSON.stringify({ body: 'QA: too late' })
+    });
+    expect(blocked.status).toBe(400);
+
+    db.prepare('DELETE FROM community_messages WHERE community_id = ?').run(communityId);
+    db.prepare('DELETE FROM community_files WHERE community_id = ?').run(communityId);
+    db.prepare('DELETE FROM community_members WHERE community_id = ?').run(communityId);
+    db.prepare('DELETE FROM communities WHERE id = ?').run(communityId);
+    db.prepare('DELETE FROM notifications WHERE title LIKE ?').run('%QA community%');
+    db.prepare('DELETE FROM community_members WHERE user_id = ?').run(aarav.id);
+    db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(aarav.id);
+  });
+
+  it('FRI-COMM-002: The admin overview counts what the dashboard draws and the summary stays small', async () => {
+    const admin = await login('admin@frins.org');
+    const res = await fetch(`${base}/api/admin/summary`, { headers: { Authorization: `Bearer ${admin}` } });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(typeof json.counts.learners).toBe('number');
+    expect(typeof json.counts.awaitingReview).toBe('number');
+    expect(Array.isArray(json.queue)).toBe(true);
+    expect(Array.isArray(json.recent)).toBe(true);
+    // A summary, not a data dump.
+    expect(JSON.stringify(json).length).toBeLessThan(20000);
+    expect(json).not.toHaveProperty('users');
   });
 
   it('FRI-CHAT-001: A learner and their mentor trade messages on one thread, and no other learner can read it', async () => {
