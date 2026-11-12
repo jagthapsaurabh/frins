@@ -234,42 +234,163 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     product: 'FRINS Market Learning',
     database: 'SQLite (better-sqlite3, Prisma-free)',
-    questionBankVersion: QUESTION_BANK_VERSION,
     counts,
     timestamp: new Date().toISOString()
   });
 });
 
+const AI_PROVIDERS: Record<string, { label: string; model: string; baseUrl: string }> = {
+  OPENAI: { label: 'OpenAI', model: 'gpt-4o-mini', baseUrl: 'https://api.openai.com/v1' },
+  GEMINI: { label: 'Google Gemini', model: 'gemini-1.5-flash', baseUrl: 'https://generativelanguage.googleapis.com/v1beta' },
+  ANTHROPIC: { label: 'Anthropic', model: 'claude-3-5-sonnet-latest', baseUrl: 'https://api.anthropic.com/v1' },
+  OPENAI_COMPATIBLE: { label: 'Any OpenAI-compatible API', model: '', baseUrl: '' },
+  NONE: { label: 'Not connected', model: '', baseUrl: '' }
+};
+
+const readAiSettings = () => {
+  const row = db.prepare("SELECT * FROM ai_settings WHERE id = 'default'").get() as any;
+  return row || { id: 'default', provider: 'NONE', model: '', api_key: '', base_url: '', updated_at: null, updated_by: null };
+};
+
+const maskKey = (key?: string | null) => {
+  if (!key) return '';
+  const tail = key.slice(-4);
+  return `${'•'.repeat(Math.min(12, Math.max(4, key.length - 4)))}${tail}`;
+};
+
+const aiPublicSettings = () => {
+  const saved = readAiSettings();
+  const provider = String(saved.provider || 'NONE').toUpperCase();
+  const envKey = process.env.AI_API_KEY || '';
+  const hasKey = Boolean(saved.api_key || envKey);
+  return {
+    provider,
+    providerLabel: AI_PROVIDERS[provider]?.label || AI_PROVIDERS.NONE.label,
+    model: saved.model || AI_PROVIDERS[provider]?.model || '',
+    baseUrl: saved.base_url || AI_PROVIDERS[provider]?.baseUrl || '',
+    hasKey,
+    maskedKey: maskKey(saved.api_key || envKey),
+    updatedAt: saved.updated_at || null,
+    updatedBy: saved.updated_by || null,
+    providers: Object.entries(AI_PROVIDERS).map(([value, meta]) => ({ value, ...meta }))
+  };
+};
+
+app.get('/api/admin/ai/settings', requireRole(['ADMIN']), (_req, res) => {
+  res.json({ success: true, settings: aiPublicSettings() });
+});
+
+app.put('/api/admin/ai/settings', requireRole(['ADMIN']), (req, res) => {
+  const provider = String(req.body?.provider || 'NONE').toUpperCase();
+  if (!AI_PROVIDERS[provider]) {
+    return res.status(400).json({ success: false, error: 'Pick a provider from the list.' });
+  }
+  const model = String(req.body?.model || '').trim();
+  const baseUrl = String(req.body?.baseUrl || '').trim();
+  const incomingKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : null;
+  const clearKey = Boolean(req.body?.clearKey);
+
+  const current = readAiSettings();
+  const nextKey = clearKey ? '' : incomingKey ? incomingKey : current.api_key || '';
+
+  db.prepare(
+    `INSERT INTO ai_settings (id, provider, model, api_key, base_url, updated_at, updated_by)
+     VALUES ('default', ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET provider = excluded.provider, model = excluded.model,
+       api_key = excluded.api_key, base_url = excluded.base_url,
+       updated_at = excluded.updated_at, updated_by = excluded.updated_by`
+  ).run(provider, model, nextKey, baseUrl, new Date().toISOString(), req.user!.id);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'AI_PROVIDER_SETTINGS_UPDATED',
+    entityType: 'AI_SETTINGS',
+    entityId: 'default',
+    details: { provider, model, hasKey: Boolean(nextKey) }
+  });
+
+  res.json({ success: true, settings: aiPublicSettings() });
+});
+
+app.post('/api/admin/ai/test', requireRole(['ADMIN']), async (req, res) => {
+  const saved = readAiSettings();
+  const provider = String(saved.provider || 'NONE').toUpperCase();
+  const key = saved.api_key || process.env.AI_API_KEY || '';
+  const model = saved.model || AI_PROVIDERS[provider]?.model || '';
+  const baseUrl = saved.base_url || AI_PROVIDERS[provider]?.baseUrl || '';
+
+  if (provider === 'NONE' || !key) {
+    return res.status(400).json({ success: false, error: 'Add a provider and an API key first.' });
+  }
+
+  const started = Date.now();
+  try {
+    let url = '';
+    let headers: Record<string, string> = {};
+    if (provider === 'OPENAI' || provider === 'OPENAI_COMPATIBLE') {
+      url = `${baseUrl.replace(/\/$/, '')}/models`;
+      headers = { Authorization: `Bearer ${key}` };
+    } else if (provider === 'GEMINI') {
+      url = `${baseUrl.replace(/\/$/, '')}/models?key=${encodeURIComponent(key)}`;
+    } else if (provider === 'ANTHROPIC') {
+      url = `${baseUrl.replace(/\/$/, '')}/models`;
+      headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01' };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(url, { headers, signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: `The provider answered with ${response.status}. Check the key and the model.`
+      });
+    }
+
+    res.json({ success: true, latencyMs: Date.now() - started, model });
+  } catch (err: any) {
+    res.status(502).json({
+      success: false,
+      error: err?.name === 'AbortError' ? 'The provider did not answer in time.' : 'Could not reach the provider from the server.'
+    });
+  }
+});
+
 app.get('/api/ai/status', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
-  const providerEnv = (process.env.AI_PROVIDER || 'mock').toLowerCase();
-  const hasLiveKey = Boolean(process.env.AI_API_KEY && process.env.AI_API_KEY.trim().length > 0);
-  const isLiveActive = (providerEnv === 'real' || providerEnv === 'external') && hasLiveKey;
+  const saved = readAiSettings();
+  const savedProvider = String(saved.provider || 'NONE').toUpperCase();
+  const providerEnv = (process.env.AI_PROVIDER || '').toLowerCase();
+  const hasLiveKey = Boolean((saved.api_key || process.env.AI_API_KEY || '').trim());
+  const isLiveActive = savedProvider !== 'NONE' && hasLiveKey;
+  const modelName =
+    saved.model || AI_PROVIDERS[savedProvider]?.model || process.env.AI_MODEL || '';
 
   res.json({
-    providerMode: isLiveActive ? 'LIVE_LLM' : 'MOCK_DETERMINISTIC',
+    provider: savedProvider,
+    providerLabel: AI_PROVIDERS[savedProvider]?.label || 'Not connected',
+    providerMode: isLiveActive ? 'LIVE' : 'NOT_CONNECTED',
     configuredProviderEnv: providerEnv,
     liveProviderConfigured: isLiveActive,
-    modelName: isLiveActive ? process.env.AI_MODEL || 'gpt-4o-mini' : 'frins-deterministic-mock-v1',
-    promptVersion: 'frins-prompt-v1.0.0',
-    validatorVersion: '1.0.0-safety-gate',
+    modelName: modelName || 'Not connected',
+    hasKey: hasLiveKey,
     agents: [
       {
         name: 'ObservationalAgent',
         status: 'ACTIVE',
-        mode: isLiveActive ? 'LIVE_LLM_WITH_FALLBACK' : 'MOCK_DETERMINISTIC',
-        forbiddenAuthority: 'Cannot diagnose, invent facts, or make final learner-level decisions.'
+        mode: isLiveActive ? 'LIVE' : 'RULES'
       },
       {
         name: 'DecisionAgent',
         status: 'ACTIVE',
-        mode: 'DETERMINISTIC_GOVERNED_RULES',
-        forbiddenAuthority: 'Cannot publish a PDP, change an approved level, or override sufficiency rules.'
+        mode: 'RULES'
       },
       {
         name: 'GenerativeAgent',
         status: 'ACTIVE',
-        mode: isLiveActive ? 'LIVE_LLM_WITH_TEMPLATE_FALLBACK' : 'TEMPLATE',
-        forbiddenAuthority: 'Cannot present draft as approved or generate stock tips/trade signals.'
+        mode: isLiveActive ? 'LIVE' : 'TEMPLATE'
       }
     ],
     truthfulTrainingStatus: {
@@ -2958,10 +3079,18 @@ app.get('/api/admin/bookings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req,
 app.get('/api/admin/users', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { page, limit, offset } = readPaging(req, 20);
   const role = String(req.query.role || '').trim();
+  const scope = String(req.query.scope || '').trim();
   const q = req.query.q;
 
   const where: string[] = ['1 = 1'];
   const params: any[] = [];
+  // Staff and learners are two different jobs. The access list only ever shows
+  // people who can sign in to a staff console.
+  if (scope === 'staff') {
+    where.push("role IN ('ADMIN', 'CURRICULUM_OWNER', 'GUIDE')");
+  } else if (scope === 'learner') {
+    where.push("role = 'LEARNER'");
+  }
   if (role && role !== 'ALL') {
     where.push('role = ?');
     params.push(role);
@@ -5179,31 +5308,64 @@ const chatMessagesFor = (threadId: string) =>
 /** Staff side: one row per learner who has a conversation, newest first. */
 app.get('/api/chat/threads', requireRole(CHAT_STAFF_ROLES), (req, res) => {
   const q = req.query.q;
+  const filter = String(req.query.filter || 'ALL').toUpperCase();
+  const { page, limit, offset } = readPaging(req, 30);
   const params: any[] = [];
   const where: string[] = ['1 = 1'];
+
   if (hasSearch(q)) {
-    where.push('(u.name LIKE ? OR u.email LIKE ?)');
-    params.push(likeTerm(q), likeTerm(q));
+    where.push('(u.name LIKE ? OR u.email LIKE ? OR COALESCE(t.subject, \'\') LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q));
   }
+  if (filter === 'UNREAD') {
+    where.push(`EXISTS (SELECT 1 FROM chat_messages m
+      WHERE m.thread_id = t.id AND m.sender_role = 'LEARNER'
+        AND (t.staff_last_read_at IS NULL OR m.created_at > t.staff_last_read_at))`);
+  }
+
+  const whereSql = `WHERE ${where.join(' AND ')}`;
+  const base = `FROM chat_threads t JOIN users u ON u.id = t.learner_id ${whereSql}`;
+
+  const total = (db.prepare(`SELECT COUNT(*) AS c ${base}`).get(...params) as any).c as number;
+  const unreadTotal = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM chat_threads t JOIN users u ON u.id = t.learner_id
+          WHERE EXISTS (SELECT 1 FROM chat_messages m
+            WHERE m.thread_id = t.id AND m.sender_role = 'LEARNER'
+              AND (t.staff_last_read_at IS NULL OR m.created_at > t.staff_last_read_at))`
+      )
+      .get() as any
+  ).c as number;
 
   const rows = db
     .prepare(
       `SELECT t.id, t.learner_id, t.last_message_at, t.updated_at,
               u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
+              u.account_status AS learner_status,
               (SELECT m.message FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
               (SELECT m.sender_name FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender,
+              (SELECT m.created_at FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_message_sent_at,
               (SELECT COUNT(*) FROM chat_messages m
                 WHERE m.thread_id = t.id AND m.sender_role = 'LEARNER'
                   AND (t.staff_last_read_at IS NULL OR m.created_at > t.staff_last_read_at)) AS unread
          FROM chat_threads t
          JOIN users u ON u.id = t.learner_id
-         WHERE ${where.join(' AND ')}
-         ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
-         LIMIT 100`
+         ${whereSql}
+         ORDER BY COALESCE((SELECT MAX(m.created_at) FROM chat_messages m WHERE m.thread_id = t.id), t.created_at) DESC
+         LIMIT ? OFFSET ?`
     )
-    .all(...params);
+    .all(...params, limit, offset);
 
-  res.json({ success: true, rows });
+  res.json({
+    success: true,
+    rows,
+    total,
+    unreadTotal,
+    page,
+    pages: Math.max(1, Math.ceil(total / limit)),
+    limit
+  });
 });
 
 // Open (or start) the conversation with one learner.

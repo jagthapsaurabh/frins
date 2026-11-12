@@ -1,936 +1,104 @@
-import { LearnerOverview } from './learner/LearnerOverview';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-  BookOpen,
-  ClipboardList,
-  CheckCircle2,
-  HelpCircle,
-  BadgeCheck,
-  TrendingUp,
-  MessageSquare,
-  ArrowRight,
-  FileText,
-  PhoneCall,
-  CalendarClock,
-  Search,
-  X
-} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { BookCallDialog } from '../components/BookCallDialog';
-import { formatDateTime } from '../utils/dates';
+import { LearnerOverview } from './learner/LearnerOverview';
+import { LearnerCourses } from './learner/LearnerCourses';
+import { LearnerTasks } from './learner/LearnerTasks';
+import { LearnerProgress } from './learner/LearnerProgress';
+import { LearnerCalls } from './learner/LearnerCalls';
 
 type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress' | 'calls';
 
-const SECTION_COPY: Record<LearnerSection, { title: string; blurb: string }> = {
-  overview: { title: 'Overview', blurb: 'Where you are and what is waiting for you.' },
-  courses: { title: 'My courses', blurb: 'The courses built for you, and the questions inside them.' },
-  tasks: { title: 'Tasks and uploads', blurb: 'Your practical tasks, the work you sent, and the mentor chat.' },
-  progress: { title: 'Progress', blurb: 'Your plan, reflections and the evidence behind your level.' },
-  calls: { title: 'Calls', blurb: 'Book time with your guide or the team, and see what is coming up.' }
-};
+const SECTIONS: LearnerSection[] = ['overview', 'courses', 'tasks', 'progress', 'calls'];
 
+/**
+ * The learner panel. Loads the learner's data once, then shows one section at a
+ * time. Every section is a small page of its own, so each stays readable on a
+ * phone.
+ */
 export const LearnerDashboardPage: React.FC = () => {
-  const { user, authFetch, loginWithEmail } = useAuth();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, authFetch } = useAuth();
   const navigate = useNavigate();
   const params = useParams<{ section?: string }>();
-  const section: LearnerSection =
-    params.section === 'courses' || params.section === 'tasks' || params.section === 'progress' || params.section === 'calls'
-      ? params.section
-      : 'overview';
-  const unknownSection = Boolean(params.section) && section === 'overview';
+  const section: LearnerSection = SECTIONS.includes(params.section as LearnerSection)
+    ? (params.section as LearnerSection)
+    : 'overview';
+  const unknownSection = Boolean(params.section) && !SECTIONS.includes(params.section as LearnerSection);
 
-  // Guest gate state
-  const [guestEmail, setGuestEmail] = useState<string>('');
-  const [guestPassword, setGuestPassword] = useState<string>('');
-  const [guestError, setGuestError] = useState<string | null>(null);
-  const [guestBusy, setGuestBusy] = useState<boolean>(false);
-
-  // Task Result Upload State
-  const [selectedTaskId, setSelectedTaskId] = useState<string>('tsk_heikin_ashi_01');
-  const [taskAnswerText, setTaskAnswerText] = useState<string>('');
-  const [uploadedFileName, setUploadedFileName] = useState<string>('');
-  const [uploadedFileData, setUploadedFileData] = useState<string>('');
-  const [taskUploadBanner, setTaskUploadBanner] = useState<string | null>(null);
-
-  // Direct Chat on Task State
-  const [studentChatText, setStudentChatText] = useState<string>('');
-
-  // Search and filters over the learner's own tasks
-  const [taskSearch, setTaskSearch] = useState('');
-  const [taskFilter, setTaskFilter] = useState('ALL');
-  const [taskCourseFilter, setTaskCourseFilter] = useState('ALL');
-
-  // Booking a call straight from the panel
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [callOpen, setCallOpen] = useState(false);
-  const [callBanner, setCallBanner] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
 
-  // Course question answering state
-  const [courseAnswers, setCourseAnswers] = useState<Record<string, number>>({});
-  const [courseResults, setCourseResults] = useState<Record<string, any>>({});
-
-  // Reflection form state
-  const [refComp, setRefComp] = useState('COMP-EXEC-03');
-  const [refTitle, setRefTitle] = useState('');
-  const [refText, setRefText] = useState('');
-  const [refTrigger, setRefTrigger] = useState('');
-  const [refAdherence, setRefAdherence] = useState('4');
-  const [refStatus, setRefStatus] = useState<string | null>(null);
-
-  const loadDashboard = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
       const res = await authFetch('/api/learner/dashboard');
-      if (res.ok) {
-        const json = await res.json();
-        setData(json);
-        if (json.tasks?.length > 0) {
-          const ha = json.tasks.find((t: any) => t.id === 'tsk_heikin_ashi_01') || json.tasks[0];
-          if (!selectedTaskId || !json.tasks.some((t: any) => t.id === selectedTaskId)) {
-            setSelectedTaskId(ha.id);
-          }
-        }
-      }
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Could not load your dashboard.');
+      setData(json);
+      setError(null);
+    } catch (err: any) {
+      setError(err?.message || 'Could not load your dashboard.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [authFetch]);
 
   useEffect(() => {
-    loadDashboard();
-  }, [user]);
+    load();
+  }, [load, user]);
 
   useEffect(() => {
     if (unknownSection) navigate('/dashboard', { replace: true });
   }, [unknownSection, navigate]);
 
-  useEffect(() => {
-    if (!data?.tasks) return;
-    const curr = data.tasks.find((t: any) => t.id === selectedTaskId);
-    if (curr) {
-      setTaskAnswerText(curr.learner_submission || '');
-      setUploadedFileName(curr.uploaded_file_name || '');
-      setUploadedFileData(curr.uploaded_file_data || '');
-    }
-  }, [selectedTaskId, data?.tasks]);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadedFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setUploadedFileData(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleLoadSampleHeikinAshiSubmission = () => {
-    setTaskAnswerText(
-      '1. Heikin-Ashi Formula: HA Close = (Open + High + Low + Close) / 4 and HA Open = midpoint of prior HA candle body.\n' +
-        '2. Strong Uptrend: Identified 5 consecutive green Heikin-Ashi candles with no lower wicks (zero lower shadows).\n' +
-        '3. Reversal Signal: Marked the small-bodied Heikin-Ashi Doji with upper and lower shadows signaling momentum exhaustion before the bearish shift.\n' +
-        '4. Execution Note: Since Heikin-Ashi values are synthetic averaged prices, my actual stop-loss order is placed using the real market price (LTP).'
-    );
-    setUploadedFileName('Heikin_Ashi_Chart_Upload.svg');
-  };
-
-  const handleUploadTaskResult = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTaskId || !taskAnswerText.trim()) return;
-    setTaskUploadBanner('Uploading your task result...');
-    const res = await authFetch(`/api/learner/tasks/${selectedTaskId}/submit`, {
-      method: 'POST',
-      body: JSON.stringify({
-        submissionText: taskAnswerText.trim(),
-        uploadedFileName: uploadedFileName || 'Student_Task_Result.svg',
-        uploadedFileData: uploadedFileData || undefined
-      })
-    });
-    if (res.ok) {
-      setTaskUploadBanner(
-        '✓ Task uploaded. Your mentor can see it now, and you can find it below with the chat.'
-      );
-      await loadDashboard();
-    } else {
-      const err = await res.json();
-      setTaskUploadBanner(`⚠ ${err.error || 'Could not upload task result.'}`);
-    }
-  };
-
-  const handleSendStudentChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!studentChatText.trim() || !selectedTaskId) return;
-    const res = await authFetch(`/api/tasks/${selectedTaskId}/chat`, {
-      method: 'POST',
-      body: JSON.stringify({ message: studentChatText.trim() })
-    });
-    if (res.ok) {
-      setStudentChatText('');
-      await loadDashboard();
-    }
-  };
-
-  const handleAnswerCourseQuestion = async (questionId: string) => {
-    const selectedOptionIndex = courseAnswers[questionId];
-    if (selectedOptionIndex === undefined) return;
-    const res = await authFetch(`/api/learner/course-questions/${questionId}/answer`, {
-      method: 'POST',
-      body: JSON.stringify({ selectedOptionIndex })
-    });
-    if (res.ok) {
-      const out = await res.json();
-      setCourseResults((prev) => ({ ...prev, [questionId]: out }));
-      await loadDashboard();
-    }
-  };
-
-  const handleReflectionSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!refText.trim()) return;
-    setRefStatus('Saving structured reflection...');
-    const res = await authFetch('/api/learner/reflections', {
-      method: 'POST',
-      body: JSON.stringify({
-        competencyCode: refComp,
-        title: refTitle || 'Structured Post-Session Reflection',
-        reflectionText: refText,
-        emotionalStateTrigger: refTrigger || 'Session review',
-        processAdherenceSelfRating: Number(refAdherence)
-      })
-    });
-    if (res.ok) {
-      setRefTitle('');
-      setRefText('');
-      setRefTrigger('');
-      setRefStatus('✓ Structured reflection logged (LOW_REFLECTION weight. It cannot trigger a level promotion on its own).');
-      await loadDashboard();
-    } else {
-      setRefStatus('Could not save reflection.');
-    }
-  };
-
-  if (!user) {
-    return (
-      <div className="workspace-shell">
-        <div className="container">
-          <div className="panel-card" style={{ maxWidth: 520, margin: '0 auto' }}>
-            <span className="micro-tag accent">Student Portal</span>
-            <h2 style={{ fontSize: 24, margin: '10px 0 6px' }}>Student Login</h2>
-            <p style={{ fontSize: 13.5, marginBottom: 16 }}>
-              Sign in to see your courses, tasks and messages.
-            </p>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setGuestError(null);
-                setGuestBusy(true);
-                const res = await loginWithEmail(guestEmail.trim(), guestPassword);
-                setGuestBusy(false);
-                if (!res.ok) setGuestError(res.error || 'Could not sign in.');
-              }}
-            >
-              <div className="form-group">
-                <label className="form-label">Email Address</label>
-                <input
-                  type="email"
-                  className="form-input"
-                  autoComplete="email"
-                  placeholder="you@example.com"
-                  value={guestEmail}
-                  onChange={(e) => setGuestEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  autoComplete="current-password"
-                  placeholder="Enter your password"
-                  value={guestPassword}
-                  onChange={(e) => setGuestPassword(e.target.value)}
-                  required
-                />
-              </div>
-              {guestError && (
-                <div style={{ color: 'var(--danger-text)', fontSize: 12.5, marginBottom: 10, fontWeight: 600 }}>
-                  {guestError}
-                </div>
-              )}
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={guestBusy}>
-                {guestBusy ? 'Signing in...' : 'Sign In to My Learning'}
-              </button>
-            </form>
-            <div style={{ marginTop: 16, fontSize: 12.5, color: 'var(--text-muted)' }}>
-              Don&rsquo;t have an account yet? <a href="/discovery">Start Discovery</a> or{' '}
-              <a href="/">book a call</a> with our team.
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (loading && !data) {
     return (
-      <div className="workspace-shell">
-        <div className="container">
-          <div className="panel-card">Loading Student Learning Profile, Courses &amp; Tasks...</div>
-        </div>
+      <div className="skeleton-stack">
+        <div className="skeleton-block" />
+        <div className="skeleton-block" style={{ height: 180 }} />
+        <div className="skeleton-block" style={{ height: 220 }} />
       </div>
     );
   }
 
-  const profile = data?.profile;
-  const activePDP = data?.activeApprovedPDP;
-  const pendingPDP = data?.pendingDraftPDP;
-  const suffEval = data?.sufficiencyEvaluation;
-  const assignedCourses: any[] = data?.assignedCourses || [];
-  const courseQuestions: any[] = data?.courseQuestions || [];
-  const tasksList: any[] = data?.tasks || [];
-  const reflections: any[] = data?.reflections || [];
-  const evidenceItems: any[] = data?.evidenceItems || [];
-  const selectedTask = tasksList.find((t) => t.id === selectedTaskId) || tasksList[0] || null;
+  if (!data) {
+    return <div className="governance-alert danger">{error || 'Could not load your dashboard.'}</div>;
+  }
 
-  const courseTitleFor = (task: any) =>
-    assignedCourses.find((c: any) => c.course_id === task.course_id)?.course_title || 'General task';
-
-  const visibleTasks = tasksList.filter((task: any) => {
-    const matchesSearch =
-      !taskSearch.trim() ||
-      `${task.title} ${task.instructions} ${courseTitleFor(task)}`.toLowerCase().includes(taskSearch.trim().toLowerCase());
-    const matchesStatus =
-      taskFilter === 'ALL' ||
-      (taskFilter === 'OPEN' && (task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS')) ||
-      (taskFilter === 'SUBMITTED' && task.status === 'SUBMITTED') ||
-      (taskFilter === 'REVIEWED' && (task.status === 'REVIEWED' || task.status === 'APPROVED'));
-    const matchesCourse = taskCourseFilter === 'ALL' || task.course_id === taskCourseFilter;
-    return matchesSearch && matchesStatus && matchesCourse;
-  });
-
-  const myCalls: any[] = data?.calls || [];
-  const upcomingCalls = myCalls.filter((call) => !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(call.status));
-
-  const cancelCall = async (bookingId: string) => {
-    const res = await authFetch(`/api/learner/calls/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({}) });
-    const json = await res.json();
-    if (!res.ok || !json.success) {
-      setCallBanner(json.error || 'Could not cancel that call.');
-      return;
-    }
-    setCallBanner('Call cancelled.');
-    loadDashboard();
-  };
-
-  const todoTasks = tasksList.filter((t) => t.status !== 'REVIEWED' && t.status !== 'APPROVED');
-  const reviewedCount = tasksList.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
-  const answeredQuestions = courseQuestions.filter((q) => Boolean(q.lastAttempt)).length;
-  const latestFeedbackTask = tasksList.find((t) => Boolean(t.guide_feedback)) || null;
-  const progressPct =
-    tasksList.length === 0 ? 0 : Math.round((reviewedCount / tasksList.length) * 100);
-
-  const statusClass = (status: string) =>
-    status === 'REVIEWED' || status === 'APPROVED'
-      ? 'approved'
-      : status === 'SUBMITTED'
-        ? 'info'
-        : 'pending';
+  const tasks: any[] = data.tasks || [];
+  const courses: any[] = data.assignedCourses || [];
+  const calls: any[] = data.calls || [];
 
   return (
-    <div className="workspace-shell">
-      <div className="container-wide">
-        {section !== 'overview' && (
-          <header className="admin-page-head">
-            <h1>{SECTION_COPY[section].title}</h1>
-            <p>{SECTION_COPY[section].blurb}</p>
-          </header>
-        )}
+    <div>
+      {banner && <div className="governance-alert success">{banner}</div>}
 
-        {taskUploadBanner && (
-          <div className="governance-alert success" style={{ marginBottom: 20 }}>
-            {taskUploadBanner}
-          </div>
-        )}
+      {section === 'overview' && (
+        <LearnerOverview
+          data={data}
+          myCalls={calls}
+          onOpenCall={() => setCallOpen(true)}
+        />
+      )}
 
-        {/* =================== OVERVIEW =================== */}
-        {section === 'overview' && <LearnerOverview />}
+      {section === 'courses' && <LearnerCourses courses={courses} />}
 
-        {/* =================== COURSES =================== */}
-        {section === 'courses' && (
-          <div className="panel-card">
-            <span className="micro-tag accent">Built around you</span>
-            <h3 className="admin-card-title">My courses ({assignedCourses.length})</h3>
-            <p className="admin-card-copy">
-              Read the modules, then answer the questions. You get one attempt per question.
-            </p>
+      {section === 'tasks' && <LearnerTasks tasks={tasks} courses={courses} />}
 
-            {assignedCourses.length === 0 ? (
-              <p className="admin-muted">No course assigned yet. Your mentor will add one.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {assignedCourses.map((sc: any) => (
-                  <div
-                    key={sc.id}
-                    style={{
-                      padding: 16,
-                      background: 'var(--bg-canvas)',
-                      borderRadius: 12,
-                      border: '1px solid var(--border-subtle)'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, gap: 10, flexWrap: 'wrap' }}>
-                      <strong style={{ fontSize: 16 }}>{sc.course_title}</strong>
-                      <span className="status-pill approved">{sc.course_level}</span>
-                    </div>
-                    <p style={{ fontSize: 13.5, marginBottom: 10 }}>{sc.course_description}</p>
-                    {sc.custom_notes && (
-                      <div
-                        style={{
-                          padding: '8px 12px',
-                          background: 'var(--accent-soft)',
-                          color: 'var(--accent)',
-                          borderRadius: 8,
-                          fontSize: 12.5,
-                          fontWeight: 600,
-                          marginBottom: 10
-                        }}
-                      >
-                        Note from your mentor: {sc.custom_notes}
-                      </div>
-                    )}
-                    <div className="course-open-row">
-                      <div className="progress-line">
-                        <div className="progress-track">
-                          <span
-                            style={{
-                              width: `${sc.step_count ? Math.round((Number(sc.steps_done) / Number(sc.step_count)) * 100) : 0}%`
-                            }}
-                          />
-                        </div>
-                        <span className="admin-muted small">
-                          {sc.steps_done || 0}/{sc.step_count || 0} steps done
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={() => navigate(`/dashboard/courses/${sc.course_id}`)}
-                      >
-                        {sc.steps_done > 0 ? 'Continue course' : 'Start course'}
-                      </button>
-                    </div>
+      {section === 'progress' && <LearnerProgress data={data} onReload={load} />}
 
-                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Course modules</div>
-                    <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      {(sc.modules || []).map((m: string, idx: number) => (
-                        <li key={idx}>{m}</li>
-                      ))}
-                    </ul>
-
-                    {(() => {
-                      const qs = courseQuestions.filter((q) => q.course_id === sc.course_id);
-                      if (qs.length === 0) return null;
-                      return (
-                        <div style={{ marginTop: 14 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-                            Course questions ({qs.length})
-                          </div>
-                          {qs.map((q: any, qi: number) => {
-                            const live = courseResults[q.id];
-                            const answered = Boolean(live) || Boolean(q.lastAttempt);
-                            const correctIndex =
-                              live?.correctOptionIndex ?? q.correctOptionIndex ?? q.lastAttempt?.selectedOptionIndex ?? 0;
-                            const correctText = live?.correctAnswer ?? (q.options || [])[correctIndex];
-                            const selectedIndex = live
-                              ? courseAnswers[q.id]
-                              : q.lastAttempt?.selectedOptionIndex ?? courseAnswers[q.id];
-                            const showExplanation = live?.explanation || q.explanation;
-                            return (
-                              <div
-                                key={q.id}
-                                style={{
-                                  padding: 12,
-                                  background: '#FFFFFF',
-                                  borderRadius: 8,
-                                  border: '1px solid var(--border-subtle)',
-                                  marginBottom: 8,
-                                  fontSize: 13
-                                }}
-                              >
-                                <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                                  {qi + 1}. {q.prompt}
-                                </div>
-                                {(q.options || []).map((opt: string, i: number) => (
-                                  <label
-                                    key={`${q.id}-${i}`}
-                                    style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '4px 0', cursor: answered ? 'default' : 'pointer' }}
-                                  >
-                                    <input
-                                      type="radio"
-                                      name={`cq-${q.id}`}
-                                      checked={selectedIndex === i}
-                                      disabled={answered}
-                                      onChange={() => setCourseAnswers((prev) => ({ ...prev, [q.id]: i }))}
-                                    />
-                                    <span>
-                                      {String.fromCharCode(65 + i)}. {opt}
-                                    </span>
-                                  </label>
-                                ))}
-                                {!answered && (
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary btn-sm"
-                                    style={{ marginTop: 6 }}
-                                    disabled={courseAnswers[q.id] === undefined}
-                                    onClick={() => handleAnswerCourseQuestion(q.id)}
-                                  >
-                                    Check answer
-                                  </button>
-                                )}
-                                {answered && (
-                                  <div
-                                    style={{
-                                      marginTop: 8,
-                                      padding: '8px 10px',
-                                      borderRadius: 6,
-                                      background: (live ? live.isCorrect : q.lastAttempt?.isCorrect) ? '#ECFDF5' : '#FEF2F2',
-                                      color: (live ? live.isCorrect : q.lastAttempt?.isCorrect) ? '#047857' : '#B91C1C',
-                                      fontWeight: 600
-                                    }}
-                                  >
-                                    {(live ? live.isCorrect : q.lastAttempt?.isCorrect)
-                                      ? 'Correct.'
-                                      : `Not quite. Correct answer: ${String.fromCharCode(65 + Number(correctIndex))}. ${correctText}`}
-                                    {showExplanation && (
-                                      <div style={{ fontWeight: 400, marginTop: 4, color: 'var(--text-muted)' }}>
-                                        {showExplanation}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* =================== TASKS =================== */}
-        {section === 'tasks' && (
-          <div className="workspace-sidebar-layout">
-            <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">My tasks ({visibleTasks.length})</span>
-              <h3 className="admin-card-title">Pick a task</h3>
-
-              <div className="list-tools learner-task-tools">
-                <div className="list-search-wrap">
-                  <Search size={15} />
-                  <input
-                    className="form-input list-search"
-                    placeholder="Search your tasks"
-                    value={taskSearch}
-                    onChange={(e) => setTaskSearch(e.target.value)}
-                    aria-label="Search tasks"
-                  />
-                </div>
-                <select
-                  className="form-select list-filter"
-                  value={taskFilter}
-                  onChange={(e) => setTaskFilter(e.target.value)}
-                  aria-label="Filter by status"
-                >
-                  <option value="ALL">Every status</option>
-                  <option value="OPEN">Not sent yet</option>
-                  <option value="SUBMITTED">In review</option>
-                  <option value="REVIEWED">Reviewed</option>
-                </select>
-                <select
-                  className="form-select list-filter"
-                  value={taskCourseFilter}
-                  onChange={(e) => setTaskCourseFilter(e.target.value)}
-                  aria-label="Filter by course"
-                >
-                  <option value="ALL">Every course</option>
-                  {assignedCourses.map((course: any) => (
-                    <option key={course.course_id} value={course.course_id}>
-                      {course.course_title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {tasksList.length === 0 ? (
-                <p className="admin-muted">No task assigned yet.</p>
-              ) : visibleTasks.length === 0 ? (
-                <p className="admin-muted">No task matches this search.</p>
-              ) : (
-                <div className="learner-task-list">
-                  {visibleTasks.map((t: any) => {
-                    const isSel = selectedTask?.id === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        className={`learner-task-item ${isSel ? 'active' : ''}`}
-                        onClick={() => setSelectedTaskId(t.id)}
-                      >
-                        <span className="learner-task-text">
-                          <strong>{t.title}</strong>
-                          <small>
-                            {courseTitleFor(t)}
-                            {t.due_date ? ` · due ${formatDateTime(t.due_date)}` : ''}
-                          </small>
-                        </span>
-                        <span className={`status-pill ${statusClass(t.status)}`}>{t.status}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {selectedTask ? (
-              <div className="learner-task-detail">
-                <section className="panel-card" style={{ marginBottom: 0 }}>
-                  <div className="learner-task-head">
-                    <div>
-                      <span className="micro-tag accent">Task</span>
-                      <h3 className="admin-card-title">{selectedTask.title}</h3>
-                      <p className="admin-card-copy">{courseTitleFor(selectedTask)}</p>
-                    </div>
-                    <span className={`status-pill ${statusClass(selectedTask.status)}`}>{selectedTask.status}</span>
-                  </div>
-
-                  <div className="task-timeline task-timeline-wide">
-                    <span>
-                      <em>Given</em>
-                      {formatDateTime(selectedTask.assigned_at)}
-                    </span>
-                    <span>
-                      <em>Due</em>
-                      {formatDateTime(selectedTask.due_date)}
-                    </span>
-                    <span>
-                      <em>Uploaded</em>
-                      {selectedTask.submitted_at ? formatDateTime(selectedTask.submitted_at) : 'Not yet'}
-                    </span>
-                    <span>
-                      <em>Reviewed</em>
-                      {selectedTask.reviewed_at ? formatDateTime(selectedTask.reviewed_at) : 'Not yet'}
-                    </span>
-                  </div>
-
-                  <div className="learner-instructions">
-                    <strong>What to do</strong>
-                    <div>{selectedTask.instructions}</div>
-                  </div>
-
-                  {selectedTask.guide_feedback && (
-                    <div className="learner-feedback">
-                      <strong>Mentor feedback</strong>
-                      <div>{selectedTask.guide_feedback}</div>
-                    </div>
-                  )}
-
-                  {selectedTask.learner_submission && (
-                    <div className="learner-submission">
-                      <strong>What you sent</strong>
-                      <div>{selectedTask.learner_submission}</div>
-                      {selectedTask.uploaded_file_data && (
-                        <div className="learner-file-preview">
-                          <img
-                            src={selectedTask.uploaded_file_data}
-                            alt={selectedTask.uploaded_file_name || 'Uploaded chart'}
-                          />
-                        </div>
-                      )}
-                      {!selectedTask.uploaded_file_data && selectedTask.uploaded_file_name && (
-                        <small>File attached: {selectedTask.uploaded_file_name}</small>
-                      )}
-                    </div>
-                  )}
-
-                  {selectedTask.status === 'REVIEWED' || selectedTask.status === 'APPROVED' ? (
-                    <p className="admin-muted" style={{ marginTop: 14 }}>
-                      This task is finished. Ask your mentor in the chat if you want to redo it.
-                    </p>
-                  ) : (
-                    <form onSubmit={handleUploadTaskResult} style={{ marginTop: 16 }}>
-                      <div className="learner-form-row">
-                        <label className="form-label" style={{ marginBottom: 0 }}>
-                          Your answer / analysis
-                        </label>
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '4px 10px', fontSize: 11.5 }}
-                          onClick={handleLoadSampleHeikinAshiSubmission}
-                        >
-                          Fill a sample answer
-                        </button>
-                      </div>
-
-                      <div className="form-group">
-                        <textarea
-                          className="form-textarea"
-                          rows={5}
-                          placeholder="Write what you found, the formula you used, and what the chart shows."
-                          value={taskAnswerText}
-                          onChange={(e) => setTaskAnswerText(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <div className="form-group">
-                        <label className="form-label">Chart screenshot or result file</label>
-                        <input type="file" accept="image/*,.svg" className="form-input" onChange={handleFileChange} />
-                        {uploadedFileName && (
-                          <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 4, fontWeight: 600 }}>
-                            Attached: {uploadedFileName}
-                          </div>
-                        )}
-                      </div>
-
-                      <button type="submit" className="btn btn-primary">
-                        Upload result &amp; submit
-                      </button>
-                    </form>
-                  )}
-                </section>
-
-                <section className="panel-card" style={{ marginBottom: 0 }}>
-                  <div className="learner-task-head">
-                    <div>
-                      <span className="micro-tag accent">
-                        <MessageSquare size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
-                        Mentor chat
-                      </span>
-                      <h3 className="admin-card-title">Ask about this task</h3>
-                    </div>
-                  </div>
-
-                  <div className="learner-chat">
-                    {(selectedTask.messages || []).length === 0 && (
-                      <p className="admin-muted">No messages yet. Ask a question below.</p>
-                    )}
-                    {(selectedTask.messages || []).map((m: any) => {
-                      const isMe = m.sender_role === 'LEARNER';
-                      return (
-                        <div key={m.id} className={`learner-bubble ${isMe ? 'mine' : ''}`}>
-                          <div className="learner-bubble-meta">
-                            {m.sender_name} &middot; {new Date(m.created_at).toLocaleString()}
-                          </div>
-                          <div>{m.message}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <form onSubmit={handleSendStudentChat} className="learner-chat-form">
-                    <input
-                      className="form-input"
-                      placeholder="Write a message to your mentor"
-                      value={studentChatText}
-                      onChange={(e) => setStudentChatText(e.target.value)}
-                    />
-                    <button type="submit" className="btn btn-primary btn-sm">
-                      Send
-                    </button>
-                  </form>
-                </section>
-              </div>
-            ) : (
-              <div className="panel-card">
-                <p className="admin-muted">No task selected.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* =================== CALLS =================== */}
-        {section === 'calls' && (
-          <div className="panel-card">
-            <div className="call-section-head">
-              <div>
-                <span className="micro-tag accent">Direct line</span>
-                <h3 className="admin-card-title">Talk to your guide</h3>
-                <p className="admin-card-copy">
-                  Book a slot when you want to go through a chart, a lesson or your plan. Your guide or the team
-                  confirms it and it shows up here.
-                </p>
-              </div>
-              <button type="button" className="btn btn-primary" onClick={() => setCallOpen(true)}>
-                <PhoneCall size={16} /> Book a call
-              </button>
-            </div>
-
-            {callBanner && <div className="governance-alert success">{callBanner}</div>}
-
-            {myCalls.length === 0 ? (
-              <p className="admin-muted">No call yet. The button above is the fastest way to reach your mentor.</p>
-            ) : (
-              <div className="call-history">
-                {myCalls.map((call: any) => (
-                  <div key={call.id} className="call-history-row">
-                    <div>
-                      <strong>
-                        {formatDateTime(call.preferred_date)} &middot; {call.preferred_time}
-                      </strong>
-                      <div className="admin-muted small">{call.topic || 'General call'}</div>
-                      <div className="admin-muted small">With {call.staff_name || 'your mentor'}</div>
-                    </div>
-                    <div className="call-history-side">
-                      <span className={`status-pill ${statusClass(call.status)}`}>{call.status}</span>
-                      {!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(call.status) && (
-                        <button type="button" className="link-button" onClick={() => cancelCall(call.id)}>
-                          <X size={13} /> Cancel
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* =================== PROGRESS =================== */}
-        {section === 'progress' && (
-          <>
-            {pendingPDP && (
-              <div className="governance-alert warn">
-                <strong>Waiting for your guide:</strong> a new plan (<strong>v{pendingPDP.version_number}.0, {pendingPDP.title}</strong>)
-                is in review. Your approved plan (<strong>v{activePDP?.version_number || 1}.0</strong>) stays active
-                until your Learning Guide approves the new one.
-              </div>
-            )}
-
-            <div className="progress-stats" style={{ marginBottom: 16 }}>
-              <div>
-                <ClipboardList size={16} />
-                <strong>{reviewedCount}/{tasksList.length}</strong>
-                <span>Tasks reviewed</span>
-              </div>
-              <div>
-                <FileText size={16} />
-                <strong>{reflections.length}</strong>
-                <span>Reflections logged</span>
-              </div>
-              <div>
-                <BadgeCheck size={16} />
-                <strong>{evidenceItems.length}</strong>
-                <span>Evidence items</span>
-              </div>
-              <div>
-                <TrendingUp size={16} />
-                <strong>{progressPct}%</strong>
-                <span>Overall task progress</span>
-              </div>
-            </div>
-
-            <div className="workspace-grid-2">
-              <div className="panel-card" style={{ border: '2px solid var(--success-border)', marginBottom: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                  <span className="micro-tag success">Approved plan &middot; v{activePDP?.version_number || 1}.0</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-light-muted)' }}>
-                    Approved by your guide
-                  </span>
-                </div>
-
-                {activePDP ? (
-                  <>
-                    <h2 style={{ fontSize: 22, marginBottom: 8 }}>{activePDP.title}</h2>
-                    <p style={{ fontSize: 14, marginBottom: 16 }}>{activePDP.summary}</p>
-                    <div style={{ padding: 14, background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 4 }}>
-                        Practice routine
-                      </div>
-                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{activePDP.routine_schedule}</div>
-                    </div>
-                  </>
-                ) : (
-                  <p>No approved plan yet.</p>
-                )}
-              </div>
-
-              <div className="panel-card" style={{ marginBottom: 0 }}>
-                <span className="micro-tag accent">Reflection</span>
-                <h3 className="admin-card-title">Log what you learned</h3>
-                <p className="admin-card-copy">
-                  Short and honest beats long. Your guide reads these before your next conversation.
-                </p>
-                <form onSubmit={handleReflectionSubmit}>
-                  <div className="form-group">
-                    <label className="form-label">Title</label>
-                    <input
-                      className="form-input"
-                      placeholder="e.g. Post-session process check"
-                      value={refTitle}
-                      onChange={(e) => setRefTitle(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">What did you notice?</label>
-                    <textarea
-                      className="form-textarea"
-                      placeholder="What did you do, and what would you change next time?"
-                      value={refText}
-                      onChange={(e) => setRefText(e.target.value)}
-                      required
-                    />
-                  </div>
-                  {refStatus && (
-                    <div style={{ fontSize: 12.5, color: 'var(--accent)', marginBottom: 10, fontWeight: 600 }}>
-                      {refStatus}
-                    </div>
-                  )}
-                  <button type="submit" className="btn btn-secondary">
-                    Save reflection
-                  </button>
-                </form>
-              </div>
-            </div>
-
-            <section className="panel-card" style={{ marginTop: 16 }}>
-              <span className="micro-tag accent">History</span>
-              <h3 className="admin-card-title">Reflections you have logged ({reflections.length})</h3>
-              {reflections.length === 0 ? (
-                <p className="admin-muted">Nothing yet. The box above is a good start.</p>
-              ) : (
-                <div className="learner-list">
-                  {reflections.slice(0, 8).map((r: any) => (
-                    <div key={r.id} className="learner-reflect-row">
-                      <strong>{r.title}</strong>
-                      <small>{new Date(r.created_at).toLocaleDateString()} &middot; {r.evidence_weight.replaceAll('_', ' ').toLowerCase()}</small>
-                      <p>{r.reflection_notes}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
-      </div>
+      {section === 'calls' && <LearnerCalls calls={calls} onReload={load} />}
 
       <BookCallDialog
         open={callOpen}
         onClose={() => setCallOpen(false)}
         onBooked={() => {
-          setCallBanner('Call requested. Check back here for the confirmation.');
-          loadDashboard();
+          setCallOpen(false);
+          setBanner('Call requested. It shows on your Calls page once confirmed.');
+          load();
         }}
       />
     </div>

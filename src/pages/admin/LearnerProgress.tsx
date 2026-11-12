@@ -73,10 +73,10 @@ export const LearnerProgress: React.FC = () => {
           { label: 'Learner' },
           { label: 'Courses', width: 90, align: 'right' },
           { label: 'Tasks', width: 80, align: 'right' },
-          { label: 'Uploaded', width: 90, align: 'right' },
+          { label: 'Sent', width: 90, align: 'right' },
           { label: 'Reviewed', width: 90, align: 'right' },
           { label: 'Completion', width: 180 },
-          { label: 'Last upload', width: 130 },
+          { label: 'Last sent', width: 130 },
           { label: '', width: 32 }
         ]}
       >
@@ -94,7 +94,7 @@ export const LearnerProgress: React.FC = () => {
               <td data-label="Tasks" className="num">
                 {row.task_count}
               </td>
-              <td data-label="Uploaded" className="num">
+              <td data-label="Sent" className="num">
                 {row.submitted_count}
               </td>
               <td data-label="Reviewed" className="num">
@@ -106,7 +106,7 @@ export const LearnerProgress: React.FC = () => {
                 </div>
                 <span className="row-sub">{done}% reviewed</span>
               </td>
-              <td data-label="Last upload" className="row-sub" style={{ whiteSpace: 'nowrap' }}>
+              <td data-label="Last sent" className="row-sub" style={{ whiteSpace: 'nowrap' }}>
                 {row.last_activity ? formatDate(row.last_activity) : 'None yet'}
               </td>
               <td>

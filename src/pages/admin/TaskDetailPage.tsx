@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Download, FileText, Send, Sparkles, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, Send, Sparkles, Undo2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead, StatusPill, labelFor, toneFor } from '../../components/console/ConsoleUI';
@@ -109,7 +109,6 @@ export const TaskDetailPage: React.FC = () => {
   if (!task) return <div className="governance-alert danger">{error || 'Task not found.'}</div>;
 
   const ai = task.aiReview;
-  const file: string | null = task.uploaded_file_data;
   const messages: any[] = task.messages || [];
 
   return (
@@ -151,7 +150,7 @@ export const TaskDetailPage: React.FC = () => {
           <strong>{task.due_date ? formatDateTime(task.due_date) : 'Not set'}</strong>
         </div>
         <div className="fact">
-          <span>Uploaded</span>
+          <span>Sent</span>
           <strong>{task.submitted_at ? formatDateTime(task.submitted_at) : 'Not yet'}</strong>
         </div>
         <div className="fact">
@@ -194,23 +193,12 @@ export const TaskDetailPage: React.FC = () => {
             {task.learner_submission ? (
               <p className="prose-block">{task.learner_submission}</p>
             ) : (
-              <p className="section-note">Nothing uploaded yet.</p>
+              <p className="section-note">Nothing sent yet.</p>
+            )}
+            {task.uploaded_file_data?.startsWith('data:image') && (
+              <img className="submission-image" src={task.uploaded_file_data} alt="Chart sent with the submission" />
             )}
 
-            {file && (
-              <div style={{ marginTop: 12 }}>
-                <a
-                  className="post-file"
-                  href={file}
-                  download={task.uploaded_file_name || 'submission'}
-                >
-                  <FileText size={14} /> {task.uploaded_file_name || 'Attached file'} <Download size={13} />
-                </a>
-                {file.startsWith('data:image') && (
-                  <img className="submission-image" src={file} alt="Learner upload" />
-                )}
-              </div>
-            )}
           </section>
 
           {ai && (
@@ -360,7 +348,7 @@ export const TaskDetailPage: React.FC = () => {
         message={
           pending === 'approve'
             ? 'The learner is notified and any milestone step it unlocks opens.'
-            : 'The learner is notified and can upload again.'
+            : 'The learner is notified and can send it again.'
         }
         confirmLabel={pending === 'approve' ? 'Approve' : 'Send back'}
         variant={pending === 'approve' ? 'primary' : 'danger'}

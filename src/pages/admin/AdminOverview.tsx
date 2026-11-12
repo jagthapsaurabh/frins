@@ -104,7 +104,7 @@ export const AdminOverview: React.FC = () => {
           <span className="kpi-body">
             <span className="kpi-label">Awaiting review</span>
             <span className="kpi-value">{counts?.awaitingReview ?? '—'}</span>
-            <span className="kpi-hint">Uploads to check</span>
+            <span className="kpi-hint">Work to review</span>
           </span>
         </Link>
         <Link className="kpi" to="/admin/leads">
@@ -189,7 +189,7 @@ export const AdminOverview: React.FC = () => {
           ) : (
             <div className="empty-state">
               <strong>Nothing waiting</strong>
-              Every upload has been reviewed.
+              Every submission has been reviewed.
             </div>
           )}
 

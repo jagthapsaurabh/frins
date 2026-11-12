@@ -40,13 +40,18 @@ export const StaffDirectory: React.FC = () => {
     setPage(1);
   }, [q, role]);
 
-  const list = usePagedList<any>(authFetch, '/api/admin/users', { q, role, page, limit: 20 });
+  // Only people who can sign in to a staff console. Learners live in their own tab.
+  const list = usePagedList<any>(authFetch, '/api/admin/users', { q, role, page, limit: 20, scope: 'staff' });
 
   return (
     <div>
       <PageHead
         title="Staff & access"
-        meta={list.total > 0 ? `${list.total} accounts` : undefined}
+        meta={
+          list.total > 0
+            ? `${list.total} ${list.total === 1 ? 'staff account' : 'staff accounts'}`
+            : undefined
+        }
         actions={
           <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/staff/new')}>
             <Plus size={14} /> New account
@@ -64,7 +69,6 @@ export const StaffDirectory: React.FC = () => {
           onChange={setRole}
           options={[
             { value: 'ALL', label: 'Every role' },
-            { value: 'LEARNER', label: 'Students' },
             { value: 'GUIDE', label: 'Guides' },
             { value: 'ADMIN', label: 'Admins' },
             { value: 'CURRICULUM_OWNER', label: 'Curriculum owners' }
@@ -75,7 +79,7 @@ export const StaffDirectory: React.FC = () => {
       <TableShell
         loading={list.loading}
         isEmpty={!list.loading && list.rows.length === 0}
-        empty="No account matches that search."
+        empty="No staff account matches that search."
         columns={[
           { label: 'Name' },
           { label: 'Email' },

@@ -4,7 +4,7 @@ import { Pager } from '../../components/Pager';
 import { usePagedList } from '../../hooks/usePagedList';
 import { PageHead, SearchBox, TableShell, Toolbar } from '../../components/console/ConsoleUI';
 import { formatDateTime } from '../../utils/dates';
-import { KeyRound, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 const humanAction = (action: string) =>
   action
@@ -14,26 +14,19 @@ const humanAction = (action: string) =>
     .join(' ');
 
 /**
- * Account, rubric versions and the audit trail. Nothing here is a list of
- * people, so it keeps the two column shape: the things you change on the left,
- * the record you cannot change on the right.
+ * Rubric versions and the audit trail. Account security is handled by the
+ * sign-in flow, so there is no password form here.
  */
 export const SettingsPage: React.FC = () => {
   const { authFetch } = useAuth();
-
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [again, setAgain] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [banner, setBanner] = useState<string | null>(null);
 
   const [competencies, setCompetencies] = useState<any[]>([]);
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [version, setVersion] = useState('2.0');
-  const [rubricBusy, setRubricBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -60,44 +53,16 @@ export const SettingsPage: React.FC = () => {
 
   const audit = usePagedList<any>(authFetch, '/api/admin/audit', { q: query, page, limit: 25 });
 
-  const changePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError(null);
-    setBanner(null);
-    if (next.length < 8) {
-      setPasswordError('Use at least 8 characters.');
-      return;
-    }
-    if (next !== again) {
-      setPasswordError('The two new passwords do not match.');
-      return;
-    }
-    setBusy(true);
-    const res = await authFetch('/api/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword: current, newPassword: next })
-    });
-    const json = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok || !json.success) {
-      setPasswordError(json.error || 'Could not change the password.');
-      return;
-    }
-    setCurrent('');
-    setNext('');
-    setAgain('');
-    setBanner('Password changed. Other devices signed out.');
-  };
-
   const publishRubric = async (e: React.FormEvent) => {
     e.preventDefault();
-    setRubricBusy(true);
+    setBusy(true);
+    setBanner(null);
     const res = await authFetch('/api/admin/competencies', {
       method: 'POST',
       body: JSON.stringify({ code, title, description, rubricVersion: version })
     });
     const json = await res.json().catch(() => ({}));
-    setRubricBusy(false);
+    setBusy(false);
     if (!res.ok || !json.success) {
       setBanner(json.error || 'Could not publish that version.');
       return;
@@ -120,78 +85,16 @@ export const SettingsPage: React.FC = () => {
           <section className="panel-card">
             <div className="panel-head">
               <h2>
-                <KeyRound size={13} /> Your password
-              </h2>
-              <span className="section-note">Other devices signed in as you get signed out</span>
-            </div>
-
-            <form onSubmit={changePassword}>
-              <div className="form-group">
-                <label className="form-label" htmlFor="currentPassword">
-                  Current password
-                </label>
-                <input
-                  id="currentPassword"
-                  type="password"
-                  className="form-input"
-                  autoComplete="current-password"
-                  value={current}
-                  onChange={(e) => setCurrent(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="form-row-2">
-                <div className="form-group">
-                  <label className="form-label" htmlFor="newPassword">
-                    New password
-                  </label>
-                  <input
-                    id="newPassword"
-                    type="password"
-                    className="form-input"
-                    autoComplete="new-password"
-                    value={next}
-                    onChange={(e) => setNext(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="againPassword">
-                    New password again
-                  </label>
-                  <input
-                    id="againPassword"
-                    type="password"
-                    className="form-input"
-                    autoComplete="new-password"
-                    value={again}
-                    onChange={(e) => setAgain(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              {passwordError && <p className="form-error">{passwordError}</p>}
-
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? 'Updating' : 'Update password'}
-              </button>
-            </form>
-          </section>
-
-          <section className="panel-card">
-            <div className="panel-head">
-              <h2>
                 <ShieldCheck size={13} /> Competency rubrics
               </h2>
-              <span className="section-note">Publishing records a new version</span>
+              <span className="section-note">Publishing keeps the old version in the audit trail</span>
             </div>
 
             <TableShell
               columns={[
-                { label: 'Code', width: 120 },
+                { label: 'Code', width: 130 },
                 { label: 'Title' },
-                { label: 'Rubric', width: 90 }
+                { label: 'Rubric', width: 70 }
               ]}
               isEmpty={competencies.length === 0}
               empty="No competency loaded."
@@ -210,7 +113,7 @@ export const SettingsPage: React.FC = () => {
               ))}
             </TableShell>
 
-            <form onSubmit={publishRubric} style={{ marginTop: 14 }}>
+            <form onSubmit={publishRubric} style={{ marginTop: 16 }}>
               <div className="form-row-3">
                 <div className="form-group">
                   <label className="form-label" htmlFor="rubricCode">
@@ -262,8 +165,8 @@ export const SettingsPage: React.FC = () => {
                   required
                 />
               </div>
-              <button type="submit" className="btn btn-secondary" disabled={rubricBusy}>
-                {rubricBusy ? 'Publishing' : 'Publish version'}
+              <button type="submit" className="btn btn-secondary" disabled={busy}>
+                {busy ? 'Publishing' : 'Publish version'}
               </button>
             </form>
           </section>

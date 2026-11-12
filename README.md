@@ -1,6 +1,6 @@
-# FRINS: The Market Learning Ecosystem (Clean-Slate Edition V1.0)
+# FRINS: Market Learning, Taught Properly
 
-Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Prisma)** implementation of **FRINS: The Market Learning Ecosystem**.
+Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Prisma)** implementation of **FRINS**.
 
 ---
 
@@ -8,7 +8,7 @@ Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Pr
 
 - **Prisma-Free Persistence (`server/db.ts`)**: Uses native SQLite (`better-sqlite3`) stored in `/home/user/data/frins.db` with WAL journaling, foreign-key enforcement, automatic schema migration, and deterministic seed data.
 - **Approved Public Website (`src/pages/PublicWebsitePage.tsx`)**: Faithfully implements all 10 sections, typography (`Inter`), institutional color tokens (`#F7F5F0`, `#1B1A18`, `#2D5296`), interactive WAI-ARIA tabs, SEBI non-advisory notice, and Booking Modal wired to `POST /api/leads`.
-- **Canonical 34-Question Discovery (`server/canonicalQuestions.ts`, `src/pages/DiscoveryPage.tsx`)**: Implements the canonical 34-question bank (`v1.0.0-canonical-34`) across 5 domains with deterministic completeness, contradiction detection, sufficiency classification (`SUFFICIENT`, `INSUFFICIENT`, `CONFLICTING`, `REVIEW_REQUIRED`), and permitted exit pathways including `NO_CONCERN_ESTABLISHED` (Requirement 3 & 8: never manufactures an artificial learning problem).
+- **Canonical Discovery (`server/canonicalQuestions.ts`, `src/pages/DiscoveryPage.tsx`)**: Implements the canonical Discovery question bank across 5 domains with deterministic completeness, contradiction detection, sufficiency classification (`SUFFICIENT`, `INSUFFICIENT`, `CONFLICTING`, `REVIEW_REQUIRED`), and permitted exit pathways including `NO_CONCERN_ESTABLISHED` (Requirement 3 & 8: never manufactures an artificial learning problem).
 - **Three-Agent AI Orchestrator (`server/aiPipeline.ts`, `src/pages/AIPipelinePage.tsx`)**:
   - `Sanitize Context` (redacts names, emails, and phone numbers)
   - `ObservationalAgent` (summarises patterns, gaps, and uncertainty with question ID citations `evidenceRefs`)
@@ -28,7 +28,7 @@ Full-stack **React 18 + TypeScript + Express + SQLite (`better-sqlite3`, zero Pr
 
 ## 2. Admin Course Questions, Website Leads & Rebrand
 
-- **Brand**: the product is **FRINS: The Market Learning Ecosystem** everywhere (UI, API responses, database rows, seeded accounts `@frins.org`, package name `frins-ecosystem`, SQLite file `data/frins.db`).
+- **Brand**: the product is **FRINS** everywhere (UI, API responses, database rows, seeded accounts `@frins.org`, package name `frins-ecosystem`, SQLite file `data/frins.db`).
 - **Admin course questions**: Admin can create/edit/delete courses, edit their modules, and manage a per-course question bank. Students answer those questions from their dashboard and only see the correct answer + explanation after submitting.
 - **Website leads inbox**: every public form submission (Basic Details / Discovery start, Book a Call, sign-ups) is stored in the `leads` table and rendered in Admin → *Solved Discovery Q&A & Call Leads* with contact details, track, status, notes and capture time.
 - **AI isolation**: `/api/ai/status`, `/api/ai/run`, `/api/ai/runs`, `/api/ai/test-safety` and the whole training pipeline are restricted server-side to `ADMIN` / `CURRICULUM_OWNER`.
@@ -224,9 +224,57 @@ dashboard** tag. The mentor confirms, moves or cancels it from Bookings, and the
 ### Every task carries its dates
 
 `learning_tasks` now stores `assigned_at`. The task list in Task review and in the learner's Tasks
-tab shows four timestamps: given, due, uploaded, reviewed. Task review also filters by course and by
+tab shows four timestamps: given, due, sent, reviewed. Task review also filters by course and by
 date range (today, last 7 days, last 30 days, due in the next 3 days), and the learner's own task
 list has a search box plus status and course filters.
+
+### The learner panel, one page per idea
+
+`/dashboard` is a shell: it loads the learner's data once and renders one small page per section, so
+nothing is crammed into a single scroll.
+
+- **Overview** (`src/pages/learner/LearnerOverview.tsx`): four counters, the next task with its
+  brief, the courses with a progress bar, the plan and the next call.
+- **My courses** (`LearnerCourses.tsx`): one card per course, with the mentor's note, the module list
+  and a single Continue or Start button.
+- **Tasks** (`LearnerTasks.tsx`): a searchable, filterable table. The row opens
+  `/dashboard/tasks/:taskId` (`LearnerTaskPage.tsx`), where the learner reads the brief, sends the
+  written answer plus a chart image, and talks to the mentor in the same panel.
+- **Progress** (`LearnerProgress.tsx`): the approved plan, a note form, past notes and the evidence
+  table.
+- **Calls** (`LearnerCalls.tsx`): what is booked, what happened, and a cancel button per row.
+
+The course player (`src/pages/learner/CoursePlayerPage.tsx`) keeps its step list and adds the course
+check: the questions an admin attaches to the course, answered one at a time with the explanation
+shown after the answer is in.
+
+### AI engine: bring any provider
+
+Admin → AI engine is now a settings surface, not a read-only scoreboard.
+
+- `ai_settings` (one row) stores `provider`, `model`, `base_url`, `api_key` and who saved it.
+- `GET /api/admin/ai/settings` returns the saved values plus a masked key and the provider list.
+- `PUT /api/admin/ai/settings` accepts `{provider, model, baseUrl, apiKey, clearKey}`. Keys are never
+  returned in full and never logged.
+- `POST /api/admin/ai/test` calls the provider's `/models` endpoint with an 8s timeout and reports
+  latency, or the reason it failed.
+- Providers: OpenAI, Google Gemini, Anthropic, any OpenAI-compatible base URL, or Not connected.
+  `/api/ai/status` reads the same row, so the agent modes switch from `RULES`/`TEMPLATE` to `LIVE`
+  the moment a working key is saved.
+
+### Messages for a thousand learners
+
+`/api/chat/threads` is paged and filtered: `?q&filter=ALL|UNREAD&page&limit` returns the page, the
+total, the unread count and the last message time per thread. The staff inbox
+(`src/pages/MessagesPage.tsx`) searches with a 250ms debounce, switches between all chats and unread,
+pages 20 at a time, marks a thread read when opened, polls silently every 20 seconds, and collapses
+to one pane under 900px with a back button. Under it all is the same thread table, so a learner who
+writes at 9am lands at the top.
+
+### Staff, not students
+
+`GET /api/admin/users` takes `scope=staff|learner`. Staff & access asks for `scope=staff`, and the
+role picker only offers staff roles, so a learner can never be created or promoted from that tab.
 
 ---
 
@@ -263,8 +311,8 @@ Rules the console follows:
 
 ### Console type and spacing
 
-The admin console runs on one UI face with tabular numbers, so columns of dates and counts line up.
-Display headings are switched off inside the console only; the public site keeps its own fonts. The
+Both dashboards run on Poppins for headings and Roboto for everything else; the public site keeps
+its own fonts. Numbers are tabular, so columns of dates and counts line up. The
 sidebar is 204px with 12px labels and 14px icons, which leaves the table the width it needs on a
 laptop. Below 640px every table becomes a stack of labelled rows, and the filters turn into one
 column so nothing scrolls sideways.

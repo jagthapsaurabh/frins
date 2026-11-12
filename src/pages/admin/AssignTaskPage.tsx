@@ -216,7 +216,7 @@ export const AssignTaskPage: React.FC = () => {
             </div>
             <ol className="steps-list">
               <li>The learner gets a notification with the brief and the due date.</li>
-              <li>They upload their answer, a screenshot or a written note.</li>
+              <li>They send their answer back to you.</li>
               <li>The AI pre-check reads it and flags gaps for you, never for them.</li>
               <li>You approve it or send it back with notes.</li>
             </ol>

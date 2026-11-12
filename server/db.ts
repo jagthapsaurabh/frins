@@ -616,6 +616,16 @@ export function initDatabaseAndSeed() {
       recorded_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS ai_settings (
+      id TEXT PRIMARY KEY,
+      provider TEXT NOT NULL DEFAULT 'none',
+      model TEXT,
+      api_key TEXT,
+      base_url TEXT,
+      updated_at TEXT,
+      updated_by TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS leads (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -2097,7 +2107,7 @@ export function initDatabaseAndSeed() {
     'usr_learner_aarav',
     'DISCOVERY_RESPONSE',
     'sess_aarav_01',
-    'Canonical 34-Question Discovery Baseline',
+    'Discovery Baseline',
     'Baseline self-reported process and execution profile across all 5 FRINS domains (100% completion).',
     'COMP-PROC-01',
     'LOW_REFLECTION',
@@ -2140,7 +2150,7 @@ export function initDatabaseAndSeed() {
     'usr_learner_priya',
     'DISCOVERY_RESPONSE',
     'sess_priya_01',
-    'Canonical 34-Question Discovery Baseline',
+    'Discovery Baseline',
     'Initial Discovery responses with contradiction flags between stated risk rules and averaging-down habits.',
     'COMP-RISK-02',
     'LOW_REFLECTION',
@@ -2344,7 +2354,7 @@ export function initDatabaseAndSeed() {
       'crs_heikin_ashi_01',
       'Find Heikin-Ashi Trend Continuation & Reversal Signals on Chart',
       'CHART_CONCEPT_LAB',
-      '1. State the Heikin-Ashi Close & Open formula.\n2. Upload a chart marking strong uptrend Heikin-Ashi candles (no lower shadows/wicks).\n3. Mark a Heikin-Ashi Doji exhaustion candle and explain stop-loss placement vs. synthetic HA values.',
+      '1. State the Heikin-Ashi Close & Open formula.\n2. Send a chart marking strong uptrend Heikin-Ashi candles (no lower shadows/wicks).\n3. Mark a Heikin-Ashi Doji exhaustion candle and explain stop-loss placement vs. synthetic HA values.',
       'Must state HA Close = (O+H+L+C)/4 & HA Open = midpoint of prior HA body, identify consecutive green HA bodies with no lower shadows, mark a Doji/indecision candle with both wicks, and note that HA prices are synthetic.',
       'COMP-PROC-01',
       'SUBMITTED',

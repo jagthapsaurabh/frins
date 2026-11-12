@@ -82,7 +82,7 @@ const navForRole = (role: string | undefined): NavItem[] => {
   return [
     { path: '/dashboard', label: 'Overview', icon: <LayoutDashboard size={17} />, group: 'Learning', exact: true },
     { path: '/dashboard/courses', label: 'My courses', icon: <BookOpen size={17} />, group: 'Learning' },
-    { path: '/dashboard/tasks', label: 'Tasks & uploads', icon: <ClipboardList size={17} />, group: 'Learning' },
+    { path: '/dashboard/tasks', label: 'Tasks', icon: <ClipboardList size={17} />, group: 'Learning' },
     { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' },
     { path: '/dashboard/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Learning' },
     { path: '/dashboard/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Learning' },

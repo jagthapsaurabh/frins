@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { StaffSignInGate } from '../components/StaffSignInGate';
 import { PageHead, StatusPill, TableShell } from '../components/console/ConsoleUI';
 import { formatDateTime } from '../utils/dates';
-import { Beaker, Check, Download, FlaskConical, ShieldAlert, Sparkles } from 'lucide-react';
+import { Beaker, Check, Download, FlaskConical, Plug, ShieldAlert, Sparkles } from 'lucide-react';
 
 const human = (value?: string) => {
   const words = (value || '—').replace(/_/g, ' ').toLowerCase();
@@ -11,23 +11,34 @@ const human = (value?: string) => {
 };
 
 /**
- * The team's view of the AI layer: what ran, what the safety gate stopped, and
- * what is cleared to go into the training set. Nothing here decides a learner's
- * outcome. A person always signs off.
+ * The team's view of the AI layer: which provider is connected, what ran, what
+ * the safety gate stopped, and what is cleared for training.
  */
 export const AIPipelinePage: React.FC = () => {
   const { user, authFetch } = useAuth();
   const [aiStatus, setAiStatus] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(null);
   const [runs, setRuns] = useState<any[]>([]);
   const [trainingData, setTrainingData] = useState<any>(null);
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [notice, setNotice] = useState<string>('');
 
+  // Connection form
+  const [provider, setProvider] = useState('NONE');
+  const [model, setModel] = useState('');
+  const [baseUrl, setBaseUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connectionNote, setConnectionNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Safety checker
   const [sampleText, setSampleText] = useState<string>(
     'Contact the participant at participant@example.com or +91 9000000000. Buy NIFTY calls with a target price of Rs 450 for guaranteed returns.'
   );
   const [safetyTestResult, setSafetyTestResult] = useState<any>(null);
 
+  // Training data
   const [curationRunId, setCurationRunId] = useState<string>('');
   const [curationSplit, setCurationSplit] = useState<'TRAIN' | 'VALIDATION' | 'TEST'>('TRAIN');
   const [consentChecked, setConsentChecked] = useState<boolean>(true);
@@ -39,10 +50,11 @@ export const AIPipelinePage: React.FC = () => {
   const [jsonlPreview, setJsonlPreview] = useState<string>('');
 
   const loadAll = async () => {
-    const [statusRes, runsRes, trainRes] = await Promise.all([
+    const [statusRes, runsRes, trainRes, settingsRes] = await Promise.all([
       authFetch('/api/ai/status'),
       authFetch('/api/ai/runs'),
-      authFetch('/api/ai/training/examples')
+      authFetch('/api/ai/training/examples'),
+      authFetch('/api/admin/ai/settings')
     ]);
 
     if (statusRes.ok) setAiStatus(await statusRes.json());
@@ -54,11 +66,72 @@ export const AIPipelinePage: React.FC = () => {
       setCurationRunId((current: string) => current || rows[0]?.id || '');
     }
     if (trainRes.ok) setTrainingData(await trainRes.json());
+    if (settingsRes.ok) {
+      const data = await settingsRes.json();
+      const saved = data.settings;
+      setSettings(saved);
+      setProvider(saved.provider || 'NONE');
+      setModel(saved.model || '');
+      setBaseUrl(saved.baseUrl || '');
+    }
   };
 
   useEffect(() => {
     loadAll();
   }, [user]);
+
+  const saveConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setConnectionNote(null);
+    const res = await authFetch('/api/admin/ai/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ provider, model, baseUrl, apiKey: apiKey || undefined })
+    });
+    const json = await res.json().catch(() => ({}));
+    setSaving(false);
+    if (!res.ok || !json.success) {
+      setConnectionNote({ ok: false, text: json.error || 'Could not save the connection.' });
+      return;
+    }
+    setApiKey('');
+    setSettings(json.settings);
+    setProvider(json.settings.provider);
+    setModel(json.settings.model || '');
+    setBaseUrl(json.settings.baseUrl || '');
+    setConnectionNote({ ok: true, text: 'Saved. New AI runs will use this provider.' });
+    loadAll();
+  };
+
+  const testConnection = async () => {
+    setTesting(true);
+    setConnectionNote(null);
+    const res = await authFetch('/api/admin/ai/test', { method: 'POST' });
+    const json = await res.json().catch(() => ({}));
+    setTesting(false);
+    if (!res.ok || !json.success) {
+      setConnectionNote({ ok: false, text: json.error || 'The provider did not answer.' });
+      return;
+    }
+    setConnectionNote({ ok: true, text: `The provider answered in ${json.latencyMs} ms.` });
+  };
+
+  const disconnect = async () => {
+    setSaving(true);
+    const res = await authFetch('/api/admin/ai/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ provider: 'NONE', clearKey: true, model: '', baseUrl: '' })
+    });
+    setSaving(false);
+    if (res.ok) {
+      setProvider('NONE');
+      setModel('');
+      setBaseUrl('');
+      setApiKey('');
+      setConnectionNote({ ok: true, text: 'Disconnected.' });
+      loadAll();
+    }
+  };
 
   const runSafetyTest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,7 +183,7 @@ export const AIPipelinePage: React.FC = () => {
     const res = await authFetch('/api/ai/training/dataset.jsonl');
     if (res.ok) {
       setJsonlPreview(await res.text());
-      setNotice('Dataset exported and the export is on the audit trail.');
+      setNotice('Dataset exported. The export is on the audit trail.');
     } else {
       setNotice('A guide or admin can export the dataset.');
     }
@@ -131,14 +204,15 @@ export const AIPipelinePage: React.FC = () => {
   const splits = trainingData?.splits || {};
   const benchmark = trainingData?.benchmarks?.[0];
   const passedCases = (benchmark?.cases || []).filter((item: any) => item.passed).length;
-  const model = aiStatus?.modelName || 'frins-deterministic-mock-v1';
-  const live = aiStatus?.liveProviderConfigured;
+  const connected = Boolean(settings?.hasKey && provider !== 'NONE');
+  const providerMeta = (settings?.providers || []).find((item: any) => item.value === provider);
+  const statusLabel = settings?.providerLabel || 'Not connected';
 
   return (
     <div>
       <PageHead
         title="AI engine"
-        meta={aiStatus ? `Running ${live ? 'a live model' : 'the offline mock'}` : undefined}
+        meta={connected ? `Connected to ${statusLabel}` : 'No provider connected'}
         actions={
           <button type="button" className="btn btn-secondary" onClick={runBenchmark}>
             <FlaskConical size={14} /> Run benchmark
@@ -151,14 +225,14 @@ export const AIPipelinePage: React.FC = () => {
       <div className="kpi-grid" style={{ marginBottom: 14 }}>
         <div className="kpi">
           <span className="kpi-icon">
-            <Sparkles size={14} />
+            <Plug size={14} />
           </span>
           <span className="kpi-body">
-            <span className="kpi-label">Model</span>
+            <span className="kpi-label">Provider</span>
             <span className="kpi-value" style={{ fontSize: 14 }}>
-              {model}
+              {statusLabel}
             </span>
-            <span className="kpi-hint">{human(aiStatus?.providerMode)}</span>
+            <span className="kpi-hint">{connected ? settings?.model || 'Default model' : 'Add a key below'}</span>
           </span>
         </div>
         <div className="kpi">
@@ -168,7 +242,7 @@ export const AIPipelinePage: React.FC = () => {
           <span className="kpi-body">
             <span className="kpi-label">Runs recorded</span>
             <span className="kpi-value">{runs.length}</span>
-            <span className="kpi-hint">Every run keeps its trace</span>
+            <span className="kpi-hint">Each run keeps its trace</span>
           </span>
         </div>
         <div className="kpi">
@@ -180,7 +254,7 @@ export const AIPipelinePage: React.FC = () => {
             <span className="kpi-value">
               {benchmark ? `${passedCases}/${benchmark.cases.length}` : 'Not run'}
             </span>
-            <span className="kpi-hint">Gold cases passing</span>
+            <span className="kpi-hint">Checks passing</span>
           </span>
         </div>
         <div className="kpi">
@@ -199,6 +273,122 @@ export const AIPipelinePage: React.FC = () => {
 
       <div className="detail-grid">
         <div className="detail-main">
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>
+                <Plug size={13} /> Connection
+              </h2>
+              <span className="row-sub" style={{ margin: 0 }}>
+                {connected ? settings?.maskedKey : 'No key saved'}
+              </span>
+            </div>
+
+            <form onSubmit={saveConnection}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="aiProvider">
+                  Provider
+                </label>
+                <select
+                  id="aiProvider"
+                  className="form-select"
+                  value={provider}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setProvider(next);
+                    const meta = (settings?.providers || []).find((item: any) => item.value === next);
+                    if (meta) {
+                      setModel(meta.model || '');
+                      setBaseUrl(meta.baseUrl || '');
+                    }
+                  }}
+                >
+                  <option value="NONE">Not connected</option>
+                  {(settings?.providers || [])
+                    .filter((item: any) => item.value !== 'NONE')
+                    .map((item: any) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              {provider !== 'NONE' && (
+                <>
+                  <div className="form-row-2">
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="aiModel">
+                        Model
+                      </label>
+                      <input
+                        id="aiModel"
+                        className="form-input"
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        placeholder={providerMeta?.model || 'Model name'}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="aiKey">
+                        API key
+                      </label>
+                      <input
+                        id="aiKey"
+                        type="password"
+                        className="form-input"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                        placeholder={settings?.hasKey ? 'Saved. Type a new key to replace it.' : 'Paste the key'}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="aiBaseUrl">
+                      Base URL
+                    </label>
+                    <input
+                      id="aiBaseUrl"
+                      className="form-input"
+                      value={baseUrl}
+                      onChange={(e) => setBaseUrl(e.target.value)}
+                      placeholder="https://api.openai.com/v1"
+                    />
+                    <p className="form-hint">Change it when the provider is proxied or self hosted.</p>
+                  </div>
+                </>
+              )}
+
+              {connectionNote && (
+                <p
+                  className="form-hint"
+                  style={{ color: connectionNote.ok ? 'var(--success-text)' : 'var(--danger-text)', marginBottom: 8 }}
+                >
+                  {connectionNote.text}
+                </p>
+              )}
+
+              <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Saving' : 'Save connection'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={testConnection}
+                  disabled={testing || !connected || Boolean(apiKey)}
+                >
+                  {testing ? 'Checking' : 'Test'}
+                </button>
+                {connected && (
+                  <button type="button" className="link-button" onClick={disconnect} disabled={saving}>
+                    Disconnect
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+
           <section className="panel-card">
             <div className="panel-head">
               <h2>Recent runs</h2>
@@ -307,7 +497,10 @@ export const AIPipelinePage: React.FC = () => {
             </form>
 
             {safetyTestResult && (
-              <div className={`feedback-note ${safetyTestResult.passedSafetyGate ? '' : 'danger'}`} style={{ marginTop: 12 }}>
+              <div
+                className={`feedback-note ${safetyTestResult.passedSafetyGate ? '' : 'danger'}`}
+                style={{ marginTop: 12 }}
+              >
                 <strong>{safetyTestResult.passedSafetyGate ? 'Clear to send' : 'Blocked'}</strong>
                 <p>
                   {safetyTestResult.passedSafetyGate
@@ -434,17 +627,6 @@ export const AIPipelinePage: React.FC = () => {
               ))}
               {!benchmark && <p className="section-note">Run the benchmark to fill this in.</p>}
             </div>
-          </section>
-
-          <section className="panel-card">
-            <div className="panel-head">
-              <h2>What is not built</h2>
-            </div>
-            <p className="prose-block muted">
-              A live model writes the draft and the rules below it decide what is allowed. The team trains
-              nothing online from chats. No FRINS model weights exist yet. Fine-tuning stays locked until the
-              curated set is big enough and an owner signs off.
-            </p>
           </section>
         </div>
       </div>

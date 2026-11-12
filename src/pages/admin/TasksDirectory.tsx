@@ -134,7 +134,7 @@ export const TasksDirectory: React.FC = () => {
         columns={[
           { label: 'Learner' },
           { label: 'Task' },
-          { label: 'Given' },
+          { label: 'Given', hide: 'md' },
           { label: 'Due' },
           { label: 'Submitted' },
           { label: 'Status', width: 130 },
@@ -151,7 +151,7 @@ export const TasksDirectory: React.FC = () => {
               <span className="row-title">{row.title}</span>
               <span className="row-sub">{row.course_title || 'General task'}</span>
             </td>
-            <td data-label="Given" className="row-sub" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+            <td data-label="Given" className="row-sub col-md" style={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
               {short(row.assigned_at)}
             </td>
             <td data-label="Due" className="row-sub" style={{ whiteSpace: 'nowrap' }}>

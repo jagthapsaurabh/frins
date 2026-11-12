@@ -25,6 +25,7 @@ import {
   NewCommunityPage
 } from './pages/CommunityPages';
 import { CoursePlayerPage } from './pages/learner/CoursePlayerPage';
+import { LearnerTaskPage } from './pages/learner/LearnerTaskPage';
 import { SignInPage } from './pages/SignInPage';
 import { StaffSignInPage } from './pages/StaffSignInPage';
 import { decideDashboardAccess, DASHBOARD_ROLES } from './auth/guard';
@@ -92,6 +93,16 @@ export const EcosystemShell: React.FC = () => {
           <RequireLearner>
             <AppShell>
               <CoursePlayerPage />
+            </AppShell>
+          </RequireLearner>
+        }
+      />
+      <Route
+        path="/dashboard/tasks/:taskId"
+        element={
+          <RequireLearner>
+            <AppShell>
+              <LearnerTaskPage />
             </AppShell>
           </RequireLearner>
         }

@@ -565,7 +565,7 @@ export const LearnerDossierPage: React.FC = () => {
                 Tasks &amp; reviews
               </span>
               <h3 className="admin-card-title">Work history</h3>
-              <p className="admin-card-copy">When each task was given, uploaded and reviewed.</p>
+              <p className="admin-card-copy">When each task was given, sent and reviewed.</p>
 
               {tasks.length === 0 && <p className="admin-muted">No task given yet.</p>}
 
@@ -587,7 +587,7 @@ export const LearnerDossierPage: React.FC = () => {
                         {formatDateTime(task.due_date)}
                       </span>
                       <span>
-                        <em>Uploaded</em>
+                        <em>Sent</em>
                         {task.submitted_at ? formatDateTime(task.submitted_at) : 'Not yet'}
                       </span>
                       <span>

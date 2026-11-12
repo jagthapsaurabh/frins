@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   Download,
+  ImagePlus,
   ExternalLink,
   FileText,
   Film,
@@ -14,7 +15,8 @@ import {
   ListChecks,
   Lock,
   PlayCircle,
-  Star
+  Star,
+  X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatDateTime, youtubeEmbedUrl } from '../../utils/dates';
@@ -60,6 +62,9 @@ export const CoursePlayerPage: React.FC = () => {
   const [fileName, setFileName] = useState('');
   const [fileData, setFileData] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [checks, setChecks] = useState<any[]>([]);
+  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [results, setResults] = useState<Record<string, any>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +93,33 @@ export const CoursePlayerPage: React.FC = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  const loadChecks = useCallback(async () => {
+    const res = await authFetch('/api/learner/dashboard');
+    if (!res.ok) return;
+    const json = await res.json();
+    setChecks((json.courseQuestions || []).filter((q: any) => q.course_id === courseId));
+  }, [authFetch, courseId]);
+
+  useEffect(() => {
+    loadChecks();
+  }, [loadChecks]);
+
+  const answerCheck = async (questionId: string) => {
+    const selectedOptionIndex = answers[questionId];
+    if (selectedOptionIndex === undefined) return;
+    const res = await authFetch(`/api/learner/course-questions/${questionId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ selectedOptionIndex })
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setSubmitError(json.error || 'Could not save that answer.');
+      return;
+    }
+    setResults((prev) => ({ ...prev, [questionId]: json.attempt || json }));
+    loadChecks();
+  };
 
   const steps: any[] = data?.steps || [];
   const activeStep = useMemo(() => steps.find((step) => step.id === activeStepId) || null, [steps, activeStepId]);
@@ -126,19 +158,17 @@ export const CoursePlayerPage: React.FC = () => {
     }
   };
 
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const pickChart = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setSubmitError('That file is over 5 MB. Upload a smaller one, or describe your work in the box.');
+    if (file.size > 6 * 1024 * 1024) {
+      setSubmitError('That image is over 6 MB. A smaller screenshot is enough.');
       return;
     }
+    setFileName(file.name);
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setFileName(file.name);
-        setFileData(reader.result);
-      }
+      if (typeof reader.result === 'string') setFileData(reader.result);
     };
     reader.readAsDataURL(file);
   };
@@ -150,7 +180,11 @@ export const CoursePlayerPage: React.FC = () => {
     setSubmitError(null);
     const res = await authFetch(`/api/learner/courses/${courseId}/steps/${activeStep.id}/submit`, {
       method: 'POST',
-      body: JSON.stringify({ submissionText: answer, uploadedFileName: fileName, uploadedFileData: fileData })
+      body: JSON.stringify({
+        submissionText: answer,
+        uploadedFileName: fileName || undefined,
+        uploadedFileData: fileData || undefined
+      })
     });
     const json = await res.json();
     setBusy(false);
@@ -428,13 +462,24 @@ export const CoursePlayerPage: React.FC = () => {
                           />
                         </div>
                         <div className="form-group">
-                          <label className="form-label" htmlFor="step-file">
-                            Attach a screenshot or file
+                          <label className="btn btn-secondary" htmlFor="step-chart" style={{ cursor: 'pointer' }}>
+                            <ImagePlus size={14} /> {fileName ? 'Change chart' : 'Add your chart'}
                           </label>
-                          <input id="step-file" className="form-input" type="file" onChange={handleFile} />
+                          <input id="step-chart" type="file" accept="image/*" onChange={pickChart} hidden />
                           {fileName && (
-                            <p className="form-hint">
-                              <Check size={13} /> {fileName}
+                            <p className="file-chip" style={{ marginTop: 6 }}>
+                              {fileName}
+                              <button
+                                type="button"
+                                className="icon-quiet"
+                                onClick={() => {
+                                  setFileName('');
+                                  setFileData('');
+                                }}
+                                aria-label="Remove the image"
+                              >
+                                <X size={12} />
+                              </button>
                             </p>
                           )}
                         </div>
@@ -482,6 +527,63 @@ export const CoursePlayerPage: React.FC = () => {
             )}
           </section>
         </div>
+
+        {checks.length > 0 && (
+          <section className="panel-card" style={{ marginTop: 16 }}>
+            <div className="panel-head">
+              <div>
+                <h2>Course check</h2>
+                <p>One answer per question. Your mentor sees how you did.</p>
+              </div>
+              <span className="section-note">{checks.filter((q: any) => q.lastAttempt).length}/{checks.length} answered</span>
+            </div>
+
+            <div className="quiz-list">
+              {checks.map((question: any) => {
+                const result = results[question.id] || question.lastAttempt;
+                const chosen = answers[question.id] ?? (result ? result.selectedOptionIndex : undefined);
+                const correctIndex = question.correctOptionIndex ?? result?.correctOptionIndex;
+                return (
+                  <div key={question.id} className="quiz-item">
+                    <p className="quiz-question">{question.prompt}</p>
+                    <div className="quiz-options">
+                      {(question.options || []).map((option: string, index: number) => {
+                        const isChosen = chosen === index;
+                        const isRight = Boolean(result) && correctIndex === index;
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            className={`quiz-option${isChosen ? ' chosen' : ''}${isRight ? ' right' : ''}`}
+                            onClick={() => setAnswers((prev) => ({ ...prev, [question.id]: index }))}
+                            disabled={Boolean(result)}
+                          >
+                            <span className="quiz-letter">{String.fromCharCode(65 + index)}</span>
+                            {option}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {result ? (
+                      <p className={`quiz-note ${result.isCorrect ? 'ok' : 'no'}`}>
+                        {result.isCorrect ? 'Correct.' : 'Not quite.'} {question.explanation}
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={chosen === undefined}
+                        onClick={() => answerCheck(question.id)}
+                      >
+                        Send answer
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
     </div>
   );

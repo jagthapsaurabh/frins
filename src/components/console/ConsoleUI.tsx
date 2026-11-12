@@ -75,7 +75,7 @@ export const FilterSelect: React.FC<{
 );
 
 export const TableShell: React.FC<{
-  columns: Array<{ label: string; width?: number | string; align?: 'right' }>;
+  columns: Array<{ label: string; width?: number | string; align?: 'right'; hide?: 'md' }>;
   children: React.ReactNode;
   loading?: boolean;
   empty?: React.ReactNode;
@@ -88,6 +88,7 @@ export const TableShell: React.FC<{
           {columns.map((column) => (
             <th
               key={column.label}
+              className={column.hide === 'md' ? 'col-md' : undefined}
               style={{ width: column.width, textAlign: column.align === 'right' ? 'right' : undefined }}
             >
               {column.label}
