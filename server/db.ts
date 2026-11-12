@@ -1062,8 +1062,59 @@ export function initDatabaseAndSeed() {
     );
   `);
 
+  // Course steps turn a course from a list of module titles into real lessons.
+  // Every step is one screen the learner works through in order; a step only
+  // opens once the one before it is finished.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS course_steps (
+      id TEXT PRIMARY KEY,
+      course_id TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 1,
+      title TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'TEXT',
+      summary TEXT,
+      content TEXT,
+      resource_url TEXT,
+      file_name TEXT,
+      file_data TEXT,
+      due_days INTEGER NOT NULL DEFAULT 7,
+      estimated_minutes INTEGER NOT NULL DEFAULT 15,
+      is_milestone INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS learner_step_progress (
+      id TEXT PRIMARY KEY,
+      learner_id TEXT NOT NULL,
+      course_id TEXT NOT NULL,
+      step_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'COMPLETED',
+      task_id TEXT,
+      completed_at TEXT,
+      updated_at TEXT NOT NULL,
+      UNIQUE(learner_id, step_id)
+    );
+  `);
+
   const extraTaskColumns = [
     'ALTER TABLE learning_tasks ADD COLUMN course_id TEXT',
+    'ALTER TABLE learning_tasks ADD COLUMN step_id TEXT',
+    'ALTER TABLE learning_tasks ADD COLUMN assigned_at TEXT',
+    'ALTER TABLE users ADD COLUMN phone TEXT',
+    'ALTER TABLE users ADD COLUMN city TEXT',
+    'ALTER TABLE users ADD COLUMN notes TEXT',
+    'ALTER TABLE student_courses ADD COLUMN source TEXT',
+    'ALTER TABLE student_courses ADD COLUMN amount_paid INTEGER',
+    'ALTER TABLE student_courses ADD COLUMN payment_status TEXT',
+    'ALTER TABLE student_courses ADD COLUMN paid_at TEXT',
+    'ALTER TABLE student_courses ADD COLUMN completed_at TEXT',
+    'ALTER TABLE call_bookings ADD COLUMN learner_id TEXT',
+    'ALTER TABLE call_bookings ADD COLUMN staff_id TEXT',
+    'ALTER TABLE call_bookings ADD COLUMN topic TEXT',
+    'ALTER TABLE call_bookings ADD COLUMN requested_by_role TEXT',
+    'ALTER TABLE call_bookings ADD COLUMN updated_at TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN expected_criteria TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN uploaded_file_name TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN uploaded_file_data TEXT',
@@ -1079,6 +1130,19 @@ export function initDatabaseAndSeed() {
       // Column already exists
     }
   }
+
+  // Older tasks were created before we recorded the hand-out time. The due date
+  // is the best anchor we have, so back-date the assignment from it instead of
+  // leaving the column empty.
+  db.exec(`
+    UPDATE learning_tasks
+       SET assigned_at = strftime('%Y-%m-%dT04:30:00.000Z', COALESCE(due_date, submitted_at, reviewed_at, 'now'), '-3 days')
+     WHERE assigned_at IS NULL;
+
+    UPDATE student_courses SET source = 'ADMIN_ASSIGNED' WHERE source IS NULL;
+    UPDATE student_courses SET amount_paid = 0 WHERE amount_paid IS NULL;
+    UPDATE student_courses SET payment_status = 'NOT_APPLICABLE' WHERE payment_status IS NULL;
+  `);
 
   // Seed initial custom courses if empty
   const courseCount = (db.prepare('SELECT COUNT(*) as c FROM courses').get() as any).c;
@@ -1162,6 +1226,114 @@ export function initDatabaseAndSeed() {
       30,
       now
     );
+  }
+
+  // Seed the lesson steps for the starter courses so a new install already has
+  // something to click through. Admin can edit or delete all of it.
+  const stepCount = (db.prepare('SELECT COUNT(*) as c FROM course_steps').get() as any).c;
+  if (stepCount === 0) {
+    const insertStep = db.prepare(`
+      INSERT INTO course_steps (
+        id, course_id, position, title, kind, summary, content, resource_url,
+        due_days, estimated_minutes, is_milestone, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const seedSteps: Array<[string, number, string, string, string, string, string | null, number, number, number]> = [
+      [
+        'crs_heikin_ashi_01', 1, 'What a Heikin-Ashi candle actually is', 'TEXT',
+        'The averaged candle, and why it hides noise.',
+        'A normal candle uses the real open. A Heikin-Ashi candle uses an average instead.\n\nHA Close = (Open + High + Low + Close) / 4\nHA Open = (previous HA Open + previous HA Close) / 2\n\nBecause every value is smoothed, the chart is quieter than the real price chart. That is the point. You see trend better. You do not see the exact price you can trade at.\n\nKeep this in mind for the whole course: read the trend on the Heikin-Ashi chart, place orders at the real market price.',
+        null, 5, 10, 0
+      ],
+      [
+        'crs_heikin_ashi_01', 2, 'See it on a live chart', 'LINK',
+        'A short YouTube walkthrough of the formula on a real chart.',
+        'Open the video, then follow the formula on one candle of your own chart. Write the four numbers down before you move on.',
+        'https://www.youtube.com/results?search_query=heikin+ashi+candles+explained', 5, 20, 0
+      ],
+      [
+        'crs_heikin_ashi_01', 3, 'Trend, doji and the trap', 'TEXT',
+        'What a run of flat-bottom candles tells you, and where it lies.',
+        'A strong up move in Heikin-Ashi often prints candles with no lower wick. A careful reader treats that as trend confirmation, not as a buy signal.\n\nWhen the body shrinks and both wicks appear, the move is losing push. That is a doji in averaged form.\n\nThe trap: Heikin-Ashi values are synthetic. If your stop sits on the HA low, it may never fill. Place stops and entries against the real price.',
+        null, 5, 10, 0
+      ],
+      [
+        'crs_heikin_ashi_01', 4, 'Milestone: mark up one real chart', 'TASK',
+        'Show a clean trend run and one exhaustion signal on your own chart.',
+        'Open a chart you trade. Mark one run of at least five Heikin-Ashi candles in the same direction, and one place where the body shrank and the move stalled. Upload a screenshot and write four or five lines on what the chart said to you. This is the milestone for the course. Your mentor reviews it before the next course opens.',
+        null, 7, 45, 1
+      ],
+
+      [
+        'crs_strategy_lab_02', 1, 'A strategy is a written rule set', 'TEXT',
+        'The four lines every setup needs before you risk money.',
+        'A setup is not a feeling. Write it down in four lines:\n\n1. What has to be true before I look? (regime, time of day, instrument)\n2. What exactly triggers the entry?\n3. Where am I wrong? (invalidation, not a round number)\n4. How big is the position if that invalidation is hit?\n\nIf you cannot fill all four lines, you do not have a strategy yet. You have an idea.',
+        null, 6, 15, 0
+      ],
+      [
+        'crs_strategy_lab_02', 2, 'Position size from the stop', 'TEXT',
+        'Size the trade from the risk, never the other way around.',
+        'Decide the money you are willing to lose on the trade first. Then divide it by the distance between entry and invalidation.\n\nExample: risk Rs 2,000, stop distance 10 points, one point is Rs 20 per lot -> two lots is too much. One lot, and not every setup deserves the full risk.\n\nWrite the number down before the entry. After the entry it is a hope, not a rule.',
+        null, 6, 15, 0
+      ],
+      [
+        'crs_strategy_lab_02', 3, 'Watch a worked example', 'LINK',
+        'A YouTube walkthrough on building and testing a rule set.',
+        'Watch the first ten minutes, then write your own four-line rule set for a setup you already trade.',
+        'https://www.youtube.com/results?search_query=build+trading+strategy+rules+risk+management', 6, 25, 0
+      ],
+      [
+        'crs_strategy_lab_02', 4, 'Milestone: one setup, fully written', 'TASK',
+        'Submit the four-line rule set plus one filled qualification card.',
+        'Write the setup in the four-line format from lesson 1. Add one qualification card for a real session, with the position size worked out from the stop. Your mentor needs to see that the size follows from the risk, not from how confident you felt.',
+        null, 10, 60, 1
+      ],
+
+      [
+        'crs_concepts_03', 1, 'How a market actually moves', 'TEXT',
+        'Orders, not opinions, move price.',
+        'Price moves when an order is filled at a worse price than the last one. That is it.\n\nA bid is someone willing to buy. An ask is someone willing to sell. When buyers take the ask again and again, price rises. When they stop, price stalls.\n\nWatch the order book for five minutes without trading and you will see this happen in real time.',
+        null, 7, 12, 0
+      ],
+      [
+        'crs_concepts_03', 2, 'Support, resistance and why they are zones', 'TEXT',
+        'Levels are areas where orders clustered before.',
+        'A support line is not a magic number. It is an area where buyers stepped in before and might again. Draw it as a band, not a hairline.\n\nThe more often a level is tested, the less information a bounce gives you. A level that breaks cleanly and holds from the other side is usually the more useful signal.',
+        null, 7, 12, 0
+      ],
+      [
+        'crs_concepts_03', 3, 'Watch: reading a price chart', 'LINK',
+        'A YouTube session on trend, structure and volume.',
+        'After the video, open any index chart and mark two levels plus one trend. Do not place a trade.',
+        'https://www.youtube.com/results?search_query=how+to+read+price+charts+support+resistance', 7, 25, 0
+      ],
+      [
+        'crs_concepts_03', 4, 'Milestone: your first written thesis', 'TASK',
+        'One page on what you think happens next, and why.',
+        'Pick one stock or index. Write one page: what the business or index is, what the chart says, the level you are wrong at, and what would change your mind. No price targets without a reason. This is the first milestone in the course.',
+        null, 10, 60, 1
+      ]
+    ];
+
+    const nowIso = new Date().toISOString();
+    for (const [courseId, position, title, kind, summary, content, url, dueDays, minutes, milestone] of seedSteps) {
+      insertStep.run(
+        `stp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+        courseId,
+        position,
+        title,
+        kind,
+        summary,
+        content,
+        url,
+        dueDays,
+        minutes,
+        milestone,
+        nowIso,
+        nowIso
+      );
+    }
   }
 
   // Seed course-linked questions (Admin-editable question bank per course)

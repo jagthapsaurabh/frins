@@ -1367,7 +1367,10 @@ app.get('/api/learner/dashboard', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (r
   const rawStudentCourses = db
     .prepare(`
       SELECT sc.*, c.title as course_title, c.track as course_track, c.level as course_level,
-             c.description as course_description, c.modules_json
+             c.description as course_description, c.modules_json,
+             (SELECT COUNT(*) FROM course_steps s WHERE s.course_id = sc.course_id) AS step_count,
+             (SELECT COUNT(*) FROM learner_step_progress p
+                WHERE p.learner_id = sc.learner_id AND p.course_id = sc.course_id AND p.status = 'COMPLETED') AS steps_done
       FROM student_courses sc
       JOIN courses c ON c.id = sc.course_id
       WHERE sc.learner_id = ?
@@ -1379,6 +1382,17 @@ app.get('/api/learner/dashboard', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (r
     ...sc,
     modules: JSON.parse(sc.modules_json || '[]')
   }));
+
+  const learnerCalls = db
+    .prepare(
+      `SELECT b.id, b.topic, b.status, b.preferred_date, b.preferred_time, b.notes, b.created_at,
+              s.name AS staff_name, s.role AS staff_role
+         FROM call_bookings b
+         LEFT JOIN users s ON s.id = b.staff_id
+        WHERE b.learner_id = ?
+        ORDER BY b.preferred_date DESC, b.created_at DESC`
+    )
+    .all(targetLearnerId);
 
   // Course questions set by Admin. Correct answers/explanations are only released after the student answers.
   const assignedCourseIds = Array.from(new Set(assignedCourses.map((c) => c.course_id)));
@@ -1434,6 +1448,7 @@ app.get('/api/learner/dashboard', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (r
     allPDPVersions: formattedPDPs,
     assignedCourses,
     courseQuestions,
+    calls: learnerCalls,
     tasks: sanitizedStudentTasks,
     reflections,
     evidenceItems,
@@ -2574,7 +2589,8 @@ app.get('/api/admin/metrics', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req,
   const discoveryQuestions = getAllDiscoveryQuestions();
   const courses = (db.prepare('SELECT * FROM courses ORDER BY created_at DESC').all() as any[]).map((c) => ({
     ...c,
-    modules: JSON.parse(c.modules_json || '[]')
+    modules: JSON.parse(c.modules_json || '[]'),
+    step_count: (db.prepare('SELECT COUNT(*) AS n FROM course_steps WHERE course_id = ?').get(c.id) as any).n
   }));
   const courseQuestions = (db.prepare('SELECT * FROM course_questions ORDER BY created_at ASC').all() as any[]).map((q) => ({
     ...q,
@@ -2623,16 +2639,21 @@ app.get('/api/admin/learners', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
   const { page, limit, offset } = readPaging(req, 20);
   const q = req.query.q;
   const status = String(req.query.status || '').trim();
+  const track = String(req.query.track || '').trim();
 
   const where: string[] = ["u.role = 'LEARNER'"];
   const params: any[] = [];
   if (hasSearch(q)) {
-    where.push('(u.name LIKE ? OR u.email LIKE ?)');
-    params.push(likeTerm(q), likeTerm(q));
+    where.push("(u.name LIKE ? OR u.email LIKE ? OR COALESCE(u.phone, '') LIKE ?)");
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q));
   }
   if (status && status !== 'ALL') {
     where.push('u.account_status = ?');
     params.push(status);
+  }
+  if (track && track !== 'ALL') {
+    where.push('u.track = ?');
+    params.push(track);
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
@@ -2642,13 +2663,16 @@ app.get('/api/admin/learners', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
 
   const rows = db
     .prepare(
-      `SELECT u.id, u.name, u.email, u.track, u.account_status, u.created_at,
+      `SELECT u.id, u.name, u.email, u.track, u.account_status, u.created_at, u.phone, u.city,
+              g.name AS guide_name,
               (SELECT COUNT(*) FROM student_courses sc WHERE sc.learner_id = u.id) AS course_count,
+              (SELECT COALESCE(SUM(sc.amount_paid), 0) FROM student_courses sc WHERE sc.learner_id = u.id) AS paid_total,
               (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id) AS task_count,
               (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.learner_submission IS NOT NULL) AS submitted_count,
               (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.status IN ('REVIEWED', 'APPROVED')) AS reviewed_count,
               (SELECT MAX(COALESCE(t.submitted_at, t.reviewed_at, t.due_date)) FROM learning_tasks t WHERE t.learner_id = u.id) AS last_activity
        FROM users u
+       LEFT JOIN users g ON g.id = u.assigned_guide_id
        ${whereSql}
        ORDER BY (last_activity IS NULL) ASC, last_activity DESC, u.name ASC
        LIMIT ? OFFSET ?`
@@ -2731,6 +2755,8 @@ app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']),
   const { page, limit, offset } = readPaging(req, 20);
   const status = String(req.query.status || '').trim();
   const q = req.query.q;
+  const courseId = String(req.query.courseId || '').trim();
+  const range = String(req.query.range || '').trim().toUpperCase();
 
   const where: string[] = ['1 = 1'];
   const params: any[] = [];
@@ -2738,21 +2764,39 @@ app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']),
     where.push('t.status = ?');
     params.push(status);
   }
+  if (courseId && courseId !== 'ALL') {
+    where.push('t.course_id = ?');
+    params.push(courseId);
+  }
+  if (range === 'TODAY') {
+    where.push("date(COALESCE(t.submitted_at, t.assigned_at, t.due_date)) = date('now')");
+  } else if (range === 'WEEK') {
+    where.push("date(COALESCE(t.submitted_at, t.assigned_at, t.due_date)) >= date('now', '-7 day')");
+  } else if (range === 'MONTH') {
+    where.push("date(COALESCE(t.submitted_at, t.assigned_at, t.due_date)) >= date('now', '-30 day')");
+  } else if (range === 'DUE') {
+    where.push("t.status = 'ASSIGNED' AND t.due_date IS NOT NULL AND date(t.due_date) <= date('now', '+3 day')");
+  }
   if (hasSearch(q)) {
-    where.push('(t.title LIKE ? OR u.name LIKE ? OR u.email LIKE ?)');
-    params.push(likeTerm(q), likeTerm(q), likeTerm(q));
+    where.push("(t.title LIKE ? OR u.name LIKE ? OR u.email LIKE ? OR COALESCE(c.title, '') LIKE ?)");
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q), likeTerm(q));
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
   const total = (
     db
-      .prepare(`SELECT COUNT(*) AS c FROM learning_tasks t JOIN users u ON u.id = t.learner_id ${whereSql}`)
+      .prepare(`SELECT COUNT(*) AS c
+         FROM learning_tasks t
+         JOIN users u ON u.id = t.learner_id
+         LEFT JOIN courses c ON c.id = t.course_id
+         ${whereSql}`)
       .get(...params) as any
   ).c as number;
 
   const rows = db
     .prepare(
-      `SELECT t.id, t.title, t.status, t.course_id, t.learner_id, t.submitted_at, t.reviewed_at, t.due_date,
+      `SELECT t.id, t.title, t.status, t.course_id, t.step_id, t.learner_id,
+              t.assigned_at, t.submitted_at, t.reviewed_at, t.due_date,
               t.uploaded_file_name, t.guide_feedback, t.ai_review_json,
               u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
               c.title AS course_title,
@@ -2856,22 +2900,45 @@ app.get('/api/admin/bookings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req,
   const { page, limit, offset } = readPaging(req, 20);
   const status = String(req.query.status || '').trim();
   const q = req.query.q;
+  const source = String(req.query.source || '').trim().toUpperCase();
 
   const where: string[] = ['1 = 1'];
   const params: any[] = [];
   if (status && status !== 'ALL') {
-    where.push('status = ?');
+    where.push('b.status = ?');
     params.push(status);
   }
+  if (source === 'LEARNER') {
+    where.push('b.learner_id IS NOT NULL');
+  } else if (source === 'PUBLIC') {
+    where.push('b.learner_id IS NULL');
+  }
   if (hasSearch(q)) {
-    where.push('(participant_name LIKE ? OR participant_email LIKE ?)');
-    params.push(likeTerm(q), likeTerm(q));
+    where.push(
+      "(b.participant_name LIKE ? OR b.participant_email LIKE ? OR COALESCE(b.topic, '') LIKE ? OR COALESCE(learner.name, '') LIKE ?)"
+    );
+    params.push(likeTerm(q), likeTerm(q), likeTerm(q), likeTerm(q));
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
-  const total = (db.prepare(`SELECT COUNT(*) AS c FROM call_bookings ${whereSql}`).get(...params) as any).c as number;
+  const total = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM call_bookings b LEFT JOIN users learner ON learner.id = b.learner_id ${whereSql}`
+      )
+      .get(...params) as any
+  ).c as number;
   const rows = (db
-    .prepare(`SELECT * FROM call_bookings ${whereSql} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .prepare(
+      `SELECT b.*, staff.name AS staff_name, staff.role AS staff_role, learner.name AS learner_name,
+              learner.email AS learner_email
+         FROM call_bookings b
+         LEFT JOIN users staff ON staff.id = b.staff_id
+         LEFT JOIN users learner ON learner.id = b.learner_id
+         ${whereSql}
+         ORDER BY CASE WHEN b.status = 'REQUESTED' THEN 0 ELSE 1 END, b.created_at DESC
+         LIMIT ? OFFSET ?`
+    )
     .all(...params, limit, offset) as any[]).map((b) => ({
     ...b,
     phone: b.participant_phone,
@@ -3072,7 +3139,9 @@ app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req
   const rawCourses = db.prepare('SELECT * FROM courses ORDER BY created_at DESC').all() as any[];
   const courses = rawCourses.map((c) => ({
     ...c,
-    modules: JSON.parse(c.modules_json || '[]')
+    modules: JSON.parse(c.modules_json || '[]'),
+    step_count: (db.prepare('SELECT COUNT(*) AS n FROM course_steps WHERE course_id = ?').get(c.id) as any).n,
+    learner_count: (db.prepare('SELECT COUNT(*) AS n FROM student_courses WHERE course_id = ?').get(c.id) as any).n
   }));
 
   const courseQuestions = (db.prepare('SELECT * FROM course_questions ORDER BY created_at ASC').all() as any[]).map((q) => ({
@@ -3387,6 +3456,13 @@ app.post('/api/admin/courses/assign', requireRole(['ADMIN', 'CURRICULUM_OWNER', 
   const courseId = String(req.body?.courseId || '').trim();
   const learnerId = String(req.body?.learnerId || '').trim();
   const customNotes = String(req.body?.customNotes || '').trim();
+  const amountPaid = Math.max(0, Number(req.body?.amountPaid) || 0);
+  const rawPayment = String(req.body?.paymentStatus || '').toUpperCase();
+  const paymentStatus = ['PAID', 'PENDING', 'WAIVED', 'NOT_APPLICABLE'].includes(rawPayment)
+    ? rawPayment
+    : amountPaid > 0
+      ? 'PAID'
+      : 'NOT_APPLICABLE';
 
   if (!courseId || !learnerId) {
     return res.status(400).json({ success: false, error: 'Both courseId and learnerId are required.' });
@@ -3396,9 +3472,21 @@ app.post('/api/admin/courses/assign', requireRole(['ADMIN', 'CURRICULUM_OWNER', 
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO student_courses (id, course_id, learner_id, custom_notes, progress_pct, status, assigned_by, assigned_at)
-    VALUES (?, ?, ?, ?, 0, 'ACTIVE', ?, ?)
-  `).run(id, courseId, learnerId, customNotes || 'Customised course assigned by Admin.', req.user!.id, now);
+    INSERT INTO student_courses (id, course_id, learner_id, custom_notes, progress_pct, status, assigned_by, assigned_at,
+                                 source, amount_paid, payment_status, paid_at)
+    VALUES (?, ?, ?, ?, 0, 'ACTIVE', ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    courseId,
+    learnerId,
+    customNotes || 'Customised course assigned by Admin.',
+    req.user!.id,
+    now,
+    amountPaid > 0 ? 'PURCHASED' : 'ADMIN_ASSIGNED',
+    amountPaid,
+    paymentStatus,
+    amountPaid > 0 ? now : null
+  );
 
   const assignedCourse = db.prepare('SELECT title FROM courses WHERE id = ?').get(courseId) as any;
   notifyUser(
@@ -3612,8 +3700,8 @@ app.post('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'])
   db.prepare(`
     INSERT INTO learning_tasks (
       id, learner_id, pdp_version_id, course_id, title, category, instructions, expected_criteria,
-      competency_code, status, due_date
-    ) VALUES (?, ?, 'pdp_aarav_v1', ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?)
+      competency_code, status, due_date, assigned_at
+    ) VALUES (?, ?, 'pdp_aarav_v1', ?, ?, ?, ?, ?, ?, 'ASSIGNED', ?, ?)
   `).run(
     taskId,
     learnerId,
@@ -3623,7 +3711,8 @@ app.post('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'])
     instructions,
     expectedCriteria || instructions,
     competencyCode,
-    dueDate
+    dueDate,
+    now
   );
 
   writeAuditEvent({
@@ -3683,6 +3772,23 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
     WHERE id = ?
   `).run(status, guideFeedback, now, taskId);
 
+  // A course milestone only opens the next step when a mentor passes it.
+  if (task.step_id) {
+    if (status === 'REVIEWED') {
+      markStepCompleted({
+        learnerId: task.learner_id,
+        courseId: task.course_id,
+        stepId: task.step_id,
+        taskId,
+        note: guideFeedback
+      });
+    } else {
+      db.prepare(
+        "UPDATE learner_step_progress SET status = 'IN_PROGRESS', updated_at = ? WHERE learner_id = ? AND step_id = ?"
+      ).run(now, task.learner_id, task.step_id);
+    }
+  }
+
   // Also add the official review message to the task chat thread so the student sees it immediately
   const msgId = `msg_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   db.prepare(`
@@ -3723,7 +3829,7 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
 app.patch('/api/admin/bookings/:bookingId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { bookingId } = req.params;
   const status = String(req.body?.status || '').toUpperCase();
-  const allowed = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
+  const allowed = ['REQUESTED', 'NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'RESCHEDULED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
 
   if (!allowed.includes(status)) {
     return res.status(400).json({ success: false, error: `Status must be one of: ${allowed.join(', ')}.` });
@@ -3734,7 +3840,41 @@ app.patch('/api/admin/bookings/:bookingId', requireRole(['ADMIN', 'CURRICULUM_OW
     return res.status(404).json({ success: false, error: 'Booking not found.' });
   }
 
-  db.prepare('UPDATE call_bookings SET status = ? WHERE id = ?').run(status, bookingId);
+  const staffId = req.body?.staffId !== undefined ? String(req.body.staffId).trim() || null : booking.staff_id;
+  if (staffId && !db.prepare("SELECT id FROM users WHERE id = ? AND role IN ('ADMIN', 'GUIDE', 'CURRICULUM_OWNER')").get(staffId)) {
+    return res.status(400).json({ success: false, error: 'That person cannot take calls.' });
+  }
+  const preferredDate =
+    req.body?.preferredDate !== undefined ? String(req.body.preferredDate).trim() : booking.preferred_date;
+  const preferredTime =
+    req.body?.preferredTime !== undefined ? String(req.body.preferredTime).trim() : booking.preferred_time;
+  const topic = req.body?.topic !== undefined ? String(req.body.topic).trim() : booking.topic;
+  const notes = req.body?.notes !== undefined ? String(req.body.notes).trim() : booking.notes;
+
+  db.prepare(
+    `UPDATE call_bookings
+        SET status = ?, staff_id = ?, preferred_date = ?, preferred_time = ?, topic = ?, notes = ?, updated_at = ?
+      WHERE id = ?`
+  ).run(status, staffId, preferredDate, preferredTime, topic, notes, new Date().toISOString(), bookingId);
+
+  if (booking.learner_id) {
+    const verb =
+      status === 'CONFIRMED'
+        ? 'confirmed'
+        : status === 'CANCELLED'
+          ? 'cancelled'
+          : status === 'RESCHEDULED'
+            ? 'moved'
+            : status === 'COMPLETED'
+              ? 'marked done'
+              : 'updated';
+    notifyUser(
+      booking.learner_id,
+      `Your call is ${status === 'CONFIRMED' ? 'confirmed' : status.toLowerCase()}`,
+      `The ${preferredDate} call was ${verb}${staffId ? ' with your mentor' : ''}. ${topic || ''}`.trim(),
+      { id: req.user!.id, name: req.user!.name }
+    );
+  }
 
   writeAuditEvent({
     actorUserId: req.user!.id,
@@ -3742,7 +3882,7 @@ app.patch('/api/admin/bookings/:bookingId', requireRole(['ADMIN', 'CURRICULUM_OW
     action: 'CALL_BOOKING_UPDATED',
     entityType: 'CALL_BOOKING',
     entityId: bookingId,
-    details: { previousStatus: booking.status, nextStatus: status }
+    details: { previousStatus: booking.status, nextStatus: status, staffId, preferredDate, preferredTime }
   });
 
   res.json({ success: true, bookingId, status });
@@ -3972,6 +4112,937 @@ app.post('/api/admin/competencies', requireRole(['ADMIN', 'CURRICULUM_OWNER']), 
   });
 
   res.json({ success: true, code, rubricVersion });
+});
+
+
+// ============================================================================
+// COURSE STEPS, LEARNER DOSSIERS, DIRECT CALLS
+//
+// A course is a sequence of steps. A step can be reading, a video link, a PDF or
+// Word file, a plain link, or a practical task. Steps open one at a time: the
+// learner finishes step N and step N + 1 unlocks. Task steps are finished by a
+// mentor review, not by ticking a box.
+// ============================================================================
+
+const STEP_KINDS = ['TEXT', 'VIDEO', 'PDF', 'DOC', 'LINK', 'TASK'] as const;
+type StepKind = (typeof STEP_KINDS)[number];
+
+const normaliseKind = (value: unknown): StepKind => {
+  const kind = String(value || '').toUpperCase();
+  return (STEP_KINDS as readonly string[]).includes(kind) ? (kind as StepKind) : 'TEXT';
+};
+
+const listCourseSteps = (courseId: string) =>
+  db
+    .prepare('SELECT * FROM course_steps WHERE course_id = ? ORDER BY position ASC, created_at ASC')
+    .all(courseId) as any[];
+
+const publicStep = (step: any) => {
+  const { file_data, ...rest } = step;
+  return {
+    ...rest,
+    isMilestone: Boolean(rest.is_milestone),
+    hasFile: Boolean(file_data),
+    fileAvailable: Boolean(file_data) || Boolean(step.resource_url)
+  };
+};
+
+/** Recomputes the enrolment percentage from completed steps and keeps status in step. */
+const recalcEnrollmentProgress = (learnerId: string, courseId: string) => {
+  const enrollment = db
+    .prepare('SELECT * FROM student_courses WHERE learner_id = ? AND course_id = ?')
+    .get(learnerId, courseId) as any;
+  if (!enrollment) return null;
+
+  const total = (db.prepare('SELECT COUNT(*) AS c FROM course_steps WHERE course_id = ?').get(courseId) as any).c;
+  const done = (
+    db
+      .prepare(
+        "SELECT COUNT(*) AS c FROM learner_step_progress WHERE learner_id = ? AND course_id = ? AND status = 'COMPLETED'"
+      )
+      .get(learnerId, courseId) as any
+  ).c;
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const now = new Date().toISOString();
+  const nextStatus = total > 0 && done >= total ? 'COMPLETED' : enrollment.status;
+
+  db.prepare(
+    `UPDATE student_courses
+        SET progress_pct = ?, status = ?, completed_at = CASE WHEN ? = 'COMPLETED' THEN COALESCE(completed_at, ?) ELSE completed_at END
+      WHERE id = ?`
+  ).run(pct, nextStatus, nextStatus, now, enrollment.id);
+
+  return { pct, done, total, status: nextStatus };
+};
+
+const markStepCompleted = (params: {
+  learnerId: string;
+  courseId: string;
+  stepId: string;
+  taskId?: string | null;
+  note?: string | null;
+}) => {
+  const now = new Date().toISOString();
+  const existing = db
+    .prepare('SELECT id FROM learner_step_progress WHERE learner_id = ? AND step_id = ?')
+    .get(params.learnerId, params.stepId) as any;
+
+  if (existing) {
+    db.prepare(
+      `UPDATE learner_step_progress
+          SET status = 'COMPLETED', task_id = COALESCE(?, task_id), completed_at = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(params.taskId || null, now, now, existing.id);
+  } else {
+    db.prepare(
+      `INSERT INTO learner_step_progress (id, learner_id, course_id, step_id, status, task_id, completed_at, updated_at)
+       VALUES (?, ?, ?, ?, 'COMPLETED', ?, ?, ?)`
+    ).run(
+      `sp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      params.learnerId,
+      params.courseId,
+      params.stepId,
+      params.taskId || null,
+      now,
+      now
+    );
+  }
+
+  return recalcEnrollmentProgress(params.learnerId, params.courseId);
+};
+
+const learnerOwnsCourse = (learnerId: string, courseId: string) =>
+  Boolean(
+    db.prepare('SELECT id FROM student_courses WHERE learner_id = ? AND course_id = ?').get(learnerId, courseId)
+  );
+
+const activeLearnerIdsForStaff = (staffId: string) =>
+  (db.prepare("SELECT id FROM users WHERE role = 'LEARNER' AND assigned_guide_id = ?").all(staffId) as any[]).map(
+    (r) => r.id
+  );
+
+// ---------------------------------------------------------------------------
+// Admin: course builder
+// ---------------------------------------------------------------------------
+
+// A light course list for pickers. The overview payload is too heavy for a select.
+app.get('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT c.id, c.title, c.track, c.level, c.description, c.created_at,
+              (SELECT COUNT(*) FROM course_steps s WHERE s.course_id = c.id) AS step_count,
+              (SELECT COUNT(*) FROM student_courses sc WHERE sc.course_id = c.id) AS learner_count
+         FROM courses c
+        ORDER BY c.created_at DESC`
+    )
+    .all();
+  res.json({ success: true, rows });
+});
+
+app.get('/api/admin/courses/:courseId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const courseId = String(req.params.courseId);
+  const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+  if (!course) return res.status(404).json({ success: false, error: 'Course not found.' });
+
+  const steps = listCourseSteps(courseId);
+  const enrolled = (
+    db.prepare('SELECT COUNT(*) AS c FROM student_courses WHERE course_id = ?').get(courseId) as any
+  ).c;
+  const questions = (
+    db.prepare('SELECT COUNT(*) AS c FROM course_questions WHERE course_id = ?').get(courseId) as any
+  ).c;
+
+  res.json({
+    success: true,
+    course: { ...course, modules: JSON.parse(course.modules_json || '[]') },
+    steps: steps.map(publicStep),
+    enrolled,
+    questions
+  });
+});
+
+app.post('/api/admin/courses/:courseId/steps', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const courseId = String(req.params.courseId);
+  const course = db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId);
+  if (!course) return res.status(404).json({ success: false, error: 'Course not found.' });
+
+  const title = String(req.body?.title || '').trim();
+  const kind = normaliseKind(req.body?.kind);
+  const content = String(req.body?.content || '').trim();
+  const resourceUrl = String(req.body?.resourceUrl || '').trim();
+  const fileName = String(req.body?.fileName || '').trim();
+  const fileData = String(req.body?.fileData || '').trim();
+
+  if (!title) return res.status(400).json({ success: false, error: 'Give the step a title.' });
+  if (kind === 'TASK' && !content) {
+    return res.status(400).json({ success: false, error: 'A task step needs instructions the learner can follow.' });
+  }
+  if ((kind === 'VIDEO' || kind === 'LINK') && !resourceUrl) {
+    return res.status(400).json({ success: false, error: 'Add the video or page link.' });
+  }
+  if ((kind === 'PDF' || kind === 'DOC') && !fileData && !resourceUrl) {
+    return res.status(400).json({ success: false, error: 'Upload the file or paste a link to it.' });
+  }
+
+  const maxPosition = (
+    db.prepare('SELECT COALESCE(MAX(position), 0) AS p FROM course_steps WHERE course_id = ?').get(courseId) as any
+  ).p;
+  const now = new Date().toISOString();
+  const stepId = `stp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+  db.prepare(
+    `INSERT INTO course_steps (
+       id, course_id, position, title, kind, summary, content, resource_url, file_name, file_data,
+       due_days, estimated_minutes, is_milestone, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    stepId,
+    courseId,
+    maxPosition + 1,
+    title,
+    kind,
+    String(req.body?.summary || '').trim() || null,
+    content || null,
+    resourceUrl || null,
+    fileName || null,
+    fileData || null,
+    Number(req.body?.dueDays) > 0 ? Number(req.body.dueDays) : 7,
+    Number(req.body?.estimatedMinutes) > 0 ? Number(req.body.estimatedMinutes) : 15,
+    req.body?.isMilestone ? 1 : 0,
+    now,
+    now
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'COURSE_STEP_CREATED',
+    entityType: 'COURSE_STEP',
+    entityId: stepId,
+    details: { courseId, title, kind }
+  });
+
+  res.status(201).json({ success: true, stepId, step: publicStep(listCourseSteps(courseId).slice(-1)[0]) });
+});
+
+app.patch('/api/admin/course-steps/:stepId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const stepId = String(req.params.stepId);
+  const step = db.prepare('SELECT * FROM course_steps WHERE id = ?').get(stepId) as any;
+  if (!step) return res.status(404).json({ success: false, error: 'Step not found.' });
+
+  const title = req.body?.title !== undefined ? String(req.body.title).trim() : step.title;
+  if (!title) return res.status(400).json({ success: false, error: 'Give the step a title.' });
+
+  const kind = req.body?.kind !== undefined ? normaliseKind(req.body.kind) : (step.kind as StepKind);
+  const content = req.body?.content !== undefined ? String(req.body.content).trim() : step.content;
+  const resourceUrl =
+    req.body?.resourceUrl !== undefined ? String(req.body.resourceUrl).trim() : step.resource_url;
+
+  if ((kind === 'VIDEO' || kind === 'LINK') && !resourceUrl) {
+    return res.status(400).json({ success: false, error: 'Add the video or page link.' });
+  }
+  if (kind === 'TASK' && !content) {
+    return res.status(400).json({ success: false, error: 'A task step needs instructions.' });
+  }
+
+  db.prepare(
+    `UPDATE course_steps
+        SET title = ?, kind = ?, summary = ?, content = ?, resource_url = ?, file_name = ?, file_data = ?,
+            due_days = ?, estimated_minutes = ?, is_milestone = ?, updated_at = ?
+      WHERE id = ?`
+  ).run(
+    title,
+    kind,
+    req.body?.summary !== undefined ? String(req.body.summary).trim() || null : step.summary,
+    content || null,
+    resourceUrl || null,
+    req.body?.fileName !== undefined ? String(req.body.fileName).trim() || null : step.file_name,
+    req.body?.fileData !== undefined ? String(req.body.fileData).trim() || null : step.file_data,
+    req.body?.dueDays !== undefined ? Math.max(1, Number(req.body.dueDays) || 7) : step.due_days,
+    req.body?.estimatedMinutes !== undefined
+      ? Math.max(1, Number(req.body.estimatedMinutes) || 15)
+      : step.estimated_minutes,
+    req.body?.isMilestone !== undefined ? (req.body.isMilestone ? 1 : 0) : step.is_milestone,
+    new Date().toISOString(),
+    stepId
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'COURSE_STEP_UPDATED',
+    entityType: 'COURSE_STEP',
+    entityId: stepId,
+    details: { courseId: step.course_id, title, kind }
+  });
+
+  res.json({ success: true, step: publicStep(db.prepare('SELECT * FROM course_steps WHERE id = ?').get(stepId)) });
+});
+
+app.delete('/api/admin/course-steps/:stepId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const stepId = String(req.params.stepId);
+  const step = db.prepare('SELECT * FROM course_steps WHERE id = ?').get(stepId) as any;
+  if (!step) return res.status(404).json({ success: false, error: 'Step not found.' });
+
+  db.prepare('DELETE FROM learner_step_progress WHERE step_id = ?').run(stepId);
+  db.prepare('DELETE FROM course_steps WHERE id = ?').run(stepId);
+
+  const remaining = listCourseSteps(step.course_id);
+  remaining.forEach((row, index) => {
+    db.prepare('UPDATE course_steps SET position = ? WHERE id = ?').run(index + 1, row.id);
+  });
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'COURSE_STEP_DELETED',
+    entityType: 'COURSE_STEP',
+    entityId: stepId,
+    details: { courseId: step.course_id, title: step.title }
+  });
+
+  res.json({ success: true, removed: stepId });
+});
+
+app.post('/api/admin/courses/:courseId/steps/reorder', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const courseId = String(req.params.courseId);
+  const stepIds = Array.isArray(req.body?.stepIds) ? req.body.stepIds.map(String) : [];
+  const existing = listCourseSteps(courseId).map((s) => s.id);
+  if (stepIds.length !== existing.length || !stepIds.every((id: string) => existing.includes(id))) {
+    return res.status(400).json({ success: false, error: 'Send every step of the course, in the new order.' });
+  }
+
+  stepIds.forEach((id: string, index: number) => {
+    db.prepare('UPDATE course_steps SET position = ?, updated_at = ? WHERE id = ?').run(
+      index + 1,
+      new Date().toISOString(),
+      id
+    );
+  });
+
+  res.json({ success: true, steps: listCourseSteps(courseId).map(publicStep) });
+});
+
+// ---------------------------------------------------------------------------
+// Learner: the course player
+// ---------------------------------------------------------------------------
+
+app.get('/api/learner/courses/:courseId', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (req, res) => {
+  const courseId = String(req.params.courseId);
+  const learnerId =
+    req.user!.role === 'LEARNER' ? req.user!.id : String(req.query.learnerId || req.user!.id);
+
+  const course = db.prepare('SELECT * FROM courses WHERE id = ?').get(courseId) as any;
+  if (!course) return res.status(404).json({ success: false, error: 'Course not found.' });
+
+  const enrollment = db
+    .prepare('SELECT * FROM student_courses WHERE learner_id = ? AND course_id = ?')
+    .get(learnerId, courseId) as any;
+  if (!enrollment && req.user!.role === 'LEARNER') {
+    return res.status(403).json({ success: false, error: 'This course is not assigned to you.' });
+  }
+
+  const steps = listCourseSteps(courseId);
+  const progressRows = db
+    .prepare('SELECT * FROM learner_step_progress WHERE learner_id = ? AND course_id = ?')
+    .all(learnerId, courseId) as any[];
+
+  let previousDone = true;
+  const decorated = steps.map((step, index) => {
+    const row = progressRows.find((p) => p.step_id === step.id) || null;
+    const completed = row?.status === 'COMPLETED';
+    const unlocked = index === 0 ? true : previousDone;
+    previousDone = completed;
+    return {
+      ...publicStep(step),
+      status: completed ? 'COMPLETED' : row?.status || (unlocked ? 'OPEN' : 'LOCKED'),
+      completed_at: row?.completed_at || null,
+      task_id: row?.task_id || null,
+      unlocked
+    };
+  });
+
+  const completedCount = decorated.filter((s) => s.status === 'COMPLETED').length;
+  const nextStep = decorated.find((s) => s.unlocked && s.status !== 'COMPLETED') || null;
+
+  res.json({
+    success: true,
+    course: { ...course, modules: JSON.parse(course.modules_json || '[]') },
+    enrollment: enrollment
+      ? { ...enrollment, progress_pct: enrollment.progress_pct }
+      : null,
+    steps: decorated,
+    completedCount,
+    totalSteps: decorated.length,
+    progressPct: decorated.length ? Math.round((completedCount / decorated.length) * 100) : 0,
+    nextStepId: nextStep?.id || null
+  });
+});
+
+app.get('/api/learner/course-steps/:stepId/file', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const step = db.prepare('SELECT * FROM course_steps WHERE id = ?').get(String(req.params.stepId)) as any;
+  if (!step?.file_data) return res.status(404).json({ success: false, error: 'This step has no file.' });
+  res.json({ success: true, fileName: step.file_name, fileData: step.file_data });
+});
+
+app.post('/api/learner/courses/:courseId/steps/:stepId/complete', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (req, res) => {
+  const { courseId, stepId } = req.params;
+  const learnerId =
+    req.user!.role === 'LEARNER' ? req.user!.id : String(req.body?.learnerId || req.user!.id);
+
+  if (!learnerOwnsCourse(learnerId, courseId)) {
+    return res.status(403).json({ success: false, error: 'This course is not assigned to you.' });
+  }
+
+  const step = db.prepare('SELECT * FROM course_steps WHERE id = ? AND course_id = ?').get(stepId, courseId) as any;
+  if (!step) return res.status(404).json({ success: false, error: 'Step not found.' });
+  if (step.kind === 'TASK') {
+    return res
+      .status(400)
+      .json({ success: false, error: 'Submit the task. Your mentor marks this step complete after review.' });
+  }
+
+  const ordered = listCourseSteps(courseId);
+  const index = ordered.findIndex((s) => s.id === stepId);
+  const progressRows = db
+    .prepare('SELECT * FROM learner_step_progress WHERE learner_id = ? AND course_id = ?')
+    .all(learnerId, courseId) as any[];
+  for (let i = 0; i < index; i += 1) {
+    if (!progressRows.some((p) => p.step_id === ordered[i].id && p.status === 'COMPLETED')) {
+      return res.status(409).json({ success: false, error: 'Finish the step above this one first.' });
+    }
+  }
+
+  const summary = markStepCompleted({ learnerId, courseId, stepId });
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_COURSE_STEP_COMPLETED',
+    entityType: 'COURSE_STEP',
+    entityId: stepId,
+    details: { learnerId, courseId, title: step.title }
+  });
+
+  res.json({ success: true, stepId, progress: summary });
+});
+
+app.post('/api/learner/courses/:courseId/steps/:stepId/submit', requireRole(['LEARNER', 'GUIDE', 'ADMIN']), (req, res) => {
+  const { courseId, stepId } = req.params;
+  const learnerId =
+    req.user!.role === 'LEARNER' ? req.user!.id : String(req.body?.learnerId || req.user!.id);
+
+  if (!learnerOwnsCourse(learnerId, courseId)) {
+    return res.status(403).json({ success: false, error: 'This course is not assigned to you.' });
+  }
+
+  const step = db.prepare('SELECT * FROM course_steps WHERE id = ? AND course_id = ?').get(stepId, courseId) as any;
+  if (!step) return res.status(404).json({ success: false, error: 'Step not found.' });
+  if (step.kind !== 'TASK') {
+    return res.status(400).json({ success: false, error: 'This step is completed with the button, not a submission.' });
+  }
+
+  const submissionText = String(req.body?.submissionText || '').trim();
+  if (submissionText.length < 5) {
+    return res.status(400).json({ success: false, error: 'Write what you did before you submit.' });
+  }
+
+  const ordered = listCourseSteps(courseId);
+  const index = ordered.findIndex((s) => s.id === stepId);
+  const done = db
+    .prepare("SELECT step_id FROM learner_step_progress WHERE learner_id = ? AND course_id = ? AND status = 'COMPLETED'")
+    .all(learnerId, courseId) as any[];
+  for (let i = 0; i < index; i += 1) {
+    if (!done.some((d) => d.step_id === ordered[i].id)) {
+      return res.status(409).json({ success: false, error: 'Finish the step above this one first.' });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const taskId = `tsk_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+  const dueDate = new Date(Date.now() + Math.max(1, Number(step.due_days) || 7) * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  const pdpRow = db
+    .prepare("SELECT id FROM pdp_versions WHERE learner_id = ? ORDER BY version_number DESC LIMIT 1")
+    .get(learnerId) as any;
+
+  db.prepare(
+    `INSERT INTO learning_tasks (
+       id, learner_id, pdp_version_id, course_id, step_id, title, category, instructions, expected_criteria,
+       competency_code, status, learner_submission, uploaded_file_name, uploaded_file_data, due_date, assigned_at, submitted_at
+     ) VALUES (?, ?, ?, ?, ?, ?, 'COURSE_STEP', ?, ?, 'COMP-PROC-01', 'SUBMITTED', ?, ?, ?, ?, ?, ?)`
+  ).run(
+    taskId,
+    learnerId,
+    pdpRow?.id || 'pdp_self_build',
+    courseId,
+    stepId,
+    step.title,
+    step.content || step.summary || step.title,
+    step.summary || step.content || step.title,
+    submissionText,
+    req.body?.uploadedFileName ? String(req.body.uploadedFileName) : null,
+    req.body?.uploadedFileData ? String(req.body.uploadedFileData) : null,
+    dueDate,
+    now,
+    now
+  );
+
+  const existingProgress = db
+    .prepare('SELECT id FROM learner_step_progress WHERE learner_id = ? AND step_id = ?')
+    .get(learnerId, stepId) as any;
+  if (existingProgress) {
+    db.prepare(
+      "UPDATE learner_step_progress SET status = 'SUBMITTED', task_id = ?, updated_at = ? WHERE id = ?"
+    ).run(taskId, now, existingProgress.id);
+  } else {
+    db.prepare(
+      `INSERT INTO learner_step_progress (id, learner_id, course_id, step_id, status, task_id, updated_at)
+       VALUES (?, ?, ?, ?, 'SUBMITTED', ?, ?)`
+    ).run(`sp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`, learnerId, courseId, stepId, taskId, now);
+  }
+
+  const evidenceId = `ev_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  db.prepare(
+    `INSERT INTO evidence_items (
+       id, learner_id, source_type, source_ref_id, title, summary, competency_code,
+       sufficiency_weight, uncertainty_note, verification_status, created_at
+     ) VALUES (?, ?, 'PRACTICE_ARTEFACT', ?, ?, ?, 'COMP-PROC-01', 'MEDIUM_PRACTICE',
+       'Course milestone awaiting mentor review.', 'PENDING_REVIEW', ?)`
+  ).run(evidenceId, learnerId, taskId, `Course milestone: ${step.title}`, submissionText, now);
+
+  staffToNudge(learnerId).forEach((staffId) =>
+    notifyUser(
+      staffId,
+      `Milestone submitted: ${step.title}`,
+      `${req.user!.name} sent their work for the course step "${step.title}".`,
+      { id: req.user!.id, name: req.user!.name }
+    )
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_COURSE_STEP_SUBMITTED',
+    entityType: 'COURSE_STEP',
+    entityId: stepId,
+    details: { learnerId, courseId, taskId, title: step.title }
+  });
+
+  res.status(201).json({ success: true, taskId, stepId });
+});
+
+// ---------------------------------------------------------------------------
+// Admin: learner roster, add learner, dossier
+// ---------------------------------------------------------------------------
+
+const LEARNER_TRACKS = ['student_concepts', 'strategy_learner', 'trader', 'investor', 'both'];
+
+const generateTempPassword = () => `frins-${crypto.randomBytes(3).toString('hex')}`;
+
+app.post('/api/admin/learners', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const rawTrack = String(req.body?.track || 'student_concepts').trim().toLowerCase();
+  const track = LEARNER_TRACKS.includes(rawTrack) ? rawTrack : 'student_concepts';
+  const phone = String(req.body?.phone || '').trim();
+  const city = String(req.body?.city || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+  const suppliedPassword = String(req.body?.password || '').trim();
+  const guideId = String(req.body?.guideId || '').trim();
+  const courseId = String(req.body?.courseId || '').trim();
+  const amountPaid = Math.max(0, Number(req.body?.amountPaid) || 0);
+  const paymentStatus = String(req.body?.paymentStatus || '').toUpperCase();
+
+  if (!name || name.length < 2) {
+    return res.status(400).json({ success: false, error: 'Please enter the learner name.' });
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+  }
+  if (db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email)) {
+    return res.status(409).json({ success: false, error: 'A user with this email already exists.' });
+  }
+  if (courseId && !db.prepare('SELECT id FROM courses WHERE id = ?').get(courseId)) {
+    return res.status(400).json({ success: false, error: 'That course no longer exists.' });
+  }
+
+  const password = suppliedPassword || generateTempPassword();
+  const now = new Date().toISOString();
+  const learnerId = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const assignedGuide =
+    guideId && db.prepare("SELECT id FROM users WHERE id = ? AND role IN ('GUIDE', 'ADMIN')").get(guideId)
+      ? guideId
+      : defaultGuideId();
+
+  db.prepare(
+    `INSERT INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id, phone, city, notes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'LEARNER', 'ACTIVE', ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    learnerId,
+    name,
+    email,
+    hashPassword(password),
+    track,
+    assignedGuide,
+    phone || null,
+    city || null,
+    notes || null,
+    now,
+    now
+  );
+
+  db.prepare(
+    `INSERT INTO student_learning_profiles (
+       id, learner_id, approved_level, proposed_level, level_review_state, primary_track,
+       evidence_status, market_context_summary, rubric_version, updated_at
+     ) VALUES (?, ?, 'L1', NULL, 'APPROVED', ?, 'INSUFFICIENT', 'Newly added by the team; awaiting Discovery or a first call.', '1.2.0', ?)`
+  ).run(`slp_${learnerId}`, learnerId, track, now);
+
+  let enrollmentId: string | null = null;
+  if (courseId) {
+    enrollmentId = `sc_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+    db.prepare(
+      `INSERT INTO student_courses (id, course_id, learner_id, custom_notes, progress_pct, status, assigned_by, assigned_at, source, amount_paid, payment_status, paid_at)
+       VALUES (?, ?, ?, ?, 0, 'ACTIVE', ?, ?, ?, ?, ?, ?)`
+    ).run(
+      enrollmentId,
+      courseId,
+      learnerId,
+      String(req.body?.customNotes || '').trim() || 'Enrolled when the learner was added.',
+      req.user!.id,
+      now,
+      amountPaid > 0 ? 'PURCHASED' : 'ADMIN_ASSIGNED',
+      amountPaid,
+      ['PAID', 'PENDING', 'WAIVED'].includes(paymentStatus) ? paymentStatus : amountPaid > 0 ? 'PAID' : 'NOT_APPLICABLE',
+      amountPaid > 0 ? now : null
+    );
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_ADDED_BY_ADMIN',
+    entityType: 'USER',
+    entityId: learnerId,
+    details: { name, email, track, courseId, amountPaid }
+  });
+
+  res.status(201).json({
+    success: true,
+    learnerId,
+    enrollmentId,
+    temporaryPassword: suppliedPassword ? null : password
+  });
+});
+
+app.patch('/api/admin/learners/:learnerId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const learnerId = String(req.params.learnerId);
+  const learner = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'LEARNER'").get(learnerId) as any;
+  if (!learner) return res.status(404).json({ success: false, error: 'Learner not found.' });
+
+  const nextEmail =
+    req.body?.email !== undefined ? String(req.body.email).trim().toLowerCase() : learner.email;
+  if (!nextEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+    return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+  }
+  const clash = db.prepare('SELECT id FROM users WHERE lower(email) = ? AND id <> ?').get(nextEmail, learnerId);
+  if (clash) return res.status(409).json({ success: false, error: 'Another user already has this email.' });
+
+  const name = req.body?.name !== undefined ? String(req.body.name).trim() : learner.name;
+  if (!name) return res.status(400).json({ success: false, error: 'The learner needs a name.' });
+
+  const rawTrack = String(req.body?.track ?? learner.track).toLowerCase();
+  const track = LEARNER_TRACKS.includes(rawTrack) ? rawTrack : learner.track;
+  const accountStatus =
+    req.body?.accountStatus !== undefined && ['ACTIVE', 'SUSPENDED'].includes(String(req.body.accountStatus))
+      ? String(req.body.accountStatus)
+      : learner.account_status;
+  const guideId =
+    req.body?.guideId !== undefined
+      ? String(req.body.guideId).trim() ||
+        (db.prepare("SELECT id FROM users WHERE id = ? AND role IN ('GUIDE', 'ADMIN')").get(String(req.body.guideId))
+          ? String(req.body.guideId)
+          : null)
+      : learner.assigned_guide_id;
+
+  db.prepare(
+    `UPDATE users
+        SET name = ?, email = ?, track = ?, account_status = ?, assigned_guide_id = ?,
+            phone = ?, city = ?, notes = ?, updated_at = ?
+      WHERE id = ?`
+  ).run(
+    name,
+    nextEmail,
+    track,
+    accountStatus,
+    guideId || null,
+    req.body?.phone !== undefined ? String(req.body.phone).trim() || null : learner.phone,
+    req.body?.city !== undefined ? String(req.body.city).trim() || null : learner.city,
+    req.body?.notes !== undefined ? String(req.body.notes).trim() || null : learner.notes,
+    new Date().toISOString(),
+    learnerId
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_PROFILE_UPDATED',
+    entityType: 'USER',
+    entityId: learnerId,
+    details: { name, nextEmail, track, accountStatus, guideId }
+  });
+
+  res.json({ success: true, learnerId });
+});
+
+app.get('/api/admin/learners/:learnerId/dossier', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
+  const learnerId = String(req.params.learnerId);
+  const learner = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'LEARNER'").get(learnerId) as any;
+  if (!learner) return res.status(404).json({ success: false, error: 'Learner not found.' });
+
+  const { password_hash, ...safeLearner } = learner;
+  const guide = learner.assigned_guide_id
+    ? db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(learner.assigned_guide_id)
+    : null;
+
+  const profile = db.prepare('SELECT * FROM student_learning_profiles WHERE learner_id = ?').get(learnerId) || null;
+
+  const enrollments = db
+    .prepare(
+      `SELECT sc.*, c.title AS course_title, c.track AS course_track, c.level AS course_level, c.description AS course_description,
+              (SELECT COUNT(*) FROM course_steps s WHERE s.course_id = sc.course_id) AS step_count,
+              (SELECT COUNT(*) FROM learner_step_progress p WHERE p.learner_id = sc.learner_id AND p.course_id = sc.course_id AND p.status = 'COMPLETED') AS steps_done
+         FROM student_courses sc
+         JOIN courses c ON c.id = sc.course_id
+        WHERE sc.learner_id = ?
+        ORDER BY sc.assigned_at DESC`
+    )
+    .all(learnerId) as any[];
+
+  const tasks = db
+    .prepare(
+      `SELECT t.id, t.title, t.status, t.category, t.course_id, t.step_id, t.due_date, t.assigned_at,
+              t.submitted_at, t.reviewed_at, t.guide_feedback, t.uploaded_file_name,
+              substr(COALESCE(t.learner_submission, ''), 1, 240) AS submission_preview,
+              c.title AS course_title
+         FROM learning_tasks t
+         LEFT JOIN courses c ON c.id = t.course_id
+        WHERE t.learner_id = ?
+        ORDER BY COALESCE(t.submitted_at, t.assigned_at, t.due_date) DESC`
+    )
+    .all(learnerId) as any[];
+
+  const calls = db
+    .prepare(
+      `SELECT b.*, s.name AS staff_name, s.role AS staff_role
+         FROM call_bookings b
+         LEFT JOIN users s ON s.id = b.staff_id
+        WHERE b.learner_id = ?
+        ORDER BY COALESCE(b.preferred_date, '') DESC, b.created_at DESC`
+    )
+    .all(learnerId) as any[];
+
+  const reflections = db
+    .prepare('SELECT id, title, market_context, process_adherence, created_at FROM reflections WHERE learner_id = ? ORDER BY created_at DESC LIMIT 20')
+    .all(learnerId);
+
+  const reviewed = tasks.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
+  const submitted = tasks.filter((t) => t.status === 'SUBMITTED').length;
+  const totalPaid = enrollments.reduce((sum, e) => sum + (Number(e.amount_paid) || 0), 0);
+  const stepsDone = enrollments.reduce((sum, e) => sum + (Number(e.steps_done) || 0), 0);
+  const stepsTotal = enrollments.reduce((sum, e) => sum + (Number(e.step_count) || 0), 0);
+
+  res.json({
+    success: true,
+    learner: safeLearner,
+    guide,
+    profile,
+    enrollments,
+    tasks,
+    calls,
+    reflections,
+    stats: {
+      courseCount: enrollments.length,
+      completedCourses: enrollments.filter((e) => e.status === 'COMPLETED').length,
+      taskCount: tasks.length,
+      submitted,
+      reviewed,
+      openTasks: tasks.length - reviewed - submitted,
+      totalPaid,
+      stepsDone,
+      stepsTotal,
+      progressPct: stepsTotal ? Math.round((stepsDone / stepsTotal) * 100) : 0
+    }
+  });
+});
+
+app.patch('/api/admin/enrollments/:enrollmentId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const enrollmentId = String(req.params.enrollmentId);
+  const enrollment = db.prepare('SELECT * FROM student_courses WHERE id = ?').get(enrollmentId) as any;
+  if (!enrollment) return res.status(404).json({ success: false, error: 'Enrollment not found.' });
+
+  const amountPaid =
+    req.body?.amountPaid !== undefined ? Math.max(0, Number(req.body.amountPaid) || 0) : enrollment.amount_paid;
+  const paymentStatus =
+    req.body?.paymentStatus !== undefined
+      ? String(req.body.paymentStatus).toUpperCase()
+      : enrollment.payment_status;
+  if (req.body?.paymentStatus !== undefined && !['PAID', 'PENDING', 'WAIVED', 'NOT_APPLICABLE'].includes(paymentStatus)) {
+    return res.status(400).json({ success: false, error: 'Unknown payment status.' });
+  }
+  const status =
+    req.body?.status !== undefined && ['ACTIVE', 'COMPLETED', 'PAUSED'].includes(String(req.body.status))
+      ? String(req.body.status)
+      : enrollment.status;
+
+  db.prepare(
+    `UPDATE student_courses
+        SET status = ?, amount_paid = ?, payment_status = ?,
+            paid_at = CASE WHEN ? = 'PAID' THEN COALESCE(paid_at, ?) ELSE paid_at END
+      WHERE id = ?`
+  ).run(status, amountPaid, paymentStatus, paymentStatus, new Date().toISOString(), enrollmentId);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'ENROLLMENT_UPDATED',
+    entityType: 'STUDENT_COURSE',
+    entityId: enrollmentId,
+    details: { status, amountPaid, paymentStatus }
+  });
+
+  res.json({ success: true, enrollmentId });
+});
+
+// ---------------------------------------------------------------------------
+// Direct calls: learner books a mentor, mentor confirms
+// ---------------------------------------------------------------------------
+
+app.get('/api/directory/staff', requireAuth, (_req, res) => {
+  const rows = db
+    .prepare(
+      "SELECT id, name, role, email FROM users WHERE role IN ('ADMIN', 'GUIDE', 'CURRICULUM_OWNER') AND account_status = 'ACTIVE' ORDER BY CASE role WHEN 'ADMIN' THEN 0 WHEN 'GUIDE' THEN 1 ELSE 2 END, name ASC"
+    )
+    .all();
+  res.json({ success: true, rows });
+});
+
+app.get('/api/learner/calls', requireRole(['LEARNER']), (req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT b.*, s.name AS staff_name, s.role AS staff_role
+         FROM call_bookings b
+         LEFT JOIN users s ON s.id = b.staff_id
+        WHERE b.learner_id = ?
+        ORDER BY COALESCE(b.preferred_date, '') DESC, b.created_at DESC`
+    )
+    .all(req.user!.id);
+  res.json({ success: true, rows });
+});
+
+app.post('/api/learner/calls', requireRole(['LEARNER']), (req, res) => {
+  const staffId = String(req.body?.staffId || '').trim();
+  if (!staffId) return res.status(400).json({ success: false, error: 'Choose who you want to talk to.' });
+
+  const staff = db
+    .prepare("SELECT id, name, role FROM users WHERE id = ? AND role IN ('ADMIN', 'GUIDE', 'CURRICULUM_OWNER') AND account_status = 'ACTIVE'")
+    .get(staffId) as any;
+  if (!staff) return res.status(400).json({ success: false, error: 'That person is not taking calls.' });
+
+  const preferredDate = String(req.body?.preferredDate || '').trim();
+  const preferredTime = String(req.body?.preferredTime || '').trim() || '11:30 AM IST';
+  const topic = String(req.body?.topic || '').trim();
+  const notes = String(req.body?.notes || '').trim();
+
+  if (!preferredDate || !/^\d{4}-\d{2}-\d{2}$/.test(preferredDate)) {
+    return res.status(400).json({ success: false, error: 'Pick a date for the call.' });
+  }
+  if (topic.length < 3) {
+    return res.status(400).json({ success: false, error: 'Write a short topic so the team can prepare.' });
+  }
+
+  const learner = db
+    .prepare('SELECT id, name, email, track, phone FROM users WHERE id = ?')
+    .get(req.user!.id) as any;
+  const bookingId = `book_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const now = new Date().toISOString();
+
+  db.prepare(
+    `INSERT INTO call_bookings (
+       id, session_id, participant_name, participant_email, participant_phone, track,
+       preferred_date, preferred_time, notes, readiness_score, recommended_focus, status, created_at,
+       learner_id, staff_id, topic, requested_by_role, updated_at
+     ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'REQUESTED', ?, ?, ?, ?, 'LEARNER', ?)`
+  ).run(
+    bookingId,
+    learner.name,
+    learner.email,
+    learner.phone || null,
+    learner.track,
+    preferredDate,
+    preferredTime,
+    notes || null,
+    topic,
+    now,
+    learner.id,
+    staff.id,
+    topic,
+    now
+  );
+
+  notifyUser(
+    staff.id,
+    `Call request from ${learner.name}`,
+    `${topic} — asked for ${preferredDate}, ${preferredTime}.`,
+    { id: learner.id, name: learner.name }
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_BOOKED_DIRECT_CALL',
+    entityType: 'CALL_BOOKING',
+    entityId: bookingId,
+    details: { staffId: staff.id, preferredDate, preferredTime, topic }
+  });
+
+  res.status(201).json({ success: true, bookingId });
+});
+
+app.post('/api/learner/calls/:bookingId/cancel', requireRole(['LEARNER']), (req, res) => {
+  const booking = db
+    .prepare('SELECT * FROM call_bookings WHERE id = ? AND learner_id = ?')
+    .get(String(req.params.bookingId), req.user!.id) as any;
+  if (!booking) return res.status(404).json({ success: false, error: 'Call not found.' });
+  if (['COMPLETED', 'CANCELLED'].includes(booking.status)) {
+    return res.status(400).json({ success: false, error: 'This call is already closed.' });
+  }
+
+  db.prepare("UPDATE call_bookings SET status = 'CANCELLED', updated_at = ? WHERE id = ?").run(
+    new Date().toISOString(),
+    booking.id
+  );
+
+  if (booking.staff_id) {
+    notifyUser(booking.staff_id, 'Call cancelled', `${req.user!.name} cancelled the call on ${booking.preferred_date}.`, {
+      id: req.user!.id,
+      name: req.user!.name
+    });
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'LEARNER_CANCELLED_DIRECT_CALL',
+    entityType: 'CALL_BOOKING',
+    entityId: booking.id,
+    details: { previousStatus: booking.status }
+  });
+
+  res.json({ success: true, status: 'CANCELLED' });
 });
 
 // Serve built frontend on port 3001 from persisted public_build/ (or dist/)

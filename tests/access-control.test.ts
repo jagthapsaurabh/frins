@@ -365,4 +365,223 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     // Clean up the messages and notices this test created.
     db.prepare("DELETE FROM task_messages WHERE message LIKE 'Paged list check%'").run();
   });
+
+  it('FRI-COURSE-001: Course steps open one at a time, and only a mentor review opens a task step', async () => {
+    const adminToken = await login('admin@frins.org');
+    const learnerToken = await login('aarav@example.com');
+
+    // A two-step course created just for this check.
+    const created = await fetch(`${base}/api/admin/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ title: 'QA step course', track: 'trader', level: 'L1', description: 'Step order check.' })
+    });
+    const { courseId } = await created.json();
+    expect(courseId).toBeTruthy();
+
+    const reading = await fetch(`${base}/api/admin/courses/${courseId}/steps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ title: 'First reading', kind: 'TEXT', content: 'Read this.' })
+    });
+    expect(reading.status).toBe(201);
+    const readingStep = (await reading.json()).step;
+
+    const taskStep = await fetch(`${base}/api/admin/courses/${courseId}/steps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ title: 'First task', kind: 'TASK', content: 'Send a chart.' })
+    });
+    const taskStepBody = await taskStep.json();
+
+    await fetch(`${base}/api/admin/courses/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ courseId, learnerId: 'usr_learner_aarav' })
+    });
+
+    const opened = await fetch(`${base}/api/learner/courses/${courseId}`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const openedBody = await opened.json();
+    expect(openedBody.steps[0].status).toBe('OPEN');
+    expect(openedBody.steps[1].unlocked).toBe(false);
+
+    // Step 2 is still locked, so finishing it directly is refused.
+    const tooSoon = await fetch(`${base}/api/learner/courses/${courseId}/steps/${taskStepBody.stepId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learnerToken}` },
+      body: JSON.stringify({})
+    });
+    expect([400, 409]).toContain(tooSoon.status);
+
+    const done = await fetch(`${base}/api/learner/courses/${courseId}/steps/${readingStep.id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learnerToken}` },
+      body: JSON.stringify({})
+    });
+    expect(done.status).toBe(200);
+
+    // A task step is finished by a submission, then by the review, not by a click.
+    const submitted = await fetch(`${base}/api/learner/courses/${courseId}/steps/${taskStepBody.stepId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learnerToken}` },
+      body: JSON.stringify({ submissionText: 'Here is the chart work.' })
+    });
+    expect(submitted.status).toBe(201);
+    const submittedBody = await submitted.json();
+
+    const waiting = await fetch(`${base}/api/learner/courses/${courseId}`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const waitingBody = await waiting.json();
+    expect(waitingBody.steps[1].status).toBe('SUBMITTED');
+    expect(waitingBody.progressPct).toBe(50);
+
+    const reviewed = await fetch(`${base}/api/admin/tasks/${submittedBody.taskId}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ status: 'REVIEWED', guideFeedback: 'Pass.' })
+    });
+    expect(reviewed.status).toBe(200);
+
+    const finished = await fetch(`${base}/api/learner/courses/${courseId}`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    const finishedBody = await finished.json();
+    expect(finishedBody.progressPct).toBe(100);
+    expect(finishedBody.enrollment.status).toBe('COMPLETED');
+
+    // Every task now records when it was handed out.
+    const storedTask = db.prepare('SELECT assigned_at, step_id FROM learning_tasks WHERE id = ?').get(submittedBody.taskId) as any;
+    expect(storedTask.assigned_at).toBeTruthy();
+    expect(storedTask.step_id).toBe(taskStepBody.stepId);
+
+    // Clean up.
+    db.prepare('DELETE FROM task_messages WHERE task_id = ?').run(submittedBody.taskId);
+    db.prepare('DELETE FROM evidence_items WHERE source_ref_id = ?').run(submittedBody.taskId);
+    db.prepare('DELETE FROM learning_tasks WHERE id = ?').run(submittedBody.taskId);
+    db.prepare('DELETE FROM learner_step_progress WHERE course_id = ?').run(courseId);
+    db.prepare('DELETE FROM course_steps WHERE course_id = ?').run(courseId);
+    db.prepare('DELETE FROM student_courses WHERE course_id = ?').run(courseId);
+    db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
+  });
+
+  it('FRI-LEARNER-ADD-001: Admin adds a learner with a course and payment, and the file adds it up', async () => {
+    const adminToken = await login('admin@frins.org');
+    const email = `qa.learner.${Date.now()}@example.com`;
+
+    const course = db.prepare('SELECT id FROM courses ORDER BY created_at ASC LIMIT 1').get() as any;
+    const created = await fetch(`${base}/api/admin/learners`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        name: 'QA Added Learner',
+        email,
+        track: 'trader',
+        phone: '9000000001',
+        city: 'Nagpur',
+        courseId: course.id,
+        amountPaid: 5000,
+        paymentStatus: 'PAID'
+      })
+    });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json();
+    expect(createdBody.learnerId).toBeTruthy();
+    expect(createdBody.temporaryPassword).toBeTruthy();
+
+    const dup = await fetch(`${base}/api/admin/learners`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ name: 'QA Added Learner', email })
+    });
+    expect(dup.status).toBe(409);
+
+    const dossier = await fetch(`${base}/api/admin/learners/${createdBody.learnerId}/dossier`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    expect(dossier.status).toBe(200);
+    const dossierBody = await dossier.json();
+    expect(dossierBody.learner.password_hash).toBeUndefined();
+    expect(dossierBody.stats.totalPaid).toBe(5000);
+    expect(dossierBody.stats.courseCount).toBe(1);
+    expect(dossierBody.enrollments[0].payment_status).toBe('PAID');
+
+    // The new learner signs in with the password the admin was shown.
+    const loginRes = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: createdBody.temporaryPassword })
+    });
+    expect(loginRes.status).toBe(200);
+
+    // Guides can read the file; learners cannot reach the admin route at all.
+    const learnerToken = await login('aarav@example.com');
+    const refused = await fetch(`${base}/api/admin/learners/${createdBody.learnerId}/dossier`, {
+      headers: { Authorization: `Bearer ${learnerToken}` }
+    });
+    expect(refused.status).toBe(403);
+
+    db.prepare('DELETE FROM student_learning_profiles WHERE learner_id = ?').run(createdBody.learnerId);
+    db.prepare('DELETE FROM student_courses WHERE learner_id = ?').run(createdBody.learnerId);
+    db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(createdBody.learnerId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(createdBody.learnerId);
+  });
+
+  it('FRI-CALL-003: A learner books a mentor from the panel and only that learner can cancel it', async () => {
+    const adminToken = await login('admin@frins.org');
+    const learnerToken = await login('aarav@example.com');
+    const guide = db.prepare("SELECT id FROM users WHERE role = 'GUIDE' LIMIT 1").get() as any;
+
+    const before = await fetch(`${base}/api/notifications`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    void before;
+
+    const booked = await fetch(`${base}/api/learner/calls`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learnerToken}` },
+      body: JSON.stringify({
+        staffId: guide.id,
+        preferredDate: '2030-01-15',
+        preferredTime: '3:00 PM IST',
+        topic: 'QA direct call'
+      })
+    });
+    expect(booked.status).toBe(201);
+    const bookedBody = await booked.json();
+
+    const row = db.prepare('SELECT * FROM call_bookings WHERE id = ?').get(bookedBody.bookingId) as any;
+    expect(row.learner_id).toBe('usr_learner_aarav');
+    expect(row.staff_id).toBe(guide.id);
+    expect(row.status).toBe('REQUESTED');
+
+    // The mentor got a bell notice for it.
+    const notice = db
+      .prepare("SELECT COUNT(*) AS c FROM notifications WHERE target_user_id = ? AND title LIKE 'Call request from%'")
+      .get(guide.id) as any;
+    expect(notice.c).toBeGreaterThan(0);
+
+    // Another learner cannot cancel it.
+    const other = await fetch(`${base}/api/learner/calls/${bookedBody.bookingId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({})
+    });
+    expect(other.status).toBe(403);
+
+    const cancelled = await fetch(`${base}/api/learner/calls/${bookedBody.bookingId}/cancel`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learnerToken}` },
+      body: JSON.stringify({})
+    });
+    expect(cancelled.status).toBe(200);
+    const after = db.prepare('SELECT status FROM call_bookings WHERE id = ?').get(bookedBody.bookingId) as any;
+    expect(after.status).toBe('CANCELLED');
+
+    db.prepare('DELETE FROM call_bookings WHERE id = ?').run(bookedBody.bookingId);
+    db.prepare("DELETE FROM notifications WHERE title = 'Call request from Aarav Mehta'").run();
+    db.prepare("DELETE FROM notifications WHERE title = 'Call cancelled' AND message LIKE '%2030-01-15%'").run();
+  });
 });

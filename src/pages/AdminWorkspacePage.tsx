@@ -14,21 +14,35 @@ import {
   Contact,
   BellRing,
   Settings as SettingsIcon,
-  KeyRound
+  KeyRound,
+  Plus
 } from 'lucide-react';
 import { StaffSignInGate } from '../components/StaffSignInGate';
 import { GuideWorkspacePage } from './GuideWorkspacePage';
+import { LearnersDirectory } from './admin/LearnersDirectory';
+import { formatDateTime } from '../utils/dates';
 import { AdminNotifications } from './admin/AdminNotifications';
 import { LearnerProgress } from './admin/LearnerProgress';
 import { Pager } from '../components/Pager';
 import { usePagedList } from '../hooks/usePagedList';
 import { ADMIN_SECTIONS, adminKeyFromPath, findAdminSection, type AdminSectionKey } from './adminSections';
 
-const BOOKING_STATUSES = ['NEW', 'DIRECT_CALL_BOOKED', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED'];
+const BOOKING_STATUSES = [
+  'REQUESTED',
+  'NEW',
+  'DIRECT_CALL_BOOKED',
+  'CONFIRMED',
+  'RESCHEDULED',
+  'COMPLETED',
+  'NO_SHOW',
+  'CANCELLED'
+];
 const BOOKING_STATUS_LABEL: Record<string, string> = {
+  REQUESTED: 'Asked from dashboard',
   NEW: 'New request',
   DIRECT_CALL_BOOKED: 'Booked from website',
   CONFIRMED: 'Confirmed',
+  RESCHEDULED: 'Moved to a new slot',
   COMPLETED: 'Completed',
   NO_SHOW: 'No show',
   CANCELLED: 'Cancelled'
@@ -77,6 +91,8 @@ export const AdminWorkspacePage: React.FC = () => {
   // ---- Paged lists. Every long list keeps its own query and page. ----
   const [taskQuery, setTaskQuery] = useState('');
   const [taskStatus, setTaskStatus] = useState('ALL');
+  const [taskCourse, setTaskCourse] = useState('ALL');
+  const [taskRange, setTaskRange] = useState('ALL');
   const [taskPage, setTaskPage] = useState(1);
   const [taskDetail, setTaskDetail] = useState<any>(null);
 
@@ -779,6 +795,8 @@ export const AdminWorkspacePage: React.FC = () => {
     q: taskQuery,
     v: dataVersion,
     status: taskStatus,
+    courseId: taskCourse,
+    range: taskRange,
     page: taskPage,
     limit: 20
   });
@@ -903,7 +921,7 @@ export const AdminWorkspacePage: React.FC = () => {
     <div className="workspace-shell">
       <div className="container-wide">
         <div className="admin-body">
-          {activeTab !== 'overview' && (
+          {activeTab !== 'overview' && activeTab !== 'learners' && (
             <header className="admin-page-head">
               <span className="admin-page-eyebrow">Admin console</span>
               <h1>{section.label}</h1>
@@ -1148,6 +1166,37 @@ export const AdminWorkspacePage: React.FC = () => {
                   <option value="ASSIGNED">Not started</option>
                   <option value="REVIEWED">Reviewed</option>
                 </select>
+                <select
+                  className="form-select list-filter"
+                  value={taskCourse}
+                  onChange={(e) => {
+                    setTaskCourse(e.target.value);
+                    setTaskPage(1);
+                  }}
+                  aria-label="Filter tasks by course"
+                >
+                  <option value="ALL">Every course</option>
+                  {coursesList.map((course: any) => (
+                    <option key={course.id} value={course.id}>
+                      {course.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="form-select list-filter"
+                  value={taskRange}
+                  onChange={(e) => {
+                    setTaskRange(e.target.value);
+                    setTaskPage(1);
+                  }}
+                  aria-label="Filter tasks by date"
+                >
+                  <option value="ALL">Any date</option>
+                  <option value="TODAY">Today</option>
+                  <option value="WEEK">Last 7 days</option>
+                  <option value="MONTH">Last 30 days</option>
+                  <option value="DUE">Due in the next 3 days</option>
+                </select>
               </div>
 
               <h3 style={{ fontSize: 16, marginBottom: 10 }}>
@@ -1193,6 +1242,12 @@ export const AdminWorkspacePage: React.FC = () => {
                           Course: {t.course_title}
                         </div>
                       )}
+
+                      <div className="task-dates">
+                        <span>Given {formatDateTime(t.assigned_at)}</span>
+                        {t.submitted_at && <span>Uploaded {formatDateTime(t.submitted_at)}</span>}
+                        {t.reviewed_at && <span>Reviewed {formatDateTime(t.reviewed_at)}</span>}
+                      </div>
 
                       {aiVerdict && (
                         <div
@@ -1252,6 +1307,24 @@ export const AdminWorkspacePage: React.FC = () => {
                       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
                         Student: <strong>{selectedTask.learner_name}</strong> ({selectedTask.learner_email}) &middot; Course:{' '}
                         <strong>{selectedTask.course_title || 'Custom plan'}</strong>
+                      </div>
+                      <div className="task-timeline task-timeline-wide">
+                        <span>
+                          <em>Given</em>
+                          {formatDateTime(selectedTask.assigned_at)}
+                        </span>
+                        <span>
+                          <em>Due</em>
+                          {formatDateTime(selectedTask.due_date)}
+                        </span>
+                        <span>
+                          <em>Uploaded</em>
+                          {selectedTask.submitted_at ? formatDateTime(selectedTask.submitted_at) : 'Not yet'}
+                        </span>
+                        <span>
+                          <em>Reviewed</em>
+                          {selectedTask.reviewed_at ? formatDateTime(selectedTask.reviewed_at) : 'Not yet'}
+                        </span>
                       </div>
                     </div>
                     <span
@@ -1646,6 +1719,20 @@ export const AdminWorkspacePage: React.FC = () => {
            =================================================================== */}
         {activeTab === 'courses' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <section className="builder-cta panel-card">
+              <div>
+                <span className="micro-tag accent">Course builder</span>
+                <h3 className="admin-card-title">Build the course itself, not just a title</h3>
+                <p className="admin-card-copy">
+                  Add steps the learner works through in order: reading, a YouTube video, a PDF or Word file, a
+                  link, or a graded task. The next step stays locked until the one before it is done.
+                </p>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/courses/new')}>
+                <Plus size={16} /> New course
+              </button>
+            </section>
+
             <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
               {/* Create Custom Course + Assign Course to Student */}
               <div className="panel-card" style={{ marginBottom: 0 }}>
@@ -1970,10 +2057,18 @@ export const AdminWorkspacePage: React.FC = () => {
                             <strong style={{ fontSize: 15 }}>{course.title}</strong>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                               {course.id} &middot; Track: <strong>{course.track}</strong> &middot; {course.level} &middot;{' '}
-                              {(course.modules || []).length} modules &middot; {courseQs.length} questions
+                              {(course.modules || []).length} modules &middot; {courseQs.length} questions &middot;{' '}
+                              <strong>{course.step_count ?? 0} steps</strong>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => navigate(`/admin/courses/${course.id}`)}
+                            >
+                              Open builder
+                            </button>
                             <button
                               type="button"
                               className="btn btn-secondary btn-sm"
@@ -2290,6 +2385,11 @@ export const AdminWorkspacePage: React.FC = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
                       <div>
                         <strong style={{ fontSize: 15 }}>{b.participant_name}</strong>
+                        {b.learner_id && (
+                          <span className="micro-tag accent" style={{ marginLeft: 8, fontSize: 10 }}>
+                            From dashboard
+                          </span>
+                        )}
                         <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
                           {b.participant_email} &middot; {b.phone || 'Phone on file'} &middot; Track:{' '}
                           <strong>
@@ -2328,6 +2428,16 @@ export const AdminWorkspacePage: React.FC = () => {
                       <strong>Call Slot:</strong> {b.preferred_date} at <strong>{b.preferred_time_slot}</strong>
                     </div>
 
+                    {b.topic && (
+                      <div style={{ fontSize: 13, marginBottom: 4 }}>
+                        <strong>Topic:</strong> {b.topic}
+                      </div>
+                    )}
+                    {b.staff_name && (
+                      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 4 }}>
+                        <strong>With:</strong> {b.staff_name} ({b.staff_role === 'GUIDE' ? 'Guide' : b.staff_role})
+                      </div>
+                    )}
                     <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
                       <strong>Focus / Result Summary:</strong> {b.result_summary}
                     </div>
@@ -2814,11 +2924,7 @@ export const AdminWorkspacePage: React.FC = () => {
         {/* ===================================================================
             TAB 5: USERS, RUBRICS & AUDIT CONSOLE
            =================================================================== */}
-        {activeTab === 'learners' && (
-          <div className="admin-embed">
-            <GuideWorkspacePage embedded />
-          </div>
-        )}
+        {activeTab === 'learners' && <LearnersDirectory />}
 
         {activeTab === 'staff' && (
           <>

@@ -8,6 +8,10 @@ import { LearnerDashboardPage } from './pages/LearnerDashboardPage';
 import { GuideWorkspacePage } from './pages/GuideWorkspacePage';
 import { AIPipelinePage } from './pages/AIPipelinePage';
 import { AdminWorkspacePage } from './pages/AdminWorkspacePage';
+import { AddLearnerPage } from './pages/admin/AddLearnerPage';
+import { LearnerDossierPage } from './pages/admin/LearnerDossierPage';
+import { CourseBuilderPage } from './pages/admin/CourseBuilderPage';
+import { CoursePlayerPage } from './pages/learner/CoursePlayerPage';
 import { SignInPage } from './pages/SignInPage';
 import { StaffSignInPage } from './pages/StaffSignInPage';
 import { decideDashboardAccess, DASHBOARD_ROLES } from './auth/guard';
@@ -59,6 +63,16 @@ export const EcosystemShell: React.FC = () => {
 
       {/* Learner sign-in + dashboard */}
       <Route path="/login" element={<SignInPage />} />
+      <Route
+        path="/dashboard/courses/:courseId"
+        element={
+          <RequireLearner>
+            <AppShell>
+              <CoursePlayerPage />
+            </AppShell>
+          </RequireLearner>
+        }
+      />
       {['/dashboard', '/dashboard/:section'].map((path) => (
         <Route
           key={path}
@@ -100,6 +114,46 @@ export const EcosystemShell: React.FC = () => {
       />
 
       {/* Staff consoles */}
+      <Route
+        path="/admin/learners/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <AddLearnerPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/learners/:learnerId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <LearnerDossierPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/courses/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <CourseBuilderPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/courses/:courseId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <CourseBuilderPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
       {['/admin', '/admin/:section'].map((path) => (
         <Route
           key={path}

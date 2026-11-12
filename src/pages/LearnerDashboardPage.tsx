@@ -9,17 +9,24 @@ import {
   TrendingUp,
   MessageSquare,
   ArrowRight,
-  FileText
+  FileText,
+  PhoneCall,
+  CalendarClock,
+  Search,
+  X
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { BookCallDialog } from '../components/BookCallDialog';
+import { formatDateTime } from '../utils/dates';
 
-type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress';
+type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress' | 'calls';
 
 const SECTION_COPY: Record<LearnerSection, { title: string; blurb: string }> = {
   overview: { title: 'Overview', blurb: 'Where you are and what is waiting for you.' },
   courses: { title: 'My courses', blurb: 'The courses built for you, and the questions inside them.' },
   tasks: { title: 'Tasks and uploads', blurb: 'Your practical tasks, the work you sent, and the mentor chat.' },
-  progress: { title: 'Progress', blurb: 'Your plan, reflections and the evidence behind your level.' }
+  progress: { title: 'Progress', blurb: 'Your plan, reflections and the evidence behind your level.' },
+  calls: { title: 'Calls', blurb: 'Book time with your guide or the team, and see what is coming up.' }
 };
 
 export const LearnerDashboardPage: React.FC = () => {
@@ -29,7 +36,7 @@ export const LearnerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const params = useParams<{ section?: string }>();
   const section: LearnerSection =
-    params.section === 'courses' || params.section === 'tasks' || params.section === 'progress'
+    params.section === 'courses' || params.section === 'tasks' || params.section === 'progress' || params.section === 'calls'
       ? params.section
       : 'overview';
   const unknownSection = Boolean(params.section) && section === 'overview';
@@ -49,6 +56,15 @@ export const LearnerDashboardPage: React.FC = () => {
 
   // Direct Chat on Task State
   const [studentChatText, setStudentChatText] = useState<string>('');
+
+  // Search and filters over the learner's own tasks
+  const [taskSearch, setTaskSearch] = useState('');
+  const [taskFilter, setTaskFilter] = useState('ALL');
+  const [taskCourseFilter, setTaskCourseFilter] = useState('ALL');
+
+  // Booking a call straight from the panel
+  const [callOpen, setCallOpen] = useState(false);
+  const [callBanner, setCallBanner] = useState<string | null>(null);
 
   // Course question answering state
   const [courseAnswers, setCourseAnswers] = useState<Record<string, number>>({});
@@ -284,6 +300,33 @@ export const LearnerDashboardPage: React.FC = () => {
   const courseTitleFor = (task: any) =>
     assignedCourses.find((c: any) => c.course_id === task.course_id)?.course_title || 'General task';
 
+  const visibleTasks = tasksList.filter((task: any) => {
+    const matchesSearch =
+      !taskSearch.trim() ||
+      `${task.title} ${task.instructions} ${courseTitleFor(task)}`.toLowerCase().includes(taskSearch.trim().toLowerCase());
+    const matchesStatus =
+      taskFilter === 'ALL' ||
+      (taskFilter === 'OPEN' && (task.status === 'ASSIGNED' || task.status === 'IN_PROGRESS')) ||
+      (taskFilter === 'SUBMITTED' && task.status === 'SUBMITTED') ||
+      (taskFilter === 'REVIEWED' && (task.status === 'REVIEWED' || task.status === 'APPROVED'));
+    const matchesCourse = taskCourseFilter === 'ALL' || task.course_id === taskCourseFilter;
+    return matchesSearch && matchesStatus && matchesCourse;
+  });
+
+  const myCalls: any[] = data?.calls || [];
+  const upcomingCalls = myCalls.filter((call) => !['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(call.status));
+
+  const cancelCall = async (bookingId: string) => {
+    const res = await authFetch(`/api/learner/calls/${bookingId}/cancel`, { method: 'POST', body: JSON.stringify({}) });
+    const json = await res.json();
+    if (!res.ok || !json.success) {
+      setCallBanner(json.error || 'Could not cancel that call.');
+      return;
+    }
+    setCallBanner('Call cancelled.');
+    loadDashboard();
+  };
+
   const todoTasks = tasksList.filter((t) => t.status !== 'REVIEWED' && t.status !== 'APPROVED');
   const reviewedCount = tasksList.filter((t) => t.status === 'REVIEWED' || t.status === 'APPROVED').length;
   const answeredQuestions = courseQuestions.filter((q) => Boolean(q.lastAttempt)).length;
@@ -437,7 +480,7 @@ export const LearnerDashboardPage: React.FC = () => {
                           key={sc.id}
                           type="button"
                           className="learner-list-row"
-                          onClick={() => navigate('/dashboard/courses')}
+                          onClick={() => navigate(`/dashboard/courses/${sc.course_id}`)}
                         >
                           <span className="learner-list-text">
                             <strong>{sc.course_title}</strong>
@@ -486,6 +529,11 @@ export const LearnerDashboardPage: React.FC = () => {
                 <strong>Progress</strong>
                 <span>{progressPct}% of tasks reviewed</span>
               </button>
+              <button type="button" className="learner-quick" onClick={() => setCallOpen(true)}>
+                <PhoneCall size={18} />
+                <strong>Book a call</strong>
+                <span>{upcomingCalls.length > 0 ? `${upcomingCalls.length} coming up` : 'With your mentor'}</span>
+              </button>
             </div>
           </>
         )}
@@ -533,6 +581,28 @@ export const LearnerDashboardPage: React.FC = () => {
                         Note from your mentor: {sc.custom_notes}
                       </div>
                     )}
+                    <div className="course-open-row">
+                      <div className="progress-line">
+                        <div className="progress-track">
+                          <span
+                            style={{
+                              width: `${sc.step_count ? Math.round((Number(sc.steps_done) / Number(sc.step_count)) * 100) : 0}%`
+                            }}
+                          />
+                        </div>
+                        <span className="admin-muted small">
+                          {sc.steps_done || 0}/{sc.step_count || 0} steps done
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => navigate(`/dashboard/courses/${sc.course_id}`)}
+                      >
+                        {sc.steps_done > 0 ? 'Continue course' : 'Start course'}
+                      </button>
+                    </div>
+
                     <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Course modules</div>
                     <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {(sc.modules || []).map((m: string, idx: number) => (
@@ -639,13 +709,53 @@ export const LearnerDashboardPage: React.FC = () => {
         {section === 'tasks' && (
           <div className="workspace-sidebar-layout">
             <div className="panel-card" style={{ marginBottom: 0 }}>
-              <span className="micro-tag accent">My tasks</span>
+              <span className="micro-tag accent">My tasks ({visibleTasks.length})</span>
               <h3 className="admin-card-title">Pick a task</h3>
+
+              <div className="list-tools learner-task-tools">
+                <div className="list-search-wrap">
+                  <Search size={15} />
+                  <input
+                    className="form-input list-search"
+                    placeholder="Search your tasks"
+                    value={taskSearch}
+                    onChange={(e) => setTaskSearch(e.target.value)}
+                    aria-label="Search tasks"
+                  />
+                </div>
+                <select
+                  className="form-select list-filter"
+                  value={taskFilter}
+                  onChange={(e) => setTaskFilter(e.target.value)}
+                  aria-label="Filter by status"
+                >
+                  <option value="ALL">Every status</option>
+                  <option value="OPEN">Not sent yet</option>
+                  <option value="SUBMITTED">In review</option>
+                  <option value="REVIEWED">Reviewed</option>
+                </select>
+                <select
+                  className="form-select list-filter"
+                  value={taskCourseFilter}
+                  onChange={(e) => setTaskCourseFilter(e.target.value)}
+                  aria-label="Filter by course"
+                >
+                  <option value="ALL">Every course</option>
+                  {assignedCourses.map((course: any) => (
+                    <option key={course.course_id} value={course.course_id}>
+                      {course.course_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {tasksList.length === 0 ? (
                 <p className="admin-muted">No task assigned yet.</p>
+              ) : visibleTasks.length === 0 ? (
+                <p className="admin-muted">No task matches this search.</p>
               ) : (
                 <div className="learner-task-list">
-                  {tasksList.map((t: any) => {
+                  {visibleTasks.map((t: any) => {
                     const isSel = selectedTask?.id === t.id;
                     return (
                       <button
@@ -656,7 +766,10 @@ export const LearnerDashboardPage: React.FC = () => {
                       >
                         <span className="learner-task-text">
                           <strong>{t.title}</strong>
-                          <small>{courseTitleFor(t)}</small>
+                          <small>
+                            {courseTitleFor(t)}
+                            {t.due_date ? ` · due ${formatDateTime(t.due_date)}` : ''}
+                          </small>
                         </span>
                         <span className={`status-pill ${statusClass(t.status)}`}>{t.status}</span>
                       </button>
@@ -676,6 +789,25 @@ export const LearnerDashboardPage: React.FC = () => {
                       <p className="admin-card-copy">{courseTitleFor(selectedTask)}</p>
                     </div>
                     <span className={`status-pill ${statusClass(selectedTask.status)}`}>{selectedTask.status}</span>
+                  </div>
+
+                  <div className="task-timeline task-timeline-wide">
+                    <span>
+                      <em>Given</em>
+                      {formatDateTime(selectedTask.assigned_at)}
+                    </span>
+                    <span>
+                      <em>Due</em>
+                      {formatDateTime(selectedTask.due_date)}
+                    </span>
+                    <span>
+                      <em>Uploaded</em>
+                      {selectedTask.submitted_at ? formatDateTime(selectedTask.submitted_at) : 'Not yet'}
+                    </span>
+                    <span>
+                      <em>Reviewed</em>
+                      {selectedTask.reviewed_at ? formatDateTime(selectedTask.reviewed_at) : 'Not yet'}
+                    </span>
                   </div>
 
                   <div className="learner-instructions">
@@ -805,6 +937,53 @@ export const LearnerDashboardPage: React.FC = () => {
           </div>
         )}
 
+        {/* =================== CALLS =================== */}
+        {section === 'calls' && (
+          <div className="panel-card">
+            <div className="call-section-head">
+              <div>
+                <span className="micro-tag accent">Direct line</span>
+                <h3 className="admin-card-title">Talk to your guide</h3>
+                <p className="admin-card-copy">
+                  Book a slot when you want to go through a chart, a lesson or your plan. Your guide or the team
+                  confirms it and it shows up here.
+                </p>
+              </div>
+              <button type="button" className="btn btn-primary" onClick={() => setCallOpen(true)}>
+                <PhoneCall size={16} /> Book a call
+              </button>
+            </div>
+
+            {callBanner && <div className="governance-alert success">{callBanner}</div>}
+
+            {myCalls.length === 0 ? (
+              <p className="admin-muted">No call yet. The button above is the fastest way to reach your mentor.</p>
+            ) : (
+              <div className="call-history">
+                {myCalls.map((call: any) => (
+                  <div key={call.id} className="call-history-row">
+                    <div>
+                      <strong>
+                        {formatDateTime(call.preferred_date)} &middot; {call.preferred_time}
+                      </strong>
+                      <div className="admin-muted small">{call.topic || 'General call'}</div>
+                      <div className="admin-muted small">With {call.staff_name || 'your mentor'}</div>
+                    </div>
+                    <div className="call-history-side">
+                      <span className={`status-pill ${statusClass(call.status)}`}>{call.status}</span>
+                      {!['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(call.status) && (
+                        <button type="button" className="link-button" onClick={() => cancelCall(call.id)}>
+                          <X size={13} /> Cancel
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* =================== PROGRESS =================== */}
         {section === 'progress' && (
           <>
@@ -922,6 +1101,15 @@ export const LearnerDashboardPage: React.FC = () => {
           </>
         )}
       </div>
+
+      <BookCallDialog
+        open={callOpen}
+        onClose={() => setCallOpen(false)}
+        onBooked={() => {
+          setCallBanner('Call requested. Check back here for the confirmation.');
+          loadDashboard();
+        }}
+      />
     </div>
   );
 };

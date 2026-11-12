@@ -105,8 +105,8 @@ workspace stays a workspace.
 | --- | --- | --- |
 | Work | Overview | Counts and four cards that jump to whatever needs attention |
 | Work | Task review | Uploaded work, internal AI pre-check, direct chat, approve or send back |
-| Work | Courses & tasks | Build courses, add questions, assign a course, give a task to one learner |
-| People | Learners | The full learner review desk, embedded: roster, dossiers, PDP decisions, level changes, assessments |
+| Work | Courses & tasks | Open the course builder, add questions, assign a course, give a task to one learner |
+| People | Learners | The enrolled learner list: search, track and status filters, pages of twenty. Open a learner for their file, or add one |
 | People | Learner progress | One learner at a time: courses with task and question bars, every task with its status, uploads and AI pre-check, and a box to assign another course |
 | People | Staff & access | Change a role, suspend or reactivate, reset a password, create an account |
 | Growth | Leads | Website form submissions with a status you can move along |
@@ -146,6 +146,62 @@ Notes:
 - "Update password" is in the account menu for every role. Changing it signs out other devices.
 - Resetting someone else's password requires no current password, returns a one-time password, and
   ends their sessions. Every reset is written to the audit trail.
+
+## 7c. Learners, Courses That Teach, and Calls
+
+### The learner tab
+
+`/admin/learners` is the list admins asked for. It is a real table: name and email, track, course
+count, reviewed task count, last activity, and account status. Search covers name, email and phone.
+Two filters sit next to it, one for track and one for active or suspended. Twenty rows a page.
+
+- Click a row to open `/admin/learners/:learnerId`. That page is the learner file: contact details,
+  the guide, the level, every course they are enrolled in with its step bar, every task with the
+  time it was given, when it was uploaded and when it was reviewed, every call they booked, and
+  their reflection log. The details can be edited in place, the guide reassigned, the account
+  suspended, and the payment on each course changed.
+- **Add learner** opens `/admin/learners/new`. It creates the account, sets the track, picks a
+  guide, and can enrol the learner in a course with the amount paid and payment status in the same
+  step. Leave the password blank and a temporary one is generated and shown once.
+
+### Building a course that actually teaches
+
+`/admin/courses/new` creates the course, then the same page becomes the builder
+(`/admin/courses/:courseId`). A course is a list of **steps** in order:
+
+| Step kind | What the learner gets |
+| --- | --- |
+| Reading | A written lesson, shown as text |
+| YouTube video | The video embedded in the lesson |
+| PDF / Word file | An upload, with a download button |
+| Web link | A button that opens the page |
+| Task / milestone | A brief, an upload box, and a mentor review |
+
+Rules that make it a course rather than a file dump:
+
+- Steps run top to bottom. Step 2 is locked until step 1 is marked done.
+- A reading, video, file or link step is finished with **Mark this step done**.
+- A task step is finished by submitting work and getting a mentor review. The submission creates a
+  real task, so it lands in Task review and in the learner's Tasks tab, with the same chat.
+- A reviewed milestone unlocks the next step and moves the course percentage along.
+- Steps can be reordered, edited or deleted; deleting a step tells you what goes with it.
+- The learner opens the course at `/dashboard/courses/:courseId` and works in the player.
+
+### Calling the team
+
+A learner can book time from the top bar (**Book a call**), from the Calls tab, or from the card in
+the sidebar. They pick a mentor, a date, a time and a topic. That writes a request, notifies the
+mentor, and shows up in the learner's Calls tab and in the admin Bookings list with a **From
+dashboard** tag. The mentor confirms, moves or cancels it from Bookings, and the learner is notified.
+
+### Every task carries its dates
+
+`learning_tasks` now stores `assigned_at`. The task list in Task review and in the learner's Tasks
+tab shows four timestamps: given, due, uploaded, reviewed. Task review also filters by course and by
+date range (today, last 7 days, last 30 days, due in the next 3 days), and the learner's own task
+list has a search box plus status and course filters.
+
+---
 
 ## 8. Routes, Copy Tone & Sign-In Pages
 

@@ -15,7 +15,8 @@ import {
   BookOpen,
   ClipboardList,
   TrendingUp,
-  Sparkles as SparklesIcon
+  Sparkles as SparklesIcon,
+  PhoneCall
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -23,6 +24,7 @@ import { NotificationBell } from './NotificationBell';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { ADMIN_SECTIONS } from '../pages/adminSections';
 import { LearnerSearch } from './LearnerSearch';
+import { BookCallDialog } from './BookCallDialog';
 
 export type ShellRole = 'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRICULUM_OWNER';
 
@@ -78,7 +80,8 @@ const navForRole = (role: string | undefined): NavItem[] => {
     { path: '/dashboard', label: 'Overview', icon: <LayoutDashboard size={17} />, group: 'Learning', exact: true },
     { path: '/dashboard/courses', label: 'My courses', icon: <BookOpen size={17} />, group: 'Learning' },
     { path: '/dashboard/tasks', label: 'Tasks & uploads', icon: <ClipboardList size={17} />, group: 'Learning' },
-    { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' }
+    { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' },
+    { path: '/dashboard/calls', label: 'Calls', icon: <PhoneCall size={17} />, group: 'Learning' }
   ];
 };
 
@@ -107,6 +110,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const [menuOpen, setMenuOpen] = useState(false);
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -201,7 +205,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
             <div>
               <strong>Need a hand?</strong>
               <p>Book a 1-on-1 call with your learning team.</p>
-              <button type="button" onClick={() => navigate('/')}>
+              <button type="button" onClick={() => setCallOpen(true)}>
                 Book a Call
               </button>
             </div>
@@ -240,6 +244,13 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           </div>
 
           <div className="app-topbar-right">
+            {user?.role === 'LEARNER' && (
+              <button type="button" className="app-call-button" onClick={() => setCallOpen(true)}>
+                <PhoneCall size={15} />
+                <span>Book a call</span>
+              </button>
+            )}
+
             <NotificationBell />
 
             <div className="app-account" ref={menuRef}>
@@ -315,6 +326,8 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
       </div>
 
       <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+
+      {user?.role === 'LEARNER' && <BookCallDialog open={callOpen} onClose={() => setCallOpen(false)} />}
 
       <ConfirmDialog
         open={signOutOpen}
