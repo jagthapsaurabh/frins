@@ -1076,13 +1076,66 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
            ================================================================= */}
         {currentPath === '/why-frins' && (
           <>
-            <section className="page-hero-banner">
-              <div className="container">
-                <span className="micro-tag accent">Why we exist</span>
-                <h1>A beginner and a full-time trader do not need the same course.</h1>
-                <p>
-                  Most courses sell one set of videos to everyone. A college student and someone managing a live book end up watching the same lesson 3 and skipping lesson 14. We build the syllabus per person instead.
-                </p>
+            <section className="page-intro">
+              <div className="container page-intro-grid">
+                <div className="page-intro-copy">
+                  <p className="page-intro-eyebrow">Why we exist</p>
+                  <h1>A beginner and a full-time trader do not need the same course.</h1>
+                  <p className="page-intro-lede">
+                    Most courses sell one set of videos to everyone. A student and someone running a live
+                    book end up watching the same lesson 3 and skipping lesson 14. We write the syllabus per
+                    person instead.
+                  </p>
+
+                  <ul className="page-intro-points">
+                    <li>
+                      <strong>Built after we meet you.</strong> The modules, exercises and calls follow from
+                      where you actually are.
+                    </li>
+                    <li>
+                      <strong>Reasoning, not tricks.</strong> You learn why a setup works, so you can still
+                      decide when conditions change.
+                    </li>
+                    <li>
+                      <strong>Yours to change.</strong> The plan moves as you improve, not on a fixed calendar.
+                    </li>
+                  </ul>
+
+                  <div className="page-intro-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
+                      Start Discovery &rarr;
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
+                      Book a Call
+                    </button>
+                  </div>
+                </div>
+
+                <aside className="page-intro-aside" aria-label="One syllabus against one built for you">
+                  <div className="intro-compare">
+                    <div className="intro-compare-col muted">
+                      <span className="intro-compare-title">Most courses</span>
+                      <ul>
+                        <li>One set of videos for everyone</li>
+                        <li>Same order, same pace</li>
+                        <li>You skip what you already know</li>
+                        <li>No one checks your work</li>
+                      </ul>
+                    </div>
+                    <div className="intro-compare-col">
+                      <span className="intro-compare-title">FRINS</span>
+                      <ul>
+                        <li>Modules written for your level</li>
+                        <li>Pace set by what you can show</li>
+                        <li>Gaps found by your guide</li>
+                        <li>Every task read and marked</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <p className="intro-compare-note">
+                    Same subject. Two very different starting points.
+                  </p>
+                </aside>
               </div>
             </section>
 
