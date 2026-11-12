@@ -808,52 +808,178 @@ a {
   gap: 24px;
 }
 
-/* Audience Split & Competency Grids */
-.audience-split {
+/* Pathways: the four starting points on Programs.
+   One card, one shape: number and audience, the promise, what you work on,
+   then the two actions. Flat borders instead of pills so it reads like a
+   programme sheet, not a marketing tile. */
+.pathway-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: clamp(24px, 3.5vw, 36px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
-.audience-card {
+.pathway-card {
   background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-xl);
-  padding: clamp(30px, 4vw, 48px);
+  border: 1px solid #E3E8EF;
+  border-radius: 10px;
+  padding: 22px 24px 20px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  box-shadow: var(--shadow-subtle);
-}
-
-.audience-card h3 {
-  font-size: clamp(1.35rem, 2vw, 1.65rem);
-}
-
-.audience-focus-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 20px;
-}
-
-.audience-focus-list li {
-  font-size: 14.5px;
-  color: var(--text-main);
-  display: flex;
-  align-items: baseline;
   gap: 12px;
+  min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.focus-bullet {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-  transform: translateY(-2px);
+.pathway-card:hover {
+  border-color: #C7D2E1;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+}
+
+.pathway-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pathway-number {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #F2F5F9;
+  border: 1px solid #E3E8EF;
+  color: #0B1220;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.pathway-kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-light-muted);
+  min-width: 0;
+  line-height: 1.4;
+}
+
+.pathway-card h3 {
+  font-size: 18.5px;
+  line-height: 1.35;
+  letter-spacing: -0.012em;
+  margin: 2px 0 0;
+  color: #0B1220;
+}
+
+.pathway-intro {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-muted);
+}
+
+.pathway-body {
+  border-top: 1px solid #EEF1F5;
+  padding-top: 12px;
+  margin-top: 2px;
+}
+
+.pathway-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-light-muted);
+  margin-bottom: 8px;
+}
+
+.pathway-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pathway-list li {
+  position: relative;
+  padding-left: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.pathway-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  background: #C3CCDA;
+}
+
+.pathway-list strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.pathway-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #EEF1F5;
+  padding-top: 16px;
+  margin-top: auto;
+}
+
+.pathway-actions .btn {
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: 6px;
+}
+
+.pathway-actions .btn-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pathway-actions .btn-secondary {
+  flex: none;
+}
+
+@media (max-width: 900px) {
+  .pathway-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .pathway-card {
+    padding: 18px 16px 16px;
+  }
+
+  .pathway-card h3 {
+    font-size: 17px;
+  }
+
+  .pathway-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pathway-actions .btn {
+    width: 100%;
+  }
 }
 
 .steps-grid {

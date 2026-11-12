@@ -10,6 +10,152 @@ export type LearnerOrientationTrack =
   | 'both'
   | 'other';
 
+interface Pathway {
+  number: string;
+  kicker: string;
+  title: string;
+  intro: string;
+  points: Array<{ title: string; body: string }>;
+  startLabel: string;
+  track: LearnerOrientationTrack;
+}
+
+/** The four starting points. Copy lives here so the cards stay one shape. */
+export const PATHWAYS: Pathway[] = [
+  {
+    number: '01',
+    kicker: 'Students & Concept Learners',
+    title: 'Understand how the market works before you risk money',
+    intro:
+      'For students and complete beginners. You want the basics to actually make sense before anyone talks to you about strategies.',
+    points: [
+      {
+        title: 'The basics, explained properly.',
+        body: 'Who moves prices, what liquidity means, and why timeframes change the whole picture.'
+      },
+      {
+        title: 'Risk from day one.',
+        body: 'How much you can lose per idea, why drawdowns compound, and how to protect capital while learning.'
+      },
+      {
+        title: 'A plan that starts where you are.',
+        body: 'No skipped steps and no jargon you are expected to already know.'
+      }
+    ],
+    startLabel: 'Start Student Discovery',
+    track: 'student_concepts'
+  },
+  {
+    number: '02',
+    kicker: 'Strategy Understanding & Design',
+    title: 'Build rules you can explain out loud',
+    intro:
+      'For anyone testing an idea or trying to understand why some strategies work for a while and then stop. We work on the logic, not the signals.',
+    points: [
+      {
+        title: 'Anatomy of a setup.',
+        body: 'What qualifies, when you enter, where you are wrong, and how you exit.'
+      },
+      {
+        title: 'Knowing when to sit out.',
+        body: 'Every strategy works in some conditions and bleeds in others. Learn to tell them apart.'
+      },
+      {
+        title: 'Work on your own idea.',
+        body: 'Bring the strategy you care about and stress-test it with a mentor instead of a generic example.'
+      }
+    ],
+    startLabel: 'Start Strategy Discovery',
+    track: 'strategy_learner'
+  },
+  {
+    number: '03',
+    kicker: 'Active Traders',
+    title: 'Fix the part that costs you money: execution',
+    intro:
+      'For intraday and swing traders who know the setups but keep breaking their own rules when money is on the line.',
+    points: [
+      {
+        title: 'Plan before the open.',
+        body: 'Decide levels, size and invalidation while you are calm, not mid-candle.'
+      },
+      {
+        title: 'Stops that stay put.',
+        body: 'The plan is made in advance. At the stop you act. You do not renegotiate.'
+      },
+      {
+        title: 'A rule for red days.',
+        body: 'A set point where you stop trading, so one bad morning does not become a bad month.'
+      }
+    ],
+    startLabel: 'Start Trader Discovery',
+    track: 'trader'
+  },
+  {
+    number: '04',
+    kicker: 'Long-Term Investors',
+    title: 'Own things for reasons you wrote down',
+    intro:
+      'For longer-term investors who want a checklist before buying, a sizing rule they trust, and less reaction to daily headlines.',
+    points: [
+      {
+        title: 'Write it before you buy.',
+        body: 'What has to go right, what would prove you wrong, and when you sell.'
+      },
+      {
+        title: 'Size by downside.',
+        body: 'Position size comes from how much you can lose, not from how confident you feel.'
+      },
+      {
+        title: 'Review on a schedule.',
+        body: 'Look at holdings quarterly, not every time the market dips.'
+      }
+    ],
+    startLabel: 'Start Investor Discovery',
+    track: 'investor'
+  }
+];
+
+/**
+ * One starting point. Number and audience name sit above the promise, the
+ * promises read as a short list, and the two actions close the card.
+ */
+export const PathwayCard: React.FC<{
+  pathway: Pathway;
+  onStart: () => void;
+  onCall: () => void;
+}> = ({ pathway, onStart, onCall }) => (
+  <article className="pathway-card">
+    <header className="pathway-head">
+      <span className="pathway-number">{pathway.number}</span>
+      <span className="pathway-kicker">{pathway.kicker}</span>
+    </header>
+
+    <h3>{pathway.title}</h3>
+    <p className="pathway-intro">{pathway.intro}</p>
+
+    <div className="pathway-body">
+      <span className="pathway-label">What you work on</span>
+      <ul className="pathway-list">
+        {pathway.points.map((point) => (
+          <li key={point.title}>
+            <strong>{point.title}</strong> {point.body}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <footer className="pathway-actions">
+      <button type="button" className="btn btn-primary" onClick={onStart}>
+        {pathway.startLabel}
+      </button>
+      <button type="button" className="btn btn-secondary" onClick={onCall}>
+        Book a Call
+      </button>
+    </footer>
+  </article>
+);
+
 export interface PublicSiteNavProps {
   onOpenSignIn?: () => void;
   onStartDiscovery?: () => void;
@@ -1141,190 +1287,15 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
             <section className="section-pad">
               <div className="container">
-                <div className="audience-split">
-                  {/* Track 1: Market Students & Concept Learners */}
-                  <div className="audience-card">
-                    <span className="micro-tag accent">Pathway 01 &middot; Students &amp; Concept Learners</span>
-                    <h3>Understand how the market works before you risk money</h3>
-                    <p>
-                      For students and complete beginners. You want the basics to actually make sense before anyone talks to you about strategies.
-                    </p>
-                    <ul className="audience-focus-list">
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>The basics, explained properly:</strong> who moves prices, what liquidity means, and why timeframes change the whole picture.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Risk from day one:</strong> how much you can lose per idea, why drawdowns compound, and how to protect capital while learning.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>A plan that starts where you are:</strong> no skipped steps and no jargon you are expected to already know.
-                        </span>
-                      </li>
-                    </ul>
-                    <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ flex: 1 }}
-                        onClick={() => openModalWithTrack('student_concepts')}
-                      >
-                        Start Student Discovery &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => openDirectCallModal('student_concepts')}
-                      >
-                        Book a Call
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Track 2: Strategy Learners & Builders */}
-                  <div className="audience-card">
-                    <span className="micro-tag accent">Pathway 02 &middot; Strategy Understanding &amp; Design</span>
-                    <h3>Build rules you can explain out loud</h3>
-                    <p>
-                      For anyone testing an idea or trying to understand why some strategies work for a while and then stop. We work on the logic, not the signals.
-                    </p>
-                    <ul className="audience-focus-list">
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Anatomy of a setup:</strong> what qualifies, when you enter, where you are wrong, and how you exit.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Knowing when to sit out:</strong> every strategy has conditions where it works and conditions where it bleeds. Learn to tell them apart.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Work on your own idea:</strong> bring the strategy you care about and stress-test it with a mentor instead of studying a generic example.
-                        </span>
-                      </li>
-                    </ul>
-                    <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ flex: 1 }}
-                        onClick={() => openModalWithTrack('strategy_learner')}
-                      >
-                        Start Strategy Discovery &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => openDirectCallModal('strategy_learner')}
-                      >
-                        Book a Call
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Track 3: Active Traders */}
-                  <div className="audience-card">
-                    <span className="micro-tag accent">Pathway 03 &middot; Active Traders</span>
-                    <h3>Fix the part that costs you money: execution</h3>
-                    <p>
-                      For intraday and swing traders who know the setups but keep breaking their own rules when money is on the line.
-                    </p>
-                    <ul className="audience-focus-list">
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Plan before the open:</strong> decide levels, size and invalidation while you are calm, not mid-candle.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Stops that stay put:</strong> the plan is made in advance. At the stop, you act. You do not renegotiate.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>A rule for red days:</strong> a set point where you stop trading, so one bad morning does not become a bad month.
-                        </span>
-                      </li>
-                    </ul>
-                    <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ flex: 1 }}
-                        onClick={() => openModalWithTrack('trader')}
-                      >
-                        Start Trader Discovery &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => openDirectCallModal('trader')}
-                      >
-                        Book a Call
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Track 4: Long-Term Investors */}
-                  <div className="audience-card">
-                    <span className="micro-tag accent">Pathway 04 &middot; Long-Term Investors</span>
-                    <h3>Own things for reasons you wrote down</h3>
-                    <p>
-                      For longer-term investors who want a checklist before buying, a sizing rule they trust, and less reaction to daily headlines.
-                    </p>
-                    <ul className="audience-focus-list">
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Write it before you buy:</strong> what has to go right, what would prove you wrong, and when you sell.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Size by downside:</strong> position size comes from how much you can lose, not from how confident you feel.
-                        </span>
-                      </li>
-                      <li>
-                        <span className="focus-bullet" />
-                        <span>
-                          <strong>Review on a schedule:</strong> look at holdings quarterly, not every time the market dips.
-                        </span>
-                      </li>
-                    </ul>
-                    <div style={{ marginTop: 'auto', paddingTop: 10, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        style={{ flex: 1 }}
-                        onClick={() => openModalWithTrack('investor')}
-                      >
-                        Start Investor Discovery &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => openDirectCallModal('investor')}
-                      >
-                        Book a Call
-                      </button>
-                    </div>
-                  </div>
+                <div className="pathway-grid">
+                  {PATHWAYS.map((pathway) => (
+                    <PathwayCard
+                      key={pathway.number}
+                      pathway={pathway}
+                      onStart={() => openModalWithTrack(pathway.track)}
+                      onCall={() => openDirectCallModal(pathway.track)}
+                    />
+                  ))}
                 </div>
               </div>
             </section>

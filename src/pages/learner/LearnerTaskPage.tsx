@@ -225,13 +225,17 @@ export const LearnerTaskPage: React.FC = () => {
       {banner && <div className="governance-alert success">{banner}</div>}
       {error && <div className="governance-alert danger">{error}</div>}
 
-      <div className={`state-card ${state.tone}`}>
-        <span className="state-icon">{state.icon}</span>
-        <div>
-          <strong>{state.title}</strong>
-          <p>{state.body}</p>
+      {/* The steps strip already says a task is with the guide, so the card is
+          only shown when there is something to act on. */}
+      {!waiting && (
+        <div className={`state-card ${state.tone}`}>
+          <span className="state-icon">{state.icon}</span>
+          <div>
+            <strong>{state.title}</strong>
+            <p>{state.body}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="review-steps">
         <div className={`review-step ${stepState(1)}`}>
