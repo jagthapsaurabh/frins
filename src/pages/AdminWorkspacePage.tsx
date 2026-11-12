@@ -1244,9 +1244,9 @@ export const AdminWorkspacePage: React.FC = () => {
                 {/* 1. Student Uploaded Result & Visual Chart Artifact */}
                 <div className="panel-card" style={{ marginBottom: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-                    <div>
-                      <span className="micro-tag accent">
-                        Student Task Submission &middot; {selectedTask.category}
+                    <div style={{ minWidth: 0 }}>
+                      <span className="micro-tag accent task-category-tag">
+                        Student task &middot; {selectedTask.category}
                       </span>
                       <h2 style={{ fontSize: 22, marginTop: 6 }}>{selectedTask.title}</h2>
                       <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>

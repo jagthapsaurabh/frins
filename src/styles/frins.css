@@ -5322,3 +5322,23 @@ a {
     display: none;
   }
 }
+
+/* Stacked panels on a phone must not be pushed wide by a long word. */
+@media (max-width: 900px) {
+  .workspace-sidebar-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workspace-sidebar-layout > *,
+  .admin-body,
+  .panel-card {
+    min-width: 0;
+  }
+}
+
+/* Long category codes like CHART_CONCEPT_LAB must not set the panel width. */
+.task-category-tag {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
