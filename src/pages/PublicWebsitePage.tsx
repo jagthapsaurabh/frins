@@ -698,18 +698,17 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             <section className="hero-section">
               <div className="container hero-grid">
                 <div className="hero-content">
-                  <div>
-                    <span className="micro-tag accent">
-                      For students, strategy learners, traders and investors
-                    </span>
-                  </div>
+                  <p className="hero-eyebrow">
+                    For students, strategy learners, traders and investors
+                  </p>
 
                   <h1 className="hero-title">
                     Learn the market with a course <span className="text-gradient">built around you</span>.
                   </h1>
 
                   <p className="hero-lead">
-                    Maybe you are a student starting from zero. Maybe you are testing a strategy, or you have traded for years and want to tighten execution. Wherever you are, your course starts there, not at page one of a template.
+                    Start from zero, test a strategy, or fix the execution that keeps costing you. Your
+                    course starts where you are, not at page one of a template.
                   </p>
 
                   {/* Primary CTA Bar with BOTH "Begin Discovery" AND Direct "Book a Call" */}
@@ -732,28 +731,20 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       <span>Book a Call Directly</span>
                     </button>
                   </div>
-                  <div className="hero-note">
-                    Rather talk to a person first? Hit <strong>Book a Call Directly</strong>. No questionnaire needed.
-                  </div>
+                  <p className="hero-note">
+                    Rather talk to a person first? <strong>Book a Call Directly</strong>. No questionnaire
+                    needed.
+                  </p>
 
-                  <div className="hero-trust-strip">
-                    <div className="trust-metric-item">
-                      <span className="trust-metric-val">Anyone can join</span>
-                      <span className="trust-metric-lbl">Students, traders, investors</span>
-                    </div>
-                    <div className="trust-metric-item">
-                      <span className="trust-metric-val">Your own course</span>
-                      <span className="trust-metric-lbl">Built from your goals</span>
-                    </div>
-                    <div className="trust-metric-item">
-                      <span className="trust-metric-val">Real mentors</span>
-                      <span className="trust-metric-lbl">1-on-1 calls, when you need</span>
-                    </div>
-                  </div>
+                  <ul className="hero-points">
+                    <li>Anyone can join, from a first question to ten years in.</li>
+                    <li>Your course is built from your goals, not a template.</li>
+                    <li>Real mentors on 1-on-1 calls, whenever you need one.</li>
+                  </ul>
                 </div>
 
                 {/* Right: 2-Tab Interactive Preview Card */}
-                <div className="hero-artifact" aria-label="Interactive FRINS System Preview">
+                <div className="hero-artifact square" aria-label="Interactive FRINS System Preview">
                   <div className="artifact-header" role="tablist" aria-label="FRINS Learning Views">
                     <div className="artifact-tab-group">
                       <button
@@ -896,7 +887,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                           style={{
                             background: 'var(--bg-canvas)',
                             padding: '12px 16px',
-                            borderRadius: 12,
+                            borderRadius: 0,
                             border: '1px solid var(--border-subtle)'
                           }}
                         >
