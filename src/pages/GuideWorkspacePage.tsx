@@ -1,11 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { StaffSignInGate } from '../components/StaffSignInGate';
+import { PageHead } from '../components/console/ConsoleUI';
+import { RefreshCw } from 'lucide-react';
 
 /**
  * The learner review desk. `embedded` drops the page padding and the sign-in
  * gate so the same component can sit inside the Admin Console.
  */
+const human = (value?: string) => {
+  const words = String(value || '').replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user, authFetch } = useAuth();
   const [workspaceData, setWorkspaceData] = useState<any>(null);
@@ -135,7 +142,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
     const out = await res.json();
     if (res.ok && out.success) {
       setGovernanceBanner(
-        `✓ Recorded Formal Assessment (${out.assessmentId}, Weight: HIGH_FORMAL). Updated Multi-Source Sufficiency: ${out.sufficiencyEvaluation.evidenceStatus} → Proposed Action: ${out.sufficiencyEvaluation.proposedAdaptationAction}`
+        `Assessment ${out.assessmentId} recorded. Evidence is ${out.sufficiencyEvaluation.evidenceStatus.toLowerCase().replace(/_/g, ' ')}, so the next step is ${out.sufficiencyEvaluation.proposedAdaptationAction.toLowerCase().replace(/_/g, ' ')}.`
       );
       setAssFindings('');
       await loadGuideWorkspace();
@@ -213,7 +220,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
     const out = await res.json();
     if (res.ok && out.success) {
       setGovernanceBanner(
-        `✓ Approved Learner-Specific Competency (${out.proposalId}). Permanent Core Competency Library modified: FALSE (Requirement 11 enforced).`
+        `Competency ${out.proposalId} approved for this learner. The shared competency library is unchanged.`
       );
       setCustomCompTitle('');
       setCustomCompDesc('');
@@ -249,33 +256,15 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
   return (
     <div className={embedded ? 'guide-embedded' : 'workspace-shell'}>
       <div className={embedded ? '' : 'container-wide'}>
-        <div className="workspace-header-banner">
-          <div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-              <span className="micro-tag accent">FRI-GUIDE-001 &middot; Human Governance Workspace</span>
-              <span className="micro-tag success">Signed in: {user?.name} ({user?.role})</span>
-            </div>
-            <h1 style={{ fontSize: 30, marginBottom: 6 }}>Learning Guide Review &amp; Approval Console</h1>
-            <p style={{ maxWidth: 760, fontSize: 14.5 }}>
-              AI proposes; the human Learning Guide reviews evidence with the learner, conducts the 45-minute FRINS Conversation, and explicitly approves, edits-and-approves, requests changes, or rejects PDP versions and level progressions.
-            </p>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <div className="metric-stat-box" style={{ padding: '10px 16px' }}>
-              <span className="metric-label">Pending PDP Drafts</span>
-              <span className="metric-value" style={{ fontSize: 20, color: 'var(--warn-text)' }}>
-                {workspaceData?.pendingPDPs?.length || 0}
-              </span>
-            </div>
-            <div className="metric-stat-box" style={{ padding: '10px 16px' }}>
-              <span className="metric-label">Assigned Learners</span>
-              <span className="metric-value" style={{ fontSize: 20 }}>
-                {workspaceData?.learners?.length || 0}
-              </span>
-            </div>
-          </div>
-        </div>
+        <PageHead
+          title="Learner reviews"
+          meta={`${workspaceData?.learners?.length || 0} learners, ${workspaceData?.pendingPDPs?.length || 0} drafts waiting`}
+          actions={
+            <button type="button" className="btn btn-secondary" onClick={() => loadGuideWorkspace()}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          }
+        />
 
         {governanceBanner && (
           <div className="governance-alert success">
@@ -287,7 +276,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
           {/* Left Column: Learner Roster & Learner-Specific Competency Creator */}
           <div>
             <div className="panel-card">
-              <h3 style={{ fontSize: 16, marginBottom: 10 }}>Authorised Learner Roster</h3>
+              <h3 style={{ fontSize: 13.5, marginBottom: 10 }}>Your learners</h3>
               <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                 <input
                   className="form-input"
@@ -330,7 +319,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                         </span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                        Track: {l.track.toUpperCase()} &middot; Evidence: {l.evidence_status}
+                        {human(l.track)} · evidence {String(l.evidence_status || '').toLowerCase().replace(/_/g, ' ')}
                       </div>
                       <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                         {l.activePDP && (
@@ -352,8 +341,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
 
             {/* Learner-Specific vs Permanent Core Competency Governance */}
             <div className="panel-card">
-              <span className="micro-tag accent">Requirement 11 Governance</span>
-              <h3 style={{ fontSize: 16, margin: '6px 0 8px' }}>Add Learner-Specific Competency</h3>
+                  <h3 style={{ fontSize: 16, margin: '6px 0 8px' }}>Add Learner-Specific Competency</h3>
               <p style={{ fontSize: 12, marginBottom: 12 }}>
                 Approving a learner-specific competency attaches it to this learner&apos;s profile without modifying the permanent FRINS Core Competency Library.
               </p>
@@ -394,11 +382,10 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                     <div>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
-                        <span className="micro-tag accent">Learner Dossier: {learnerDossier.learner.name}</span>
-                        <span className="micro-tag success">Approved Level: {learnerDossier.profile?.approved_level}</span>
+                        <span className="micro-tag success">Level {learnerDossier.profile?.approved_level}</span>
                         {learnerDossier.profile?.proposed_level && (
                           <span className="micro-tag warn">
-                            Candidate Level Proposal: {learnerDossier.profile.proposed_level} ({learnerDossier.profile.level_review_state})
+                            L{learnerDossier.profile.proposed_level} suggested for you to decide
                           </span>
                         )}
                       </div>
@@ -418,19 +405,18 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                       fontSize: 13
                     }}
                   >
-                    <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-dark-muted)', marginBottom: 4 }}>
-                      Guide-Only Confidential Notes (Never Exposed to Learner API)
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-dark-muted)', marginBottom: 4 }}>
+                      Your notes. The learner never sees these.
                     </div>
                     <div>{learnerDossier.profile?.guide_private_notes}</div>
                   </div>
                 </div>
 
-                {/* Multi-Source Evidence Sufficiency & Post-Practice Adaptation Proposal (Requirement 8.26 & Section 11) */}
                 {suffEval && (
                   <div className="panel-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                       <div>
-                        <span className="micro-tag accent">Requirement 11 &middot; Multi-Source Sufficiency Engine</span>
+                        <span className="micro-tag accent">Evidence</span>
                         <h3 style={{ fontSize: 18, marginTop: 4 }}>Evidence Weight &amp; Post-Practice Adaptation Proposal</h3>
                       </div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -443,29 +429,29 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                                 : 'warn'
                           }`}
                         >
-                          Status: {suffEval.evidenceStatus}
+                          {human(suffEval.evidenceStatus)} evidence
                         </span>
                         <span className="micro-tag accent">
-                          Proposal: {suffEval.proposedAdaptationAction}
+                          {human(suffEval.proposedAdaptationAction)}
                         </span>
                       </div>
                     </div>
 
                     <div className="workspace-grid-3" style={{ marginBottom: 12 }}>
                       <div style={{ padding: 12, background: 'var(--bg-canvas)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--success-text)' }}>HIGH_FORMAL WEIGHT</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Formal assessments</div>
                         <div style={{ fontSize: 20, fontWeight: 800 }}>{suffEval.sourceBreakdown.highFormalAssessments}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Formal Guide Scenario / Process Evaluations</div>
                       </div>
 
                       <div style={{ padding: 12, background: 'var(--bg-canvas)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)' }}>MEDIUM_PRACTICE WEIGHT</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Practice logs</div>
                         <div style={{ fontSize: 20, fontWeight: 800 }}>{suffEval.sourceBreakdown.mediumPracticeArtefacts}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Deliberate Practice &amp; Conversation Logs</div>
                       </div>
 
                       <div style={{ padding: 12, background: 'var(--bg-canvas)', borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-light-muted)' }}>LOW_REFLECTION WEIGHT</div>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)' }}>Reflections</div>
                         <div style={{ fontSize: 20, fontWeight: 800 }}>{suffEval.sourceBreakdown.lowWeightReflections}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Self-Reported Reflections &amp; Discovery</div>
                       </div>
@@ -485,11 +471,11 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                   <div className="panel-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span className="micro-tag accent">Three-Agent AI Brief</span>
-                        <span className="micro-tag warn">Mode: {latestAI.provider_mode}</span>
+                        <span className="micro-tag accent">AI brief</span>
+                        <span className="micro-tag warn">{latestAI.provider_mode === 'MOCK_DETERMINISTIC' ? 'Offline mock' : 'Live model'}</span>
                         <span className="micro-tag">Trace: {latestAI.trace_id}</span>
                       </div>
-                      <span className="micro-tag">{latestAI.review_state}</span>
+                      <span className="micro-tag">{human(latestAI.review_state)}</span>
                     </div>
 
                     <div style={{ padding: 14, background: 'var(--bg-canvas)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', marginBottom: 14 }}>
@@ -533,7 +519,6 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
 
                 {/* Step 6, 7 & 8: Record 45-Minute FRINS Conversation & Agreed Learning Needs */}
                 <div className="panel-card">
-                  <span className="micro-tag accent">Product Journey Steps 6, 7 &amp; 8</span>
                   <h3 style={{ fontSize: 18, margin: '6px 0 8px' }}>
                     Record 45-Minute FRINS Conversation &amp; Agreed Learning Needs
                   </h3>
@@ -590,7 +575,6 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                 <div className="panel-card" style={{ border: '1.5px solid var(--accent)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                     <div>
-                      <span className="micro-tag accent">Consequential Governance Gate 1 (Step 9 &amp; 10)</span>
                       <h3 style={{ fontSize: 19, marginTop: 4 }}>PDP Version Review &amp; Approval Workflow</h3>
                     </div>
                     <span className="micro-tag warn">Prior Approved PDP Remains Active Until Explicit Approval</span>
@@ -721,7 +705,7 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                 {/* Consequential Action 2: Record Formal Assessment & Competency Level Progression */}
                 <div className="workspace-grid-2">
                   <div className="panel-card">
-                    <span className="micro-tag accent">HIGH_FORMAL Evidence Source</span>
+                    <span className="micro-tag accent">Formal evidence</span>
                     <h3 style={{ fontSize: 17, margin: '4px 0 8px' }}>Record Formal Guide Assessment</h3>
                     <form onSubmit={handleRecordFormalAssessment}>
                       <div className="form-group">
@@ -764,13 +748,12 @@ export const GuideWorkspacePage: React.FC<{ embedded?: boolean }> = ({ embedded 
                         />
                       </div>
                       <button type="submit" className="btn btn-secondary btn-sm">
-                        + Log Formal Assessment (HIGH_FORMAL)
+                        + Log formal assessment
                       </button>
                     </form>
                   </div>
 
                   <div className="panel-card">
-                    <span className="micro-tag accent">Consequential Governance Gate 2</span>
                     <h3 style={{ fontSize: 17, margin: '4px 0 8px' }}>
                       Approve Level Progression (Current: {learnerDossier.profile?.approved_level})
                     </h3>
