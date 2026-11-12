@@ -354,19 +354,22 @@ export const PublicSiteFooter: React.FC<{
       <div className="container">
         <div className="footer-grid">
           <div className="footer-brand">
-            <img
-              className="footer-brand-logo"
-              src="/brand/frins-lockup-white.png"
-              alt="FRINS — Market Learning, Taught Properly"
-            />
+            <div className="footer-lockup">
+              <img className="footer-mark" src="/brand/frins-mark-white.png" alt="" aria-hidden="true" />
+              <div className="footer-wordmark">
+                <strong>FRINS</strong>
+                <span>Market Learning, Taught Properly</span>
+              </div>
+            </div>
             <p>
-              Market education built around you. Concepts, strategy work and 1-on-1 mentorship for students, strategy learners, traders and investors.
+              Market education built around you. Concepts, strategy work and 1-on-1 mentorship for
+              students, strategy learners, traders and investors.
             </p>
           </div>
 
           <div className="footer-nav">
             <div className="footer-nav-col">
-              <span className="footer-col-title">Website Pages</span>
+              <span className="footer-col-title">Website</span>
               <button type="button" onClick={() => navigate('/')}>
                 Home
               </button>
@@ -374,43 +377,67 @@ export const PublicSiteFooter: React.FC<{
                 Why FRINS &amp; Boundaries
               </button>
               <button type="button" onClick={() => navigate('/how-it-works')}>
-                How It Works
+                How it works
               </button>
               <button type="button" onClick={() => navigate('/tracks')}>
-                Who Can Join &amp; Tracks
-              </button>
-              <button
-                type="button"
-                onClick={() => (onBookCallDirect ? onBookCallDirect() : navigate('/?bookCall=1'))}
-              >
-                Book a Call Directly
+                Programs
               </button>
               <button
                 type="button"
                 onClick={() => (onStartDiscovery ? onStartDiscovery() : navigate('/discovery'))}
               >
-                Start Discovery
+                Discovery
               </button>
             </div>
 
             <div className="footer-nav-col">
-              <span className="footer-col-title">For Learners</span>
+              <span className="footer-col-title">For learners</span>
               <button type="button" onClick={() => (onOpenSignIn ? onOpenSignIn() : navigate('/login'))}>
-                Student Login
+                Student login
               </button>
               <button type="button" onClick={() => (onStartDiscovery ? onStartDiscovery() : navigate('/discovery'))}>
                 Start Discovery
               </button>
               <button type="button" onClick={() => (onBookCallDirect ? onBookCallDirect() : navigate('/?bookCall=1'))}>
-                Book a Call
+                Book a call
               </button>
+            </div>
+
+            <div className="footer-nav-col footer-contact">
+              <span className="footer-col-title">Contact</span>
+
+              <span className="footer-contact-row">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0Z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span>
+                  Nagpur, Maharashtra
+                  <small>India</small>
+                </span>
+              </span>
+
+              <a className="footer-contact-row" href="tel:+918793885079">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
+                </svg>
+                <span>+91 87938 85079</span>
+              </a>
+
+              <a className="footer-contact-row" href="mailto:support@frins.in">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="2.5" y="4.5" width="19" height="15" rx="2" />
+                  <path d="m3 6 9 7 9-7" />
+                </svg>
+                <span>support@frins.in</span>
+              </a>
             </div>
           </div>
         </div>
 
         <div className="footer-bottom">
           <span>&copy; 2026 FRINS. All rights reserved.</span>
-          <span>Strictly Educational &amp; Custom-Built Per Learner &middot; Non-Advisory</span>
+          <span>Strictly educational &middot; Custom-built per learner &middot; Non-advisory</span>
         </div>
       </div>
     </footer>

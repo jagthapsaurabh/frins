@@ -1046,74 +1046,211 @@ a {
   color: var(--text-dark-muted);
 }
 
+/* ---------------------------------------------------------------------------
+   Footer
+
+   Four columns on a wide screen: who we are, what is on the site, what a
+   learner needs, and how to reach us. The logo is the mark plus type instead of
+   the shrunken lockup, so the tagline stays readable on a dark background.
+   --------------------------------------------------------------------------- */
+
 .site-footer {
-  background: #090D16;
-  border-top: 1px solid #1E293B;
-  color: var(--text-dark-muted);
-  padding: 60px 0 40px;
+  background: #080C15;
+  border-top: 1px solid #1B2434;
+  color: #9FB0C7;
+  padding: 52px 0 26px;
 }
 
 .footer-grid {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 44px;
-  flex-wrap: wrap;
-  padding-bottom: 44px;
-  border-bottom: 1px solid #1E293B;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: clamp(28px, 4vw, 56px);
+  align-items: start;
+  padding-bottom: 36px;
+  border-bottom: 1px solid #1B2434;
 }
 
 .footer-brand {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  max-width: 340px;
+  gap: 16px;
+  max-width: 360px;
+  min-width: 0;
+}
+
+.footer-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.footer-mark {
+  width: 44px;
+  height: auto;
+  display: block;
+  flex: none;
+}
+
+.footer-wordmark {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.footer-wordmark strong {
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  color: #FFFFFF;
+}
+
+.footer-wordmark span {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #7C8CA3;
+  line-height: 1.4;
+}
+
+.footer-brand p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #8FA0B8;
+  max-width: 320px;
 }
 
 .footer-nav {
-  display: flex;
-  gap: clamp(36px, 5vw, 72px);
-  flex-wrap: wrap;
+  display: contents;
 }
 
 .footer-nav-col {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .footer-col-title {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #F8FAFC;
+  color: #E7EDF6;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #1B2434;
 }
 
-.footer-nav-col a, .footer-nav-col button {
-  font-size: 14px;
-  color: var(--text-dark-muted);
+.footer-nav-col a,
+.footer-nav-col button {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #9FB0C7;
   background: none;
   border: none;
   text-align: left;
   cursor: pointer;
   padding: 0;
   font-family: inherit;
+  transition: color 0.15s ease;
+  width: fit-content;
 }
 
-.footer-nav-col a:hover, .footer-nav-col button:hover {
-  color: #FFF;
+.footer-nav-col a:hover,
+.footer-nav-col button:hover {
+  color: #FFFFFF;
+}
+
+/* Contact, as three lines rather than a list of links. */
+.footer-contact {
+  gap: 12px;
+}
+
+.footer-contact .footer-col-title {
+  margin-bottom: 2px;
+}
+
+.footer-contact-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #9FB0C7;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.footer-contact-row svg {
+  flex: none;
+  margin-top: 2px;
+  color: #6E86A6;
+}
+
+.footer-contact-row:hover {
+  color: #FFFFFF;
+  text-decoration: none;
+}
+
+.footer-contact-row:hover svg {
+  color: #35C4B3;
+}
+
+.footer-contact-row span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.footer-contact-row small {
+  font-size: 12.5px;
+  color: #7C8CA3;
+  line-height: 1.4;
 }
 
 .footer-bottom {
-  padding-top: 28px;
+  padding-top: 22px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: 12.5px;
   color: #64748B;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 10px 24px;
+}
+
+@media (max-width: 1080px) {
+  .footer-grid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .footer-brand {
+    grid-column: 1 / -1;
+    max-width: none;
+    margin-bottom: 6px;
+  }
+  .footer-brand p { max-width: 560px; }
+}
+
+@media (max-width: 720px) {
+  .site-footer { padding: 36px 0 22px; }
+  .footer-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 26px;
+    padding-bottom: 26px;
+  }
+  .footer-brand { margin-bottom: 0; }
+  .footer-mark { width: 38px; }
+  .footer-wordmark strong { font-size: 22px; }
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: 18px;
+  }
 }
 
 /* Modal & Forms */
