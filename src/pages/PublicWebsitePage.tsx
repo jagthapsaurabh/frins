@@ -597,7 +597,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       <span>Book a Call Directly</span>
                     </button>
                   </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-light-muted)', marginTop: -8 }}>
+                  <div className="hero-note">
                     Rather talk to a person first? Hit <strong>Book a Call Directly</strong>. No questionnaire needed.
                   </div>
 

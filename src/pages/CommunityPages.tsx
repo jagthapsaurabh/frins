@@ -238,8 +238,8 @@ export const CommunityListPage: React.FC = () => {
                       </span>
                       <span className="row-sub">{row.last_message || row.description || 'No post yet'}</span>
                     </td>
-                    <td className="num">{row.member_count}</td>
-                    <td className="num">{row.message_count}</td>
+                    <td>{row.member_count}</td>
+                    <td>{row.message_count}</td>
                     <td className="row-sub" style={{ whiteSpace: 'nowrap' }}>
                       {row.last_message_at ? timeAgo(row.last_message_at) : '—'}
                     </td>

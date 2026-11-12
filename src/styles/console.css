@@ -404,7 +404,7 @@ a.kpi:hover { background: #FCFCFD; }
 
 /* ---------- Tags and status -------------------------------------------- */
 
-.micro-tag {
+.app-shell .micro-tag {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -421,10 +421,10 @@ a.kpi:hover { background: #FCFCFD; }
   white-space: nowrap;
 }
 
-.micro-tag.accent { background: var(--accent-soft); border-color: var(--accent-border); color: #1D4ED8; }
-.micro-tag.success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
-.micro-tag.warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
-.micro-tag.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.app-shell .micro-tag.accent { background: var(--accent-soft); border-color: var(--accent-border); color: #1D4ED8; }
+.app-shell .micro-tag.success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.app-shell .micro-tag.warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+.app-shell .micro-tag.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
 
 .status-pill, .pill {
   display: inline-flex;
@@ -553,7 +553,7 @@ a.kpi:hover { background: #FCFCFD; }
   border: 1px dashed var(--border-soft);
   border-radius: 6px;
   padding: 32px 20px;
-  text-align: center;
+  text-align: left;
   color: var(--text-light-muted);
   font-size: 12.5px;
   background: #FCFCFD;
@@ -1409,7 +1409,7 @@ a.kpi:hover { background: #FCFCFD; }
   gap: 4px;
   padding: 34px 18px;
   color: var(--text-light-muted);
-  text-align: center;
+  text-align: left;
   height: 100%;
 }
 .inbox-empty svg { color: #C4CBD6; margin-bottom: 2px; }
@@ -1721,4 +1721,55 @@ a.kpi:hover { background: #FCFCFD; }
    every title onto five lines. */
 @media (max-width: 900px) {
   .data-table .col-md { display: none; }
+}
+
+/* ==========================================================================
+   Turn 29 fixes
+   ========================================================================== */
+
+/* Column headings sit centred over their data, which stays left aligned. The
+   eye finds the column, then reads the value. */
+.data-table thead th,
+.course-table thead th,
+.roster-table thead th,
+.app-content .admin-table-wrap th {
+  text-align: left;
+}
+
+.data-table td.num,
+.course-table td.num,
+.roster-table td.num {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sidebar tabs get their own face: Poppins, a touch larger, calmer spacing. */
+.app-nav-item {
+  font-family: 'Poppins', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.012em;
+}
+.app-nav-item.active { font-weight: 600; }
+.app-nav-section {
+  font-family: 'Poppins', 'Roboto', sans-serif;
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+}
+
+/* Numbers sit left under their centred heading, so a column reads straight
+   down: label in the header, value under the same edge. */
+.data-table td.num,
+.course-table td.num,
+.roster-table td.num,
+.app-content .admin-table-wrap td.num {
+  text-align: left;
+}
+
+/* The tab title in the top bar gets the same face as the sidebar. */
+.app-breadcrumb strong {
+  font-family: 'Poppins', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  font-size: 13px;
 }

@@ -14,8 +14,8 @@ const humanAction = (action: string) =>
     .join(' ');
 
 /**
- * Rubric versions and the audit trail. Account security is handled by the
- * sign-in flow, so there is no password form here.
+ * The competency library and the audit trail. Account security is handled by
+ * the sign-in flow, so there is no password form here.
  */
 export const SettingsPage: React.FC = () => {
   const { authFetch } = useAuth();
@@ -24,7 +24,6 @@ export const SettingsPage: React.FC = () => {
   const [code, setCode] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [version, setVersion] = useState('2.0');
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -59,15 +58,15 @@ export const SettingsPage: React.FC = () => {
     setBanner(null);
     const res = await authFetch('/api/admin/competencies', {
       method: 'POST',
-      body: JSON.stringify({ code, title, description, rubricVersion: version })
+      body: JSON.stringify({ code, title, description })
     });
     const json = await res.json().catch(() => ({}));
     setBusy(false);
     if (!res.ok || !json.success) {
-      setBanner(json.error || 'Could not publish that version.');
+      setBanner(json.error || 'Could not save that competency.');
       return;
     }
-    setBanner(`${code} is now on rubric v${version}.`);
+    setBanner(`${code} saved.`);
     setCode('');
     setTitle('');
     setDescription('');
@@ -85,16 +84,15 @@ export const SettingsPage: React.FC = () => {
           <section className="panel-card">
             <div className="panel-head">
               <h2>
-                <ShieldCheck size={13} /> Competency rubrics
+                <ShieldCheck size={13} /> Competency library
               </h2>
-              <span className="section-note">Publishing keeps the old version in the audit trail</span>
+              <span className="section-note">Changes are recorded in the audit trail</span>
             </div>
 
             <TableShell
               columns={[
-                { label: 'Code', width: 130 },
-                { label: 'Title' },
-                { label: 'Rubric', width: 70 }
+                { label: 'Code', width: 140 },
+                { label: 'Competency' }
               ]}
               isEmpty={competencies.length === 0}
               empty="No competency loaded."
@@ -108,13 +106,12 @@ export const SettingsPage: React.FC = () => {
                     <span className="row-title">{item.title}</span>
                     <span className="row-sub">{item.description}</span>
                   </td>
-                  <td data-label="Rubric">v{item.rubric_version}</td>
                 </tr>
               ))}
             </TableShell>
 
             <form onSubmit={publishRubric} style={{ marginTop: 16 }}>
-              <div className="form-row-3">
+              <div className="form-row-2">
                 <div className="form-group">
                   <label className="form-label" htmlFor="rubricCode">
                     Code
@@ -140,18 +137,6 @@ export const SettingsPage: React.FC = () => {
                     required
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label" htmlFor="rubricVersion">
-                    Version
-                  </label>
-                  <input
-                    id="rubricVersion"
-                    className="form-input"
-                    value={version}
-                    onChange={(e) => setVersion(e.target.value)}
-                    required
-                  />
-                </div>
               </div>
               <div className="form-group">
                 <label className="form-label" htmlFor="rubricDescription">
@@ -166,7 +151,7 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
               <button type="submit" className="btn btn-secondary" disabled={busy}>
-                {busy ? 'Publishing' : 'Publish version'}
+                {busy ? 'Saving' : 'Save competency'}
               </button>
             </form>
           </section>

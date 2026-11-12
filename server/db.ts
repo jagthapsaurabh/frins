@@ -1915,7 +1915,7 @@ export function initDatabaseAndSeed() {
     'pdp_aarav_v1',
     'usr_learner_aarav',
     1,
-    'Foundational Process & Downside Execution Plan (v1.0, Active)',
+    'Foundational Process & Downside Execution Plan',
     'ACTIVE_APPROVED',
     'Approved after initial 45-minute FRINS Conversation with Dr. Vikram Sen. Focuses on establishing a written pre-market checklist and respecting initial invalidation stops without averaging down.',
     JSON.stringify([
@@ -1939,11 +1939,11 @@ export function initDatabaseAndSeed() {
     'pdp_aarav_v2',
     'usr_learner_aarav',
     2,
-    'Stage 2 Revision: Regime Filtering & Scaling Discipline (v2.0, Pending Guide Approval)',
+    'Stage 2 Revision: Regime Filtering & Scaling Discipline',
     'PENDING_GUIDE_REVIEW',
-    'Proposed revision incorporating recent reflection evidence. Adds volatility regime filtering and structured profit-scaling rules while maintaining v1.0 downside guardrails.',
+    'Proposed revision incorporating recent reflection evidence. Adds volatility regime filtering and structured profit-scaling rules while keeping the same downside guardrails.',
     JSON.stringify([
-      'Maintain all v1.0 pre-trade qualification and hard invalidation stop rules.',
+      'Maintain all pre-trade qualification and hard invalidation stop rules.',
       'Add opening-range volatility check to avoid chasing gap-up extensions in the first 15 minutes.',
       'Conduct weekly 2x2 Process vs Outcome matrix audit with chart screenshots attached.'
     ]),
@@ -1963,7 +1963,7 @@ export function initDatabaseAndSeed() {
     'pdp_priya_v1',
     'usr_learner_priya',
     1,
-    'Long-Term Thesis Documentation & Downside Allocation Plan (v1.0, Pending Guide Review)',
+    'Long-Term Thesis Documentation & Downside Allocation Plan',
     'PENDING_GUIDE_REVIEW',
     'Candidate initial PDP generated from Discovery session sess_priya_01. Prioritises separating short-term trades from long-term holdings and documenting thesis invalidation triggers.',
     JSON.stringify([
@@ -1987,7 +1987,7 @@ export function initDatabaseAndSeed() {
     'pdp_rohan_v1',
     'usr_learner_rohan',
     1,
-    'Independent Process Maintenance & Quarterly Reflection Charter (v1.0, Active)',
+    'Independent Process Maintenance & Quarterly Reflection Charter',
     'ACTIVE_APPROVED',
     'No remedial learning concern established during Discovery or Guide conversation. This charter supports Rohan’s self-governed quarterly portfolio review.',
     JSON.stringify([

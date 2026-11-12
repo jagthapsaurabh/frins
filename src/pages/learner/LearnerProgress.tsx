@@ -98,7 +98,7 @@ export const LearnerProgress: React.FC<{ data: any; onReload: () => void }> = ({
             <div className="panel-head">
               <div>
                 <h2>Your plan</h2>
-                <p>{plan ? `Version ${plan.version_number}.0, approved by your mentor.` : 'Not approved yet.'}</p>
+                <p>{plan ? 'Approved by your mentor.' : 'Not approved yet.'}</p>
               </div>
             </div>
             {plan ? (
