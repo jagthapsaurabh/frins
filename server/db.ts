@@ -1085,6 +1085,30 @@ export function initDatabaseAndSeed() {
       FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS chat_threads (
+      id TEXT PRIMARY KEY,
+      learner_id TEXT NOT NULL UNIQUE,
+      subject TEXT,
+      created_by TEXT,
+      learner_last_read_at TEXT,
+      staff_last_read_at TEXT,
+      last_message_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (learner_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id TEXT PRIMARY KEY,
+      thread_id TEXT NOT NULL,
+      sender_user_id TEXT NOT NULL,
+      sender_name TEXT NOT NULL,
+      sender_role TEXT NOT NULL,
+      message TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (thread_id) REFERENCES chat_threads(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS learner_step_progress (
       id TEXT PRIMARY KEY,
       learner_id TEXT NOT NULL,
@@ -1115,6 +1139,10 @@ export function initDatabaseAndSeed() {
     'ALTER TABLE call_bookings ADD COLUMN topic TEXT',
     'ALTER TABLE call_bookings ADD COLUMN requested_by_role TEXT',
     'ALTER TABLE call_bookings ADD COLUMN updated_at TEXT',
+    'ALTER TABLE courses ADD COLUMN duration_hours REAL',
+    'ALTER TABLE courses ADD COLUMN price INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE courses ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE courses ADD COLUMN summary TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN expected_criteria TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN uploaded_file_name TEXT',
     'ALTER TABLE learning_tasks ADD COLUMN uploaded_file_data TEXT',
@@ -1140,6 +1168,8 @@ export function initDatabaseAndSeed() {
      WHERE assigned_at IS NULL;
 
     UPDATE student_courses SET source = 'ADMIN_ASSIGNED' WHERE source IS NULL;
+    UPDATE courses SET is_active = 1 WHERE is_active IS NULL;
+    UPDATE courses SET price = 0 WHERE price IS NULL;
     UPDATE student_courses SET amount_paid = 0 WHERE amount_paid IS NULL;
     UPDATE student_courses SET payment_status = 'NOT_APPLICABLE' WHERE payment_status IS NULL;
   `);
@@ -1335,6 +1365,19 @@ export function initDatabaseAndSeed() {
       );
     }
   }
+
+  // A course's duration starts as the sum of its steps, so the list has a real
+  // number on day one. Admin can override it in the course settings.
+  db.exec(`
+    UPDATE courses
+       SET duration_hours = (
+         SELECT ROUND(SUM(COALESCE(NULLIF(s.estimated_minutes, 0), 20)) / 60.0, 1)
+           FROM course_steps s
+          WHERE s.course_id = courses.id
+       )
+     WHERE (duration_hours IS NULL OR duration_hours = 0)
+       AND EXISTS (SELECT 1 FROM course_steps s WHERE s.course_id = courses.id);
+  `);
 
   // Seed course-linked questions (Admin-editable question bank per course)
   const courseQuestionCount = (db.prepare('SELECT COUNT(*) as c FROM course_questions').get() as any).c;

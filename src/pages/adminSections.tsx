@@ -11,7 +11,8 @@ import {
   Contact,
   TrendingUp,
   BellRing,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  MessageSquare
 } from 'lucide-react';
 
 export type AdminSectionKey =
@@ -24,6 +25,7 @@ export type AdminSectionKey =
   | 'leads'
   | 'bookings'
   | 'notifications'
+  | 'messages'
   | 'discovery'
   | 'settings';
 
@@ -44,8 +46,9 @@ export interface AdminSection {
  */
 export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'overview', label: 'Overview', hint: 'Today at a glance', icon: <LayoutDashboard size={17} />, group: 'Work', path: '/admin' },
-  { key: 'tasks', label: 'Task review', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work', path: '/admin/tasks' },
-  { key: 'courses', label: 'Courses & tasks', hint: 'Build courses and assign work', icon: <BookOpen size={17} />, group: 'Work', path: '/admin/courses' },
+  { key: 'tasks', label: 'Tasks', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work', path: '/admin/tasks' },
+  { key: 'messages', label: 'Messages', hint: 'Talk to a learner', icon: <MessageSquare size={17} />, group: 'Work', path: '/admin/messages' },
+  { key: 'courses', label: 'Courses', hint: 'Build and publish courses', icon: <BookOpen size={17} />, group: 'Work', path: '/admin/courses' },
   { key: 'learners', label: 'Learners', hint: 'Roster, plans, assessments', icon: <GraduationCap size={17} />, group: 'People', path: '/admin/learners' },
   { key: 'progress', label: 'Learner progress', hint: 'Courses, tasks, uploads', icon: <TrendingUp size={17} />, group: 'People', path: '/admin/progress' },
   { key: 'staff', label: 'Staff & access', hint: 'Roles, status, passwords', icon: <UserCog size={17} />, group: 'People', path: '/admin/staff' },

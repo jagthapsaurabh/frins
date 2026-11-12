@@ -18,6 +18,7 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { formatDate } from '../../utils/dates';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 const KINDS = [
@@ -60,12 +61,24 @@ export const CourseBuilderPage: React.FC = () => {
 
   const [course, setCourse] = useState<any>(null);
   const [steps, setSteps] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [enrolledCount, setEnrolledCount] = useState(0);
   const [loading, setLoading] = useState(!isNew);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
   // Course basics
-  const [meta, setMeta] = useState({ title: '', track: 'student_concepts', level: 'L1 → L2', description: '', modulesText: '' });
+  const [meta, setMeta] = useState({
+    title: '',
+    track: 'student_concepts',
+    level: 'L1 → L2',
+    description: '',
+    modulesText: '',
+    durationHours: '',
+    price: '0',
+    isActive: true
+  });
+  const [statusPrompt, setStatusPrompt] = useState<null | boolean>(null);
   const [editingMeta, setEditingMeta] = useState(isNew);
   const [savingMeta, setSavingMeta] = useState(false);
 
@@ -76,6 +89,26 @@ export const CourseBuilderPage: React.FC = () => {
   const [stepError, setStepError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  // Enrol an existing learner from the course page.
+  const [learners, setLearners] = useState<any[]>([]);
+  const [enrolLearnerId, setEnrolLearnerId] = useState('');
+  const [enrolAmount, setEnrolAmount] = useState('');
+  const [enrolNotes, setEnrolNotes] = useState('');
+  const [enrolBusy, setEnrolBusy] = useState(false);
+  const [enrolBanner, setEnrolBanner] = useState<string | null>(null);
+
+  const loadLearners = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/admin/learners/directory');
+      if (!res.ok) return;
+      const json = await res.json();
+      setLearners(json.rows || []);
+      setEnrolLearnerId((current) => current || json.rows?.[0]?.id || '');
+    } catch {
+      /* the select stays empty */
+    }
+  }, [authFetch]);
 
   const load = useCallback(async () => {
     if (isNew) return;
@@ -89,12 +122,17 @@ export const CourseBuilderPage: React.FC = () => {
       const json = await res.json();
       setCourse(json.course);
       setSteps(json.steps || []);
+      setEnrollments(json.enrollments || []);
+      setEnrolledCount(Number(json.enrolled) || (json.enrollments || []).length);
       setMeta({
         title: json.course.title || '',
         track: json.course.track || 'student_concepts',
         level: json.course.level || 'L1 → L2',
         description: json.course.description || '',
-        modulesText: (json.course.modules || []).join('\n')
+        modulesText: (json.course.modules || []).join('\n'),
+        durationHours: json.course.duration_hours ? String(json.course.duration_hours) : '',
+        price: String(json.course.price ?? 0),
+        isActive: Number(json.course.is_active) !== 0
       });
       setError(null);
     } catch {
@@ -106,7 +144,34 @@ export const CourseBuilderPage: React.FC = () => {
 
   useEffect(() => {
     load();
-  }, [load]);
+    loadLearners();
+  }, [load, loadLearners]);
+
+  const enrolLearner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!enrolLearnerId) return;
+    setEnrolBusy(true);
+    setEnrolBanner(null);
+    const res = await authFetch('/api/admin/courses/assign', {
+      method: 'POST',
+      body: JSON.stringify({
+        courseId,
+        learnerId: enrolLearnerId,
+        customNotes: enrolNotes,
+        amountPaid: Number(enrolAmount) || 0
+      })
+    });
+    const json = await res.json();
+    setEnrolBusy(false);
+    if (!res.ok || !json.success) {
+      setEnrolBanner(json.error || 'Could not enrol this learner.');
+      return;
+    }
+    setEnrolNotes('');
+    setEnrolAmount('');
+    setEnrolBanner('Learner enrolled. They have been notified.');
+    load();
+  };
 
   const saveMeta = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,7 +186,10 @@ export const CourseBuilderPage: React.FC = () => {
       track: meta.track,
       level: meta.level,
       description: meta.description,
-      modules
+      modules,
+      durationHours: meta.durationHours ? Number(meta.durationHours) : undefined,
+      price: Number(meta.price) || 0,
+      isActive: meta.isActive
     });
 
     const res = isNew
@@ -316,6 +384,37 @@ export const CourseBuilderPage: React.FC = () => {
                 />
               </div>
             </div>
+            <div className="admin-form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="cb-duration">
+                  Duration (hours)
+                </label>
+                <input
+                  id="cb-duration"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={meta.durationHours}
+                  onChange={(e) => setMeta({ ...meta, durationHours: e.target.value })}
+                  placeholder="Left blank, it adds up from the steps"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="cb-price">
+                  Price (₹)
+                </label>
+                <input
+                  id="cb-price"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  value={meta.price}
+                  onChange={(e) => setMeta({ ...meta, price: e.target.value })}
+                  placeholder="0 makes it free"
+                />
+              </div>
+            </div>
             <div className="form-group">
               <label className="form-label" htmlFor="cb-desc">
                 Short description *
@@ -402,9 +501,25 @@ export const CourseBuilderPage: React.FC = () => {
             <div className="dossier-chips">
               <span className="micro-tag accent">{TRACKS.find((t) => t.value === course.track)?.label || course.track}</span>
               <span className="micro-tag">{course.level}</span>
-              <span className="micro-tag">{steps.length} steps</span>
-              <span className="micro-tag">{milestones} milestones</span>
-              <span className="micro-tag">~{totalMinutes} min</span>
+              <span className="micro-tag">
+                {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+              </span>
+              <span className="micro-tag">
+                {milestones} {milestones === 1 ? 'milestone' : 'milestones'}
+              </span>
+              <span className="micro-tag">
+                {course.duration_hours
+                  ? `${course.duration_hours} hr`
+                  : totalMinutes
+                    ? `~${Math.round(totalMinutes / 60) || 1} hr`
+                    : 'Duration not set'}
+              </span>
+              <span className={`micro-tag ${Number(course.price) > 0 ? 'accent' : 'success'}`}>
+                {Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Free'}
+              </span>
+              <span className={`micro-tag ${Number(course.is_active) === 0 ? 'danger' : 'success'}`}>
+                {Number(course.is_active) === 0 ? 'Inactive' : 'Active'}
+              </span>
             </div>
           </div>
           <div className="dossier-actions">
@@ -467,6 +582,37 @@ export const CourseBuilderPage: React.FC = () => {
                 />
               </div>
             </div>
+            <div className="admin-form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="cb-duration">
+                  Duration (hours)
+                </label>
+                <input
+                  id="cb-duration"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={meta.durationHours}
+                  onChange={(e) => setMeta({ ...meta, durationHours: e.target.value })}
+                  placeholder="Adds up from the steps when blank"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="cb-price">
+                  Price (₹)
+                </label>
+                <input
+                  id="cb-price"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  value={meta.price}
+                  onChange={(e) => setMeta({ ...meta, price: e.target.value })}
+                  placeholder="0 makes it free"
+                />
+              </div>
+            </div>
             <div className="form-group">
               <label className="form-label" htmlFor="cb-desc">
                 Description
@@ -492,6 +638,20 @@ export const CourseBuilderPage: React.FC = () => {
                 onChange={(e) => setMeta({ ...meta, modulesText: e.target.value })}
               />
             </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={meta.isActive}
+                onChange={(e) => setStatusPrompt(e.target.checked)}
+              />
+              <span>
+                <strong>{meta.isActive ? 'Active' : 'Inactive'}</strong>
+                <small>
+                  Inactive courses stay on the list and keep their learners, but cannot be assigned to anyone new.
+                </small>
+              </span>
+            </label>
+
             <div className="form-actions">
               <button type="submit" className="btn btn-primary" disabled={savingMeta}>
                 <Save size={15} /> {savingMeta ? 'Saving…' : 'Save basics'}
@@ -499,6 +659,130 @@ export const CourseBuilderPage: React.FC = () => {
             </div>
           </form>
         )}
+
+        <div className="dossier-stats course-stats">
+          <div>
+            <span>Duration</span>
+            <strong>{course.duration_hours ? `${course.duration_hours} hr` : totalMinutes ? `${Math.max(1, Math.round(totalMinutes / 60))} hr` : '—'}</strong>
+          </div>
+          <div>
+            <span>Price</span>
+            <strong>{Number(course.price) > 0 ? `₹${Number(course.price).toLocaleString('en-IN')}` : 'Free'}</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong>{Number(course.is_active) === 0 ? 'Inactive' : 'Active'}</strong>
+          </div>
+          <div>
+            <span>Learners</span>
+            <strong>{enrolledCount}</strong>
+          </div>
+          <div>
+            <span>Steps</span>
+            <strong>{steps.length}</strong>
+          </div>
+          <div>
+            <span>Collected</span>
+            <strong>₹{Number(course.revenue || 0).toLocaleString('en-IN')}</strong>
+          </div>
+        </div>
+
+        <section className="panel-card">
+          <div className="form-head">
+            <div>
+              <span className="micro-tag accent">Learners</span>
+              <h3 className="admin-card-title">Enrol a learner</h3>
+            </div>
+            {Number(course.is_active) === 0 && (
+              <span className="micro-tag danger">Switch the course on to assign it</span>
+            )}
+          </div>
+
+          {enrolBanner && <div className="governance-alert success">{enrolBanner}</div>}
+
+          <form onSubmit={enrolLearner} className="admin-form">
+            <div className="admin-form-row">
+              <div className="form-group">
+                <label className="form-label" htmlFor="enrol-learner">Learner</label>
+                <select
+                  id="enrol-learner"
+                  className="form-select"
+                  value={enrolLearnerId}
+                  onChange={(e) => setEnrolLearnerId(e.target.value)}
+                >
+                  {learners.map((learner: any) => (
+                    <option key={learner.id} value={learner.id}>
+                      {learner.name} ({learner.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="enrol-amount">Amount paid (₹)</label>
+                <input
+                  id="enrol-amount"
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  value={enrolAmount}
+                  onChange={(e) => setEnrolAmount(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="enrol-notes">Note for the learner</label>
+              <input
+                id="enrol-notes"
+                className="form-input"
+                value={enrolNotes}
+                onChange={(e) => setEnrolNotes(e.target.value)}
+                placeholder="Why this course, what to focus on."
+              />
+            </div>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={enrolBusy || Number(course.is_active) === 0}
+            >
+              {enrolBusy ? 'Enrolling…' : 'Enrol learner'}
+            </button>
+          </form>
+
+          {enrollments && enrollments.length > 0 && (
+            <div className="enrol-list">
+              {enrollments.map((row: any) => {
+                const pct = steps.length ? Math.round((Number(row.steps_done) / steps.length) * 100) : row.progress_pct || 0;
+                return (
+                  <div key={row.id} className="enrol-row">
+                    <div>
+                      <Link to={`/admin/learners/${row.learner_id}`} className="link-button">
+                        {row.learner_name}
+                      </Link>
+                      <div className="admin-muted small">
+                        Since {formatDate(row.assigned_at)}
+                        {Number(row.amount_paid) > 0 ? ` · ₹${Number(row.amount_paid).toLocaleString('en-IN')} paid` : ''}
+                      </div>
+                    </div>
+                    <div className="enrol-progress">
+                      <div className="progress-track">
+                        <span style={{ width: `${pct}%` }} />
+                      </div>
+                      <small className="admin-muted">{pct}%</small>
+                    </div>
+                    <span className={`status-pill ${row.status === 'COMPLETED' ? 'approved' : 'info'}`}>
+                      {row.status}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <p className="form-hint" style={{ marginTop: 10 }}>
+            {enrolledCount > 0 ? `${enrolledCount} learner${enrolledCount === 1 ? '' : 's'} on this course.` : 'Nobody on this course yet.'}
+          </p>
+        </section>
 
         <div className="builder-grid">
           <section className="panel-card builder-steps">
@@ -796,6 +1080,28 @@ export const CourseBuilderPage: React.FC = () => {
             )}
           </section>
         </div>
+
+        <ConfirmDialog
+          open={statusPrompt !== null}
+          title={statusPrompt ? 'Activate this course?' : 'Deactivate this course?'}
+          message={
+            statusPrompt ? (
+              <>The course will be assignable again as soon as you save.</>
+            ) : (
+              <>
+                Learners already on <strong>{course.title}</strong> keep their access and progress. The course
+                will not be offered for new assignments until it is active again.
+              </>
+            )
+          }
+          confirmLabel={statusPrompt ? 'Activate' : 'Deactivate'}
+          variant={statusPrompt ? 'primary' : 'danger'}
+          onConfirm={() => {
+            setMeta((prev) => ({ ...prev, isActive: Boolean(statusPrompt) }));
+            setStatusPrompt(null);
+          }}
+          onCancel={() => setStatusPrompt(null)}
+        />
 
         <ConfirmDialog
           open={Boolean(deleteTarget)}

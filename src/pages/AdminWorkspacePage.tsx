@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import {
@@ -187,6 +187,7 @@ export const AdminWorkspacePage: React.FC = () => {
   const [taskCategory, setTaskCategory] = useState<string>('CHART_CONCEPT_LAB');
   const [taskInstructions, setTaskInstructions] = useState<string>('');
   const [taskExpectedCriteria, setTaskExpectedCriteria] = useState<string>('');
+  const [taskFormOpen, setTaskFormOpen] = useState<boolean>(false);
 
   // Tab 4: Student Uploaded Results, AI Review & Direct Chat State
   const [selectedTaskId, setSelectedTaskId] = useState<string>('tsk_heikin_ashi_01');
@@ -921,7 +922,7 @@ export const AdminWorkspacePage: React.FC = () => {
     <div className="workspace-shell">
       <div className="container-wide">
         <div className="admin-body">
-          {activeTab !== 'overview' && activeTab !== 'learners' && (
+          {activeTab !== 'overview' && activeTab !== 'learners' && activeTab !== 'tasks' && (
             <header className="admin-page-head">
               <span className="admin-page-eyebrow">Admin console</span>
               <h1>{section.label}</h1>
@@ -1134,6 +1135,119 @@ export const AdminWorkspacePage: React.FC = () => {
             TAB 1: STUDENT UPLOADED RESULTS, INTERNAL AI PRE-REVIEW & DIRECT CHAT
            =================================================================== */}
         {activeTab === 'tasks' && (
+          <>
+          <div className="compact-head">
+            <div>
+              <span className="admin-page-eyebrow">Admin console</span>
+              <h1>Tasks</h1>
+            </div>
+            <div className="head-stats">
+              <span className="micro-tag">{(tasksQuery as any).total ?? allStudentTasks.length} in the queue</span>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => setTaskFormOpen((v) => !v)}>
+                {taskFormOpen ? 'Close form' : '+ Give a task'}
+              </button>
+            </div>
+          </div>
+
+          {taskFormOpen && (
+          <section className="panel-card assign-task-card" style={{ border: '1px solid var(--accent-border)' }}>
+            <div className="form-head">
+              <div>
+                <span className="micro-tag accent">Give a task</span>
+                <h3 className="admin-card-title" style={{ marginTop: 6 }}>Assign a practical task</h3>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleFillHeikinAshiTaskPreset}
+              >
+                ⚡ Load sample task
+              </button>
+            </div>
+            <p className="admin-card-copy">
+              The learner uploads their work, the internal AI pre-checks it against your criteria, and it lands in
+              the queue below for your review.
+            </p>
+
+            <form onSubmit={handleAssignTaskToStudent} className="admin-form">
+              <div className="workspace-grid-2" style={{ gap: 10 }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="taskLearner">Assign to learner *</label>
+                  <select
+                    id="taskLearner"
+                    className="form-select"
+                    value={taskLearnerId}
+                    onChange={(e) => setTaskLearnerId(e.target.value)}
+                  >
+                    {learnersList.map((l: any) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="taskCourse">Linked course</label>
+                  <select
+                    id="taskCourse"
+                    className="form-select"
+                    value={taskCourseId}
+                    onChange={(e) => setTaskCourseId(e.target.value)}
+                  >
+                    {coursesList.map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="taskTitle">Task title *</label>
+                <input
+                  id="taskTitle"
+                  className="form-input"
+                  placeholder="e.g. Find Heikin-Ashi trend continuation and one reversal"
+                  value={taskTitle}
+                  onChange={(e) => setTaskTitle(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="admin-form-row">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="taskInstructions">Instructions for the learner *</label>
+                  <textarea
+                    id="taskInstructions"
+                    className="form-textarea"
+                    rows={3}
+                    placeholder="What they need to find, analyse and upload."
+                    value={taskInstructions}
+                    onChange={(e) => setTaskInstructions(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="taskCriteria">Expected answer (AI pre-check)</label>
+                  <textarea
+                    id="taskCriteria"
+                    className="form-textarea"
+                    rows={3}
+                    placeholder="What a correct submission has to mention. Kept on the team side."
+                    value={taskExpectedCriteria}
+                    onChange={(e) => setTaskExpectedCriteria(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary">
+                Assign task
+              </button>
+            </form>
+          </section>
+          )}
+
           <div className="workspace-sidebar-layout">
             {/* Left Sidebar: List of Student Tasks & Uploaded Submissions */}
             <div className="panel-card" style={{ marginBottom: 0 }}>
@@ -1712,623 +1826,14 @@ export const AdminWorkspacePage: React.FC = () => {
               <div className="panel-card">No student tasks found.</div>
             )}
           </div>
+          </>
         )}
 
         {/* ===================================================================
-            TAB 2: MAKE CUSTOM COURSES, ASSIGN TO STUDENTS & GIVE TASKS
+            Courses now live on their own page. This section stays empty so a
+            stale link cannot render the old combined screen.
            =================================================================== */}
-        {activeTab === 'courses' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <section className="builder-cta panel-card">
-              <div>
-                <span className="micro-tag accent">Course builder</span>
-                <h3 className="admin-card-title">Build the course itself, not just a title</h3>
-                <p className="admin-card-copy">
-                  Add steps the learner works through in order: reading, a YouTube video, a PDF or Word file, a
-                  link, or a graded task. The next step stays locked until the one before it is done.
-                </p>
-              </div>
-              <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/courses/new')}>
-                <Plus size={16} /> New course
-              </button>
-            </section>
-
-            <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
-              {/* Create Custom Course + Assign Course to Student */}
-              <div className="panel-card" style={{ marginBottom: 0 }}>
-                <span className="micro-tag accent">Course Builder &amp; Student Assignment</span>
-                <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
-                  1. Make a Custom Course
-                </h3>
-                <p style={{ fontSize: 13, marginBottom: 14 }}>
-                  Build modular courses tailored to market students, strategy learners, traders, or investors.
-                </p>
-
-                <form
-                  onSubmit={handleCreateCourse}
-                  style={{
-                    background: 'var(--bg-canvas)',
-                    padding: 16,
-                    borderRadius: 12,
-                    border: '1px solid var(--border-subtle)',
-                    marginBottom: 20
-                  }}
-                >
-                  <div className="form-group">
-                    <label className="form-label">Course Title *</label>
-                    <input
-                      className="form-input"
-                      placeholder="e.g. Heikin-Ashi & Multi-Timeframe Strategy Lab"
-                      value={courseTitle}
-                      onChange={(e) => setCourseTitle(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="workspace-grid-2" style={{ gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label">Target Learner Track</label>
-                      <select
-                        className="form-select"
-                        value={courseTrack}
-                        onChange={(e) => setCourseTrack(e.target.value)}
-                      >
-                        <option value="student_concepts">Student · Market Concepts</option>
-                        <option value="strategy_learner">Strategy Learner · Strategy Lab</option>
-                        <option value="trader">Active Trader · Execution &amp; Risk</option>
-                        <option value="investor">Long-Term Investor · Thesis</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Competency Level</label>
-                      <input
-                        className="form-input"
-                        value={courseLevel}
-                        onChange={(e) => setCourseLevel(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Course Description *</label>
-                    <textarea
-                      className="form-textarea"
-                      rows={2}
-                      placeholder="Describe what this custom course teaches..."
-                      value={courseDesc}
-                      onChange={(e) => setCourseDesc(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Course Modules (One per line)</label>
-                    <textarea
-                      className="form-textarea"
-                      rows={4}
-                      value={courseModulesText}
-                      onChange={(e) => setCourseModulesText(e.target.value)}
-                    />
-                  </div>
-
-                  <button type="submit" className="btn btn-primary btn-sm">
-                    + Create Custom Course
-                  </button>
-                </form>
-
-                {/* Assign Course to Student */}
-                <h3 style={{ fontSize: 19, margin: '8px 0 8px' }}>
-                  2. Assign Course to Student
-                </h3>
-                <form
-                  onSubmit={handleAssignCourse}
-                  style={{
-                    background: 'var(--bg-canvas)',
-                    padding: 16,
-                    borderRadius: 12,
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <div className="workspace-grid-2" style={{ gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label">Select Student *</label>
-                      <select
-                        className="form-select"
-                        value={assignLearnerId}
-                        onChange={(e) => setAssignLearnerId(e.target.value)}
-                      >
-                        {learnersList.map((l: any) => (
-                          <option key={l.id} value={l.id}>
-                            {l.name} ({l.email})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Select Course *</label>
-                      <select
-                        className="form-select"
-                        value={assignCourseId}
-                        onChange={(e) => setAssignCourseId(e.target.value)}
-                      >
-                        {coursesList.map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title} ({c.level})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Customization Notes for This Student</label>
-                    <input
-                      className="form-input"
-                      value={assignNotes}
-                      onChange={(e) => setAssignNotes(e.target.value)}
-                    />
-                  </div>
-
-                  <button type="submit" className="btn btn-dark btn-sm">
-                    Assign Course to Student &rarr;
-                  </button>
-                </form>
-              </div>
-
-              {/* Right Column: Give Task to Student (e.g., Find Heikin-Ashi) */}
-              <div className="panel-card" style={{ marginBottom: 0, border: '2px solid var(--accent)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                  <span className="micro-tag accent">Assign Practical Student Task</span>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleFillHeikinAshiTaskPreset}
-                  >
-                    ⚡ Load Sample: &ldquo;Find Heikin-Ashi&rdquo; Task
-                  </button>
-                </div>
-
-                <h3 style={{ fontSize: 20, margin: '8px 0 6px' }}>
-                  3. Give Task to Student (With AI Pre-Check Criteria)
-                </h3>
-                <p style={{ fontSize: 13, marginBottom: 14 }}>
-                  Assign a task to any student. When the student uploads their chart/result, the internal AI will automatically verify whether their result is correct against your expected criteria before you review it.
-                </p>
-
-                <form
-                  onSubmit={handleAssignTaskToStudent}
-                  style={{
-                    background: 'var(--bg-canvas)',
-                    padding: 16,
-                    borderRadius: 12,
-                    border: '1px solid var(--border-subtle)',
-                    marginBottom: 18
-                  }}
-                >
-                  <div className="workspace-grid-2" style={{ gap: 10 }}>
-                    <div className="form-group">
-                      <label className="form-label">Assign to Student *</label>
-                      <select
-                        className="form-select"
-                        value={taskLearnerId}
-                        onChange={(e) => setTaskLearnerId(e.target.value)}
-                      >
-                        {learnersList.map((l: any) => (
-                          <option key={l.id} value={l.id}>
-                            {l.name} ({l.email})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Linked Course</label>
-                      <select
-                        className="form-select"
-                        value={taskCourseId}
-                        onChange={(e) => setTaskCourseId(e.target.value)}
-                      >
-                        {coursesList.map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Task Title *</label>
-                    <input
-                      className="form-input"
-                      placeholder="e.g. Find Heikin-Ashi Trend Continuation & Reversal Signals"
-                      value={taskTitle}
-                      onChange={(e) => setTaskTitle(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Instructions for Student *</label>
-                    <textarea
-                      className="form-textarea"
-                      rows={3}
-                      placeholder="Explain what the student needs to find, analyze, and upload..."
-                      value={taskInstructions}
-                      onChange={(e) => setTaskInstructions(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Expected Answer Criteria for Internal AI Pre-Review (Admin/Team Only)
-                    </label>
-                    <textarea
-                      className="form-textarea"
-                      rows={2}
-                      placeholder="e.g. Must identify Heikin-Ashi formula (O+H+L+C)/4, green trend candles with no lower wicks, and Doji reversal..."
-                      value={taskExpectedCriteria}
-                      onChange={(e) => setTaskExpectedCriteria(e.target.value)}
-                    />
-                  </div>
-
-                  <button type="submit" className="btn btn-primary">
-                    Assign Task to Student &rarr;
-                  </button>
-                </form>
-
-                {/* Active Assigned Student Courses List */}
-                <h4 style={{ fontSize: 15, marginBottom: 8 }}>
-                  Course assignments ({studentCoursesQuery.total.toLocaleString()})
-                </h4>
-                <div className="list-tools">
-                  <input
-                    className="form-input list-search"
-                    placeholder="Search learner or course"
-                    value={scQuery}
-                    onChange={(e) => {
-                      setScQuery(e.target.value);
-                      setScPage(1);
-                    }}
-                    aria-label="Search course assignments"
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {studentCoursesList.map((sc: any) => (
-                    <div
-                      key={sc.id}
-                      style={{
-                        padding: 12,
-                        background: 'var(--bg-canvas)',
-                        borderRadius: 8,
-                        border: '1px solid var(--border-subtle)',
-                        fontSize: 12.5
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                        <span>{sc.learner_name} &rarr; {sc.course_title}</span>
-                        <span className="status-pill approved">{sc.status}</span>
-                      </div>
-                      <div style={{ color: 'var(--text-muted)', marginTop: 3 }}>{sc.custom_notes}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <Pager
-                  page={studentCoursesQuery.page}
-                  pages={studentCoursesQuery.pages}
-                  total={studentCoursesQuery.total}
-                  limit={20}
-                  onChange={setScPage}
-                  noun="assignments"
-                />
-              </div>
-            </div>
-
-            {/* Course Library: Edit / Delete Courses & Manage Course Questions */}
-            <div className="panel-card" style={{ marginTop: 24 }}>
-              <span className="micro-tag accent">Course Library &amp; Course Questions</span>
-              <h3 style={{ fontSize: 20, margin: '10px 0 8px' }}>
-                Edit Courses &amp; Set Course Questions ({coursesList.length} courses &middot; {courseQuestionsList.length} questions)
-              </h3>
-              <p style={{ fontSize: 13, marginBottom: 16 }}>
-                Admin can edit any course's title, track, level, description and modules, and create the question bank students answer inside each course.
-              </p>
-
-              <div className="workspace-grid-2" style={{ alignItems: 'start' }}>
-                {/* Course list + inline editor */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {coursesList.map((course: any) => {
-                    const courseQs = courseQuestionsList.filter((q) => q.course_id === course.id);
-                    return (
-                      <div
-                        key={course.id}
-                        style={{
-                          padding: 14,
-                          background: 'var(--bg-canvas)',
-                          borderRadius: 10,
-                          border: '1px solid var(--border-subtle)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-                          <div>
-                            <strong style={{ fontSize: 15 }}>{course.title}</strong>
-                            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-                              {course.id} &middot; Track: <strong>{course.track}</strong> &middot; {course.level} &middot;{' '}
-                              {(course.modules || []).length} modules &middot; {courseQs.length} questions &middot;{' '}
-                              <strong>{course.step_count ?? 0} steps</strong>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => navigate(`/admin/courses/${course.id}`)}
-                            >
-                              Open builder
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => startEditingCourse(course)}
-                            >
-                              Edit Course
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => {
-                                setCqCourseId(course.id);
-                                setEditingCqId('');
-                                setCqPrompt('');
-                                setCqExplanation('');
-                              }}
-                            >
-                              + Question
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => handleDeleteCourse(course.id, course.title)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 8 }}>
-                          {course.description}
-                        </div>
-
-                        {editingCourseId === course.id && (
-                          <form
-                            onSubmit={handleUpdateCourse}
-                            style={{
-                              marginTop: 12,
-                              padding: 12,
-                              background: '#FFFFFF',
-                              borderRadius: 8,
-                              border: '1px solid var(--border-subtle)'
-                            }}
-                          >
-                            <div className="form-group">
-                              <label className="form-label">Course Title</label>
-                              <input
-                                className="form-input"
-                                value={editCourseTitle}
-                                onChange={(e) => setEditCourseTitle(e.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="workspace-grid-2" style={{ gap: 10 }}>
-                              <div className="form-group">
-                                <label className="form-label">Track</label>
-                                <select
-                                  className="form-select"
-                                  value={editCourseTrack}
-                                  onChange={(e) => setEditCourseTrack(e.target.value)}
-                                >
-                                  <option value="student_concepts">Student · Market Concepts</option>
-                                  <option value="strategy_learner">Strategy Learner</option>
-                                  <option value="trader">Active Trader</option>
-                                  <option value="investor">Long-Term Investor</option>
-                                </select>
-                              </div>
-                              <div className="form-group">
-                                <label className="form-label">Level</label>
-                                <input
-                                  className="form-input"
-                                  value={editCourseLevel}
-                                  onChange={(e) => setEditCourseLevel(e.target.value)}
-                                />
-                              </div>
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label">Description</label>
-                              <textarea
-                                className="form-textarea"
-                                rows={2}
-                                value={editCourseDesc}
-                                onChange={(e) => setEditCourseDesc(e.target.value)}
-                                required
-                              />
-                            </div>
-                            <div className="form-group">
-                              <label className="form-label">Modules (One per line)</label>
-                              <textarea
-                                className="form-textarea"
-                                rows={4}
-                                value={editCourseModulesText}
-                                onChange={(e) => setEditCourseModulesText(e.target.value)}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button type="submit" className="btn btn-primary btn-sm">
-                                Save Course Changes
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => setEditingCourseId('')}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </form>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Course question editor */}
-                <div
-                  style={{
-                    padding: 14,
-                    background: 'var(--bg-canvas)',
-                    borderRadius: 10,
-                    border: '1px solid var(--border-subtle)'
-                  }}
-                >
-                  <h4 style={{ fontSize: 15, marginBottom: 8 }}>
-                    {editingCqId ? 'Edit Course Question' : 'Add a Course Question'}
-                  </h4>
-                  <form onSubmit={handleSaveCourseQuestion}>
-                    <div className="form-group">
-                      <label className="form-label">Course *</label>
-                      <select
-                        className="form-select"
-                        value={cqCourseId}
-                        onChange={(e) => setCqCourseId(e.target.value)}
-                        disabled={Boolean(editingCqId)}
-                      >
-                        {coursesList.map((c: any) => (
-                          <option key={c.id} value={c.id}>
-                            {c.title}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Question Prompt *</label>
-                      <input
-                        className="form-input"
-                        placeholder="e.g. How is the Heikin-Ashi close calculated?"
-                        value={cqPrompt}
-                        onChange={(e) => setCqPrompt(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Answer Options (One per line) *</label>
-                      <textarea
-                        className="form-textarea"
-                        rows={4}
-                        value={cqOptionsText}
-                        onChange={(e) => setCqOptionsText(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Correct Answer</label>
-                      <select
-                        className="form-select"
-                        value={cqCorrectIndex}
-                        onChange={(e) => setCqCorrectIndex(Number(e.target.value))}
-                      >
-                        {cqOptionList.map((opt, i) => (
-                          <option key={`${opt}-${i}`} value={i}>
-                            {String.fromCharCode(65 + i)}. {opt}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Explanation (shown after the student answers)</label>
-                      <textarea
-                        className="form-textarea"
-                        rows={2}
-                        value={cqExplanation}
-                        onChange={(e) => setCqExplanation(e.target.value)}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="submit" className="btn btn-primary btn-sm">
-                        {editingCqId ? 'Save Question' : '+ Add Question'}
-                      </button>
-                      {editingCqId && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => {
-                            setEditingCqId('');
-                            setCqPrompt('');
-                            setCqExplanation('');
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      )}
-                    </div>
-                  </form>
-
-                  <h4 style={{ fontSize: 15, margin: '18px 0 8px' }}>
-                    Questions in {coursesList.find((c: any) => c.id === cqCourseId)?.title || 'course'} (
-                    {courseQuestionsList.filter((q) => q.course_id === cqCourseId).length})
-                  </h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
-                    {courseQuestionsList.filter((q) => q.course_id === cqCourseId).length === 0 && (
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                        No questions yet for this course. Add the first one above.
-                      </div>
-                    )}
-                    {courseQuestionsList
-                      .filter((q) => q.course_id === cqCourseId)
-                      .map((q: any) => (
-                        <div
-                          key={q.id}
-                          style={{
-                            padding: 10,
-                            background: '#FFFFFF',
-                            borderRadius: 8,
-                            border: '1px solid var(--border-subtle)',
-                            fontSize: 12.5
-                          }}
-                        >
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>{q.prompt}</div>
-                          <div style={{ color: 'var(--text-muted)' }}>
-                            Correct: {String.fromCharCode(65 + Number(q.correct_option_index || 0))}.{' '}
-                            {(q.options || [])[Number(q.correct_option_index || 0)]}
-                          </div>
-                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => startEditingCourseQuestion(q)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={() => handleDeleteCourseQuestion(q.id)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===================================================================
-            TAB 3: SOLVED DISCOVERY USERS (WITH ANSWERS) & BOOK A CALL LEADS
-           =================================================================== */}
+        {activeTab === 'courses' && <Navigate to="/admin/courses" replace />}
         {activeTab === 'bookings' && (
           <div>
             {/* Right: Book a Call Leads (Both Direct & Post-Discovery) */}

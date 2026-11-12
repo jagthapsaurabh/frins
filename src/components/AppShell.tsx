@@ -16,7 +16,8 @@ import {
   ClipboardList,
   TrendingUp,
   Sparkles as SparklesIcon,
-  PhoneCall
+  PhoneCall,
+  MessageSquare
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -72,7 +73,8 @@ const navForRole = (role: string | undefined): NavItem[] => {
 
   if (role === 'GUIDE') {
     return [
-      { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace' }
+      { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace', exact: true },
+      { path: '/guide/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Workspace' }
     ];
   }
 
@@ -81,6 +83,7 @@ const navForRole = (role: string | undefined): NavItem[] => {
     { path: '/dashboard/courses', label: 'My courses', icon: <BookOpen size={17} />, group: 'Learning' },
     { path: '/dashboard/tasks', label: 'Tasks & uploads', icon: <ClipboardList size={17} />, group: 'Learning' },
     { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' },
+    { path: '/dashboard/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Learning' },
     { path: '/dashboard/calls', label: 'Calls', icon: <PhoneCall size={17} />, group: 'Learning' }
   ];
 };

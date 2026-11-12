@@ -11,6 +11,8 @@ import { AdminWorkspacePage } from './pages/AdminWorkspacePage';
 import { AddLearnerPage } from './pages/admin/AddLearnerPage';
 import { LearnerDossierPage } from './pages/admin/LearnerDossierPage';
 import { CourseBuilderPage } from './pages/admin/CourseBuilderPage';
+import { CoursesDirectory } from './pages/admin/CoursesDirectory';
+import { MessagesPage } from './pages/MessagesPage';
 import { CoursePlayerPage } from './pages/learner/CoursePlayerPage';
 import { SignInPage } from './pages/SignInPage';
 import { StaffSignInPage } from './pages/StaffSignInPage';
@@ -63,6 +65,16 @@ export const EcosystemShell: React.FC = () => {
 
       {/* Learner sign-in + dashboard */}
       <Route path="/login" element={<SignInPage />} />
+      <Route
+        path="/dashboard/messages"
+        element={
+          <RequireLearner>
+            <AppShell>
+              <MessagesPage />
+            </AppShell>
+          </RequireLearner>
+        }
+      />
       <Route
         path="/dashboard/courses/:courseId"
         element={
@@ -135,6 +147,26 @@ export const EcosystemShell: React.FC = () => {
         }
       />
       <Route
+        path="/admin/courses"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <CoursesDirectory />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/messages"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <MessagesPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
         path="/admin/courses/new"
         element={
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
@@ -167,6 +199,16 @@ export const EcosystemShell: React.FC = () => {
           }
         />
       ))}
+      <Route
+        path="/guide/messages"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.guide]} loginPath="/guide/login">
+            <AppShell>
+              <MessagesPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
       <Route
         path="/guide"
         element={

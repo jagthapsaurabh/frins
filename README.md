@@ -104,8 +104,9 @@ workspace stays a workspace.
 | Group | Section | What it does |
 | --- | --- | --- |
 | Work | Overview | Counts and four cards that jump to whatever needs attention |
-| Work | Task review | Uploaded work, internal AI pre-check, direct chat, approve or send back |
-| Work | Courses & tasks | Open the course builder, add questions, assign a course, give a task to one learner |
+| Work | Tasks | Uploaded work, internal AI pre-check, direct chat, approve or send back. Give a task from the same tab |
+| Work | Messages | Every learner conversation in one place: search, open a thread, reply |
+| Work | Courses | The course list: search, paid or free, active or inactive. Open a course or add one |
 | People | Learners | The enrolled learner list: search, track and status filters, pages of twenty. Open a learner for their file, or add one |
 | People | Learner progress | One learner at a time: courses with task and question bars, every task with its status, uploads and AI pre-check, and a box to assign another course |
 | People | Staff & access | Change a role, suspend or reactivate, reset a password, create an account |
@@ -164,6 +165,22 @@ Two filters sit next to it, one for track and one for active or suspended. Twent
   guide, and can enrol the learner in a course with the amount paid and payment status in the same
   step. Leave the password blank and a temporary one is generated and shown once.
 
+### The course list
+
+Courses and tasks are two separate tabs. `/admin/courses` is the list: title and track, level, the
+duration the steps add up to, paid or free, steps, learners, and a switch for active or inactive.
+Search sits over the table with a paid filter and a status filter. Turning a course off asks first,
+and an inactive course cannot be assigned to anyone.
+
+The header follows the learner tab: no subtitle and no gap under the title, so the table starts
+right away.
+
+- Click a row to open `/admin/courses/:courseId`. That page is the course: duration, price, status,
+  learners, steps, money collected, a box to enrol a learner with the amount paid, the step list,
+  and the builder itself.
+- **Add course** opens `/admin/courses/new` on its own route. It asks for the title, track, level,
+  description, duration and price, then drops you into the builder.
+
 ### Building a course that actually teaches
 
 `/admin/courses/new` creates the course, then the same page becomes the builder
@@ -186,6 +203,15 @@ Rules that make it a course rather than a file dump:
 - A reviewed milestone unlocks the next step and moves the course percentage along.
 - Steps can be reordered, edited or deleted; deleting a step tells you what goes with it.
 - The learner opens the course at `/dashboard/courses/:courseId` and works in the player.
+
+### Messages, both ways
+
+Chat lives in the sidebar on both sides. A learner sees **Messages** under Learning and gets one
+thread with the team, named after their guide. An admin or guide sees **Messages** under Work: a
+list of every learner they can talk to, a search box, and the same thread view. Either side can send
+at any time. The other side gets a notification, the thread moves to the top of the list, and unread
+counts clear when it is opened. Messages cap at 2000 characters and every send lands in the audit
+trail. The older per-task chat is still there for a specific upload.
 
 ### Calling the team
 
@@ -224,6 +250,8 @@ all; write a full stop, a colon or a comma instead. Headings stay around ten wor
 | `/dashboard/courses` | My courses: modules and the course questions |
 | `/dashboard/tasks` | Tasks and uploads: write an answer, attach a chart, chat with the mentor |
 | `/dashboard/progress` | Progress: approved plan, reflections, evidence |
+| `/dashboard/messages` | Messages with the guide and the team |
+| `/dashboard/calls` | Calls the learner booked from the panel |
 
 `/learner` and `/prototype` now redirect to `/dashboard`.
 

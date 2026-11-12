@@ -3418,6 +3418,9 @@ app.post('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
   const level = String(req.body?.level || 'L1 → L2').trim();
   const description = String(req.body?.description || '').trim();
   const rawModules = Array.isArray(req.body?.modules) ? req.body.modules.map((m: any) => String(m).trim()).filter(Boolean) : [];
+  const durationHours = Number(req.body?.durationHours) > 0 ? Number(req.body.durationHours) : null;
+  const price = Math.max(0, Number(req.body?.price) || 0);
+  const isActive = req.body?.isActive === false ? 0 : 1;
 
   if (!title || !description) {
     return res.status(400).json({ success: false, error: 'Course title and description are required.' });
@@ -3427,8 +3430,9 @@ app.post('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO courses (id, title, track, level, description, modules_json, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO courses (id, title, track, level, description, modules_json, created_by, created_at,
+                         duration_hours, price, is_active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     courseId,
     title,
@@ -3437,7 +3441,10 @@ app.post('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
     description,
     JSON.stringify(rawModules.length > 0 ? rawModules : ['Module 1: Core Concepts', 'Module 2: Practical Strategy Application']),
     req.user!.id,
-    now
+    now,
+    durationHours,
+    price,
+    isActive
   );
 
   writeAuditEvent({
@@ -3446,7 +3453,7 @@ app.post('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'
     action: 'ADMIN_COURSE_CREATED',
     entityType: 'COURSE',
     entityId: courseId,
-    details: { title, track, level, moduleCount: rawModules.length }
+    details: { title, track, level, moduleCount: rawModules.length, durationHours, price, isActive }
   });
 
   res.status(201).json({ success: true, courseId });
@@ -3466,6 +3473,17 @@ app.post('/api/admin/courses/assign', requireRole(['ADMIN', 'CURRICULUM_OWNER', 
 
   if (!courseId || !learnerId) {
     return res.status(400).json({ success: false, error: 'Both courseId and learnerId are required.' });
+  }
+
+  const targetCourse = db.prepare('SELECT id, title, is_active FROM courses WHERE id = ?').get(courseId) as any;
+  if (!targetCourse) {
+    return res.status(404).json({ success: false, error: 'Course not found.' });
+  }
+  if (Number(targetCourse.is_active) === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'That course is inactive. Switch it on before you assign it.'
+    });
   }
 
   const id = `sc_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
@@ -3527,26 +3545,64 @@ app.patch('/api/admin/courses/:courseId', requireRole(['ADMIN', 'CURRICULUM_OWNE
       ? req.body.modules.map((m: any) => (typeof m === 'string' ? m.trim() : String(m?.title || '').trim())).filter(Boolean)
       : JSON.parse(existing.modules_json || '[]');
 
+  const durationHours =
+    req.body?.durationHours !== undefined
+      ? Number(req.body.durationHours) > 0
+        ? Number(req.body.durationHours)
+        : null
+      : existing.duration_hours;
+  const price = req.body?.price !== undefined ? Math.max(0, Number(req.body.price) || 0) : existing.price;
+  const isActive = req.body?.isActive !== undefined ? (req.body.isActive ? 1 : 0) : existing.is_active;
+
   if (!title || !description) {
     return res.status(400).json({ success: false, error: 'Course title and description are required.' });
   }
 
   db.prepare(`
-    UPDATE courses SET title = ?, track = ?, level = ?, description = ?, modules_json = ? WHERE id = ?
-  `).run(title, track, level, description, JSON.stringify(modules), courseId);
+    UPDATE courses
+       SET title = ?, track = ?, level = ?, description = ?, modules_json = ?,
+           duration_hours = ?, price = ?, is_active = ?
+     WHERE id = ?
+  `).run(
+    title,
+    track,
+    level,
+    description,
+    JSON.stringify(modules),
+    durationHours,
+    price,
+    isActive,
+    courseId
+  );
 
   writeAuditEvent({
     actorUserId: req.user!.id,
     actorRole: req.user!.role,
-    action: 'ADMIN_COURSE_UPDATED',
+    action:
+      Number(existing.is_active) !== Number(isActive)
+        ? isActive
+          ? 'ADMIN_COURSE_ACTIVATED'
+          : 'ADMIN_COURSE_DEACTIVATED'
+        : 'ADMIN_COURSE_UPDATED',
     entityType: 'COURSE',
     entityId: courseId,
-    details: { title, track, level, moduleCount: modules.length }
+    details: { title, track, level, moduleCount: modules.length, durationHours, price, isActive }
   });
 
   return res.json({
     success: true,
-    course: { ...existing, title, track, level, description, modules, modules_json: JSON.stringify(modules) }
+    course: {
+      ...existing,
+      title,
+      track,
+      level,
+      description,
+      modules,
+      modules_json: JSON.stringify(modules),
+      duration_hours: durationHours,
+      price,
+      is_active: isActive
+    }
   });
 });
 
@@ -4230,8 +4286,12 @@ app.get('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']
   const rows = db
     .prepare(
       `SELECT c.id, c.title, c.track, c.level, c.description, c.created_at,
+              c.duration_hours, c.price, c.is_active,
               (SELECT COUNT(*) FROM course_steps s WHERE s.course_id = c.id) AS step_count,
-              (SELECT COUNT(*) FROM student_courses sc WHERE sc.course_id = c.id) AS learner_count
+              (SELECT ROUND(SUM(COALESCE(NULLIF(s.estimated_minutes, 0), 20)) / 60.0, 1)
+                 FROM course_steps s WHERE s.course_id = c.id) AS derived_hours,
+              (SELECT COUNT(*) FROM student_courses sc WHERE sc.course_id = c.id) AS learner_count,
+              (SELECT COALESCE(SUM(sc.amount_paid), 0) FROM student_courses sc WHERE sc.course_id = c.id) AS revenue
          FROM courses c
         ORDER BY c.created_at DESC`
     )
@@ -4252,12 +4312,30 @@ app.get('/api/admin/courses/:courseId', requireRole(['ADMIN', 'CURRICULUM_OWNER'
     db.prepare('SELECT COUNT(*) AS c FROM course_questions WHERE course_id = ?').get(courseId) as any
   ).c;
 
+  const enrollments = db
+    .prepare(
+      `SELECT sc.id, sc.learner_id, sc.status, sc.progress_pct, sc.amount_paid, sc.payment_status, sc.assigned_at,
+              u.name AS learner_name, u.email AS learner_email,
+              (SELECT COUNT(*) FROM learner_step_progress p
+                WHERE p.learner_id = sc.learner_id AND p.course_id = sc.course_id AND p.status = 'COMPLETED') AS steps_done
+         FROM student_courses sc
+         JOIN users u ON u.id = sc.learner_id
+        WHERE sc.course_id = ?
+        ORDER BY sc.assigned_at DESC
+        LIMIT 50`
+    )
+    .all(courseId) as any[];
+
+  const revenue = enrollments.reduce((sum, row) => sum + (Number(row.amount_paid) || 0), 0);
+
   res.json({
     success: true,
     course: { ...course, modules: JSON.parse(course.modules_json || '[]') },
     steps: steps.map(publicStep),
     enrolled,
-    questions
+    questions,
+    enrollments,
+    revenue
   });
 });
 
@@ -5043,6 +5121,191 @@ app.post('/api/learner/calls/:bookingId/cancel', requireRole(['LEARNER']), (req,
   });
 
   res.json({ success: true, status: 'CANCELLED' });
+});
+
+
+// ============================================================================
+// DIRECT MESSAGES
+//
+// One conversation per learner with the team. The learner writes from their
+// panel; the guide or admin answers from the console. Task chat stays attached
+// to a task; this is the open channel for everything else.
+// ============================================================================
+
+const CHAT_STAFF_ROLES: Array<'ADMIN' | 'CURRICULUM_OWNER' | 'GUIDE'> = ['ADMIN', 'CURRICULUM_OWNER', 'GUIDE'];
+
+const chatThreadForLearner = (learnerId: string) =>
+  db.prepare('SELECT * FROM chat_threads WHERE learner_id = ?').get(learnerId) as any;
+
+const openChatThread = (learnerId: string, createdBy: string) => {
+  const existing = chatThreadForLearner(learnerId);
+  if (existing) return existing;
+  const now = new Date().toISOString();
+  const id = `cht_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  db.prepare(
+    `INSERT INTO chat_threads (id, learner_id, subject, created_by, last_message_at, created_at, updated_at)
+     VALUES (?, ?, 'Direct messages', ?, ?, ?, ?)`
+  ).run(id, learnerId, createdBy, now, now, now);
+  return chatThreadForLearner(learnerId);
+};
+
+const chatMessagesFor = (threadId: string) =>
+  db
+    .prepare('SELECT id, sender_user_id, sender_name, sender_role, message, created_at FROM chat_messages WHERE thread_id = ? ORDER BY created_at ASC')
+    .all(threadId);
+
+/** Staff side: one row per learner who has a conversation, newest first. */
+app.get('/api/chat/threads', requireRole(CHAT_STAFF_ROLES), (req, res) => {
+  const q = req.query.q;
+  const params: any[] = [];
+  const where: string[] = ['1 = 1'];
+  if (hasSearch(q)) {
+    where.push('(u.name LIKE ? OR u.email LIKE ?)');
+    params.push(likeTerm(q), likeTerm(q));
+  }
+
+  const rows = db
+    .prepare(
+      `SELECT t.id, t.learner_id, t.last_message_at, t.updated_at,
+              u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
+              (SELECT m.message FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_message,
+              (SELECT m.sender_name FROM chat_messages m WHERE m.thread_id = t.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender,
+              (SELECT COUNT(*) FROM chat_messages m
+                WHERE m.thread_id = t.id AND m.sender_role = 'LEARNER'
+                  AND (t.staff_last_read_at IS NULL OR m.created_at > t.staff_last_read_at)) AS unread
+         FROM chat_threads t
+         JOIN users u ON u.id = t.learner_id
+         WHERE ${where.join(' AND ')}
+         ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
+         LIMIT 100`
+    )
+    .all(...params);
+
+  res.json({ success: true, rows });
+});
+
+// Open (or start) the conversation with one learner.
+app.post('/api/chat/threads', requireRole(CHAT_STAFF_ROLES), (req, res) => {
+  const learnerId = String(req.body?.learnerId || '').trim();
+  const learner = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'LEARNER'").get(learnerId) as any;
+  if (!learner) return res.status(404).json({ success: false, error: 'Learner not found.' });
+  const thread = openChatThread(learnerId, req.user!.id);
+  res.status(201).json({ success: true, threadId: thread.id, learnerName: learner.name });
+});
+
+// My own conversation, for the learner panel.
+app.get('/api/chat/my-thread', requireRole(['LEARNER']), (req, res) => {
+  const thread = openChatThread(req.user!.id, req.user!.id);
+  db.prepare('UPDATE chat_threads SET learner_last_read_at = ?, updated_at = updated_at WHERE id = ?').run(
+    new Date().toISOString(),
+    thread.id
+  );
+  const staff = db
+    .prepare("SELECT name, role FROM users WHERE role IN ('GUIDE', 'ADMIN') AND account_status = 'ACTIVE' ORDER BY CASE role WHEN 'GUIDE' THEN 0 ELSE 1 END LIMIT 1")
+    .get() as any;
+  res.json({
+    success: true,
+    thread: { id: thread.id, lastMessageAt: thread.last_message_at },
+    mentorName: staff?.name || 'The FRINS team',
+    messages: chatMessagesFor(thread.id)
+  });
+});
+
+// One conversation, for either side. Opening it marks it read for that side.
+app.get('/api/chat/threads/:threadId', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const thread = db.prepare('SELECT * FROM chat_threads WHERE id = ?').get(String(req.params.threadId)) as any;
+  if (!thread) return res.status(404).json({ success: false, error: 'Conversation not found.' });
+
+  const isLearner = req.user!.role === 'LEARNER';
+  if (isLearner && thread.learner_id !== req.user!.id) {
+    return res.status(403).json({ success: false, error: 'That is not your conversation.' });
+  }
+
+  const learner = db
+    .prepare('SELECT id, name, email, track, assigned_guide_id FROM users WHERE id = ?')
+    .get(thread.learner_id) as any;
+
+  const now = new Date().toISOString();
+  db.prepare(
+    isLearner
+      ? 'UPDATE chat_threads SET learner_last_read_at = ? WHERE id = ?'
+      : 'UPDATE chat_threads SET staff_last_read_at = ? WHERE id = ?'
+  ).run(now, thread.id);
+
+  res.json({
+    success: true,
+    thread: { id: thread.id, learnerId: thread.learner_id, lastMessageAt: thread.last_message_at },
+    learner,
+    messages: chatMessagesFor(thread.id)
+  });
+});
+
+// Send a message. Either side can.
+app.post('/api/chat/threads/:threadId/messages', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const thread = db.prepare('SELECT * FROM chat_threads WHERE id = ?').get(String(req.params.threadId)) as any;
+  if (!thread) return res.status(404).json({ success: false, error: 'Conversation not found.' });
+
+  const isLearner = req.user!.role === 'LEARNER';
+  if (isLearner && thread.learner_id !== req.user!.id) {
+    return res.status(403).json({ success: false, error: 'That is not your conversation.' });
+  }
+
+  const message = String(req.body?.message || '').trim();
+  if (!message) return res.status(400).json({ success: false, error: 'Write a message first.' });
+  if (message.length > 2000) {
+    return res.status(400).json({ success: false, error: 'Keep the message under 2000 characters.' });
+  }
+
+  const now = new Date().toISOString();
+  const messageId = `cmg_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+
+  db.prepare(
+    `INSERT INTO chat_messages (id, thread_id, sender_user_id, sender_name, sender_role, message, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(messageId, thread.id, req.user!.id, req.user!.name, req.user!.role, message, now);
+
+  db.prepare(
+    `UPDATE chat_threads
+        SET last_message_at = ?, updated_at = ?,
+            learner_last_read_at = CASE WHEN ? = 'LEARNER' THEN ? ELSE learner_last_read_at END,
+            staff_last_read_at = CASE WHEN ? = 'LEARNER' THEN staff_last_read_at ELSE ? END
+      WHERE id = ?`
+  ).run(now, now, req.user!.role, now, req.user!.role, now, thread.id);
+
+  if (isLearner) {
+    staffToNudge(thread.learner_id).forEach((staffId) =>
+      notifyUser(staffId, `New message from ${req.user!.name}`, message.slice(0, 140), {
+        id: req.user!.id,
+        name: req.user!.name
+      })
+    );
+  } else {
+    notifyUser(thread.learner_id, `New message from ${req.user!.name}`, message.slice(0, 140), {
+      id: req.user!.id,
+      name: req.user!.name
+    });
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'CHAT_MESSAGE_SENT',
+    entityType: 'CHAT_THREAD',
+    entityId: thread.id,
+    details: { messageId, learnerId: thread.learner_id, role: req.user!.role }
+  });
+
+  res.status(201).json({
+    success: true,
+    message: {
+      id: messageId,
+      sender_user_id: req.user!.id,
+      sender_name: req.user!.name,
+      sender_role: req.user!.role,
+      message,
+      created_at: now
+    }
+  });
 });
 
 // Serve built frontend on port 3001 from persisted public_build/ (or dist/)

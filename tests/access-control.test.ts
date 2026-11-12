@@ -467,6 +467,103 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
   });
 
+  it('FRI-CHAT-001: A learner and their mentor trade messages on one thread, and no other learner can read it', async () => {
+    const learner = await login('aarav@example.com');
+    const other = await login('priya@example.com');
+    const admin = await login('admin@frins.org');
+
+    const mine = await fetch(`${base}/api/chat/my-thread`, { headers: { Authorization: `Bearer ${learner}` } });
+    expect(mine.status).toBe(200);
+    const opened = await mine.json();
+    expect(opened.mentorName).toBeTruthy();
+    const threadId = opened.thread.id;
+
+    const sent = await fetch(`${base}/api/chat/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learner}` },
+      body: JSON.stringify({ message: 'QA: where does the stop go?' })
+    });
+    expect(sent.status).toBe(201);
+
+    const list = await fetch(`${base}/api/chat/threads?q=aarav`, { headers: { Authorization: `Bearer ${admin}` } });
+    expect(list.status).toBe(200);
+    const listed = await list.json();
+    expect(listed.rows.some((row: any) => row.id === threadId && row.unread >= 1)).toBe(true);
+
+    const reply = await fetch(`${base}/api/chat/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+      body: JSON.stringify({ message: 'QA: below the swing low.' })
+    });
+    expect(reply.status).toBe(201);
+
+    const after = await fetch(`${base}/api/chat/my-thread`, { headers: { Authorization: `Bearer ${learner}` } });
+    const reloaded = await after.json();
+    expect(reloaded.messages.some((m: any) => m.message === 'QA: below the swing low.')).toBe(true);
+
+    const peeking = await fetch(`${base}/api/chat/threads/${threadId}`, { headers: { Authorization: `Bearer ${other}` } });
+    expect(peeking.status).toBe(403);
+
+    // Empty messages are refused.
+    const blank = await fetch(`${base}/api/chat/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${learner}` },
+      body: JSON.stringify({ message: '   ' })
+    });
+    expect(blank.status).toBe(400);
+
+    db.prepare('DELETE FROM chat_messages WHERE message LIKE ?').run('QA: %');
+    db.prepare('DELETE FROM notifications WHERE message LIKE ?').run('QA: %');
+  });
+
+  it('FRI-COURSE-002: A course carries its duration and price, and an inactive course cannot be assigned', async () => {
+    const admin = await login('admin@frins.org');
+
+    const created = await fetch(`${base}/api/admin/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+      body: JSON.stringify({
+        title: 'QA sizing course',
+        track: 'trader',
+        level: 'L3',
+        description: 'Short description.',
+        durationHours: 2.5,
+        price: 4999
+      })
+    });
+    expect([200, 201]).toContain(created.status);
+    const { courseId } = await created.json();
+
+    const rows = await (await fetch(`${base}/api/admin/courses`, { headers: { Authorization: `Bearer ${admin}` } })).json();
+    const row = rows.rows.find((c: any) => c.id === courseId);
+    expect(row.duration_hours).toBe(2.5);
+    expect(row.price).toBe(4999);
+    expect(row.is_active).toBe(1);
+    expect(row.revenue).toBe(0);
+
+    const off = await fetch(`${base}/api/admin/courses/${courseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+      body: JSON.stringify({ isActive: false })
+    });
+    expect(off.status).toBe(200);
+    expect((await off.json()).course.is_active).toBe(0);
+
+    const learnerRow = await (await fetch(`${base}/api/admin/learners/directory`, { headers: { Authorization: `Bearer ${admin}` } })).json();
+    const learnerId = learnerRow.rows[0].id;
+
+    const blocked = await fetch(`${base}/api/admin/courses/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${admin}` },
+      body: JSON.stringify({ courseId, learnerId })
+    });
+    expect(blocked.status).toBe(400);
+
+    db.prepare('DELETE FROM course_steps WHERE course_id = ?').run(courseId);
+    db.prepare('DELETE FROM student_courses WHERE course_id = ?').run(courseId);
+    db.prepare('DELETE FROM courses WHERE id = ?').run(courseId);
+  });
+
   it('FRI-LEARNER-ADD-001: Admin adds a learner with a course and payment, and the file adds it up', async () => {
     const adminToken = await login('admin@frins.org');
     const email = `qa.learner.${Date.now()}@example.com`;
