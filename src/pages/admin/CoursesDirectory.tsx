@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, ChevronRight, Clock, Plus, Search } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Pager } from '../../components/Pager';
+import {
+  FilterSelect,
+  PageHead,
+  SearchBox,
+  TableShell,
+  Toolbar
+} from '../../components/console/ConsoleUI';
 
 interface CourseRow {
   id: string;
@@ -117,161 +125,103 @@ export const CoursesDirectory: React.FC = () => {
 
   return (
     <div>
-      <header className="compact-head">
-        <div>
-          <span className="admin-page-eyebrow">Work</span>
-          <h1>Courses</h1>
-        </div>
-        <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/courses/new')}>
-          <Plus size={16} /> Add course
-        </button>
-      </header>
+      <PageHead
+        title="Courses"
+        meta={rows.length > 0 ? `${rows.length} ${rows.length === 1 ? 'course' : 'courses'}` : undefined}
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/courses/new')}>
+            <Plus size={14} /> Add course
+          </button>
+        }
+      />
 
       {banner && <div className="governance-alert success">{banner}</div>}
       {error && <div className="governance-alert danger">{error}</div>}
 
-      <section className="panel-card">
-        <div className="admin-mini-stats">
-          <span>
-            <strong>{rows.length}</strong> courses
-          </span>
-          <span>
-            <strong>{activeCount}</strong> active
-          </span>
-          <span>
-            <strong>{paidCount}</strong> paid
-          </span>
-          <span>
-            <strong>{learnerTotal}</strong> learners enrolled
-          </span>
-        </div>
+      <Toolbar>
+        <SearchBox value={q} onChange={setQ} placeholder="Search courses" />
+        <FilterSelect
+          label="Filter by price"
+          value={price}
+          onChange={setPrice}
+          options={[
+            { value: 'ALL', label: 'Paid and free' },
+            { value: 'PAID', label: 'Paid only' },
+            { value: 'FREE', label: 'Free only' }
+          ]}
+        />
+        <FilterSelect
+          label="Filter by status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: 'ALL', label: 'Active and inactive' },
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' }
+          ]}
+        />
+      </Toolbar>
 
-        <div className="list-tools">
-          <div className="list-search-wrap">
-            <Search size={15} />
-            <input
-              className="form-input list-search"
-              placeholder="Search courses"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              aria-label="Search courses"
-            />
-          </div>
-          <select
-            className="form-select list-filter"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            aria-label="Filter by price"
-          >
-            <option value="ALL">Paid and free</option>
-            <option value="PAID">Paid only</option>
-            <option value="FREE">Free only</option>
-          </select>
-          <select
-            className="form-select list-filter"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
-            aria-label="Filter by status"
-          >
-            <option value="ALL">Active and inactive</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
+      <TableShell
+        loading={loading}
+        isEmpty={!loading && filtered.length === 0}
+        empty="No course matches these filters."
+        columns={[
+          { label: 'Course' },
+          { label: 'Level', width: 90 },
+          { label: 'Duration', width: 110 },
+          { label: 'Price', width: 90 },
+          { label: 'Steps', width: 70, align: 'right' },
+          { label: 'Learners', width: 90, align: 'right' },
+          { label: 'Status', width: 110 },
+          { label: '', width: 32 }
+        ]}
+      >
+        {filtered.map((row) => (
+          <tr key={row.id} className="clickable-row" onClick={() => navigate(`/admin/courses/${row.id}`)}>
+            <td data-label="Course">
+              <span className="row-title">{row.title}</span>
+              <span className="row-sub">
+                {TRACK_LABEL[row.track] || row.track}
+                {row.revenue > 0 ? ` · ${money(row.revenue)} collected` : ''}
+              </span>
+            </td>
+            <td data-label="Level" style={{ whiteSpace: 'nowrap' }}>
+              {row.level}
+            </td>
+            <td data-label="Duration" className="row-sub" style={{ whiteSpace: 'nowrap' }}>
+              {formatDuration(row.duration_hours ?? row.derived_hours)}
+            </td>
+            <td data-label="Price">{Number(row.price) > 0 ? money(row.price) : 'Free'}</td>
+            <td data-label="Steps" className="num">
+              {row.step_count}
+            </td>
+            <td data-label="Learners" className="num">
+              {row.learner_count}
+            </td>
+            <td data-label="Status">
+              <button
+                type="button"
+                className={`status-pill ${Number(row.is_active) === 1 ? 'approved' : 'danger'}`}
+                style={{ cursor: 'pointer' }}
+                aria-pressed={Number(row.is_active) === 1}
+                aria-label={`${Number(row.is_active) === 1 ? 'Deactivate' : 'Activate'} ${row.title}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setToggleTarget(row);
+                }}
+              >
+                {Number(row.is_active) === 1 ? 'Active' : 'Inactive'}
+              </button>
+            </td>
+            <td>
+              <ChevronRight size={14} color="#98A2B3" />
+            </td>
+          </tr>
+        ))}
+      </TableShell>
 
-        <div className="admin-table-wrap">
-          <table className="data-table course-table">
-            <thead>
-              <tr>
-                <th>Course</th>
-                <th>Level</th>
-                <th>Duration</th>
-                <th>Price</th>
-                <th>Steps</th>
-                <th>Learners</th>
-                <th>Status</th>
-                <th aria-label="Open" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => (
-                <tr key={row.id} className="clickable-row" onClick={() => navigate(`/admin/courses/${row.id}`)}>
-                  <td>
-                    <div className="course-cell">
-                      <span className="course-icon">
-                        <BookOpen size={15} />
-                      </span>
-                      <div>
-                        <button
-                          type="button"
-                          className="link-button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/admin/courses/${row.id}`);
-                          }}
-                        >
-                          {row.title}
-                        </button>
-                        <div className="admin-muted small">
-                          {TRACK_LABEL[row.track] || row.track}
-                          {row.revenue > 0 ? ` · ${money(row.revenue)} collected` : ''}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td data-label="Level">{row.level}</td>
-                  <td data-label="Duration">
-                    <span className="inline-meta">
-                      <Clock size={13} />
-                      {formatDuration(row.duration_hours ?? row.derived_hours)}
-                    </span>
-                  </td>
-                  <td data-label="Price">
-                    {Number(row.price) > 0 ? (
-                      <span className="price-tag">{money(row.price)}</span>
-                    ) : (
-                      <span className="price-tag free">Free</span>
-                    )}
-                  </td>
-                  <td data-label="Steps">{row.step_count}</td>
-                  <td data-label="Learners">{row.learner_count}</td>
-                  <td data-label="Status">
-                    <button
-                      type="button"
-                      className={`switch ${Number(row.is_active) === 1 ? 'on' : ''}`}
-                      aria-pressed={Number(row.is_active) === 1}
-                      aria-label={`${Number(row.is_active) === 1 ? 'Deactivate' : 'Activate'} ${row.title}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setToggleTarget(row);
-                      }}
-                    >
-                      <span className="switch-dot" />
-                      <span className="switch-label">{Number(row.is_active) === 1 ? 'Active' : 'Inactive'}</span>
-                    </button>
-                  </td>
-                  <td>
-                    <ChevronRight size={16} className="row-chevron" />
-                  </td>
-                </tr>
-              ))}
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={8}>
-                    <p className="admin-muted" style={{ margin: 0 }}>
-                      {rows.length === 0
-                        ? 'No course yet. Add the first one.'
-                        : 'No course matches these filters.'}
-                    </p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {loading && <p className="admin-muted">Loading courses…</p>}
-      </section>
+      <Pager page={1} pages={1} total={filtered.length} limit={Math.max(filtered.length, 1)} onChange={() => {}} noun="courses" />
 
       <ConfirmDialog
         open={Boolean(toggleTarget)}

@@ -88,8 +88,7 @@ export const DiscoveryQuestionsPage: React.FC = () => {
     <div>
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">Setup</span>
-          <h1>Discovery questions</h1>
+          <h1>Discovery</h1>
         </div>
         <div className="page-head-actions">
           <button
@@ -105,37 +104,22 @@ export const DiscoveryQuestionsPage: React.FC = () => {
       {error && <div className="governance-alert danger">{error}</div>}
       {banner && <div className="governance-alert success">{banner}</div>}
 
-      <section className="panel-card" style={{ marginBottom: 14 }}>
-        <div className="panel-head">
-          <div>
-            <h2>How many questions</h2>
-            <p>Only the first N in this order are shown on the public Discovery page.</p>
-          </div>
-          <div className="count-control">
-            <input
-              type="number"
-              min={1}
-              max={50}
-              className="form-input"
-              value={n}
-              onChange={(e) => setN(Number(e.target.value))}
-              aria-label="Number of questions"
-            />
-            <button type="button" className="btn btn-primary" onClick={applyCount} disabled={busy}>
-              Apply
-            </button>
-          </div>
-        </div>
-        <div className="list-stack">
-          <div className="list-row">
-            <span className="list-row-main">
-              <span className="list-row-title">Active now</span>
-              <span className="list-row-sub">{questions.length} questions in the bank</span>
-            </span>
-            <span className="micro-tag accent">N = {activeCount}</span>
-          </div>
-        </div>
-      </section>
+      <div className="config-bar">
+        <label htmlFor="discoveryCount">Questions shown on the public page</label>
+        <input
+          id="discoveryCount"
+          type="number"
+          min={1}
+          max={50}
+          className="form-input"
+          value={n}
+          onChange={(e) => setN(Number(e.target.value))}
+        />
+        <button type="button" className="btn btn-primary" onClick={applyCount} disabled={busy}>
+          Apply
+        </button>
+        <span className="config-note">{activeCount} live in this order</span>
+      </div>
 
       <div className="toolbar">
         <div className="search-field">
@@ -149,7 +133,7 @@ export const DiscoveryQuestionsPage: React.FC = () => {
           />
         </div>
         <span className="toolbar-meta">
-          {filtered.length} shown · {activeCount} active
+          {q.trim() ? `${filtered.length} match${filtered.length === 1 ? '' : 'es'}` : `${activeCount} active`}
         </span>
       </div>
 
@@ -316,7 +300,6 @@ export const DiscoveryQuestionPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">{isNew ? 'New question' : 'Edit question'}</span>
           <h1>{isNew ? 'Add a question' : 'Question details'}</h1>
         </div>
       </div>

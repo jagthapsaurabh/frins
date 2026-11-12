@@ -1,7 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { StaffSignInGate } from '../components/StaffSignInGate';
+import { PageHead, StatusPill, TableShell } from '../components/console/ConsoleUI';
+import { formatDateTime } from '../utils/dates';
+import { Beaker, Check, Download, FlaskConical, ShieldAlert, Sparkles } from 'lucide-react';
 
+const human = (value?: string) => {
+  const words = (value || '—').replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/**
+ * The team's view of the AI layer: what ran, what the safety gate stopped, and
+ * what is cleared to go into the training set. Nothing here decides a learner's
+ * outcome. A person always signs off.
+ */
 export const AIPipelinePage: React.FC = () => {
   const { user, authFetch } = useAuth();
   const [aiStatus, setAiStatus] = useState<any>(null);
@@ -10,20 +23,18 @@ export const AIPipelinePage: React.FC = () => {
   const [selectedRun, setSelectedRun] = useState<any>(null);
   const [notice, setNotice] = useState<string>('');
 
-  // Safety Validator Sandbox state
   const [sampleText, setSampleText] = useState<string>(
     'Contact the participant at participant@example.com or +91 9000000000. Buy NIFTY calls with a target price of Rs 450 for guaranteed returns.'
   );
   const [safetyTestResult, setSafetyTestResult] = useState<any>(null);
 
-  // Training curation form state
-  const [curationRunId, setCurationRunId] = useState<string>('run_aarav_01');
+  const [curationRunId, setCurationRunId] = useState<string>('');
   const [curationSplit, setCurationSplit] = useState<'TRAIN' | 'VALIDATION' | 'TEST'>('TRAIN');
   const [consentChecked, setConsentChecked] = useState<boolean>(true);
   const [deidChecked, setDeidChecked] = useState<boolean>(true);
   const [guideChecked, setGuideChecked] = useState<boolean>(true);
   const [curationReason, setCurationReason] = useState<string>(
-    'Guide-verified gold example demonstrating grounded observation and non-advisory conversation brief.'
+    'Guide-verified example of grounded observation and a non-advisory conversation brief.'
   );
   const [jsonlPreview, setJsonlPreview] = useState<string>('');
 
@@ -36,49 +47,44 @@ export const AIPipelinePage: React.FC = () => {
 
     if (statusRes.ok) setAiStatus(await statusRes.json());
     if (runsRes.ok) {
-      const rData = await runsRes.json();
-      setRuns(rData.runs || []);
-      if (!selectedRun && rData.runs?.length > 0) {
-        setSelectedRun(rData.runs[0]);
-      }
+      const data = await runsRes.json();
+      const rows = data.runs || [];
+      setRuns(rows);
+      setSelectedRun((current: any) => current || rows[0] || null);
+      setCurationRunId((current: string) => current || rows[0]?.id || '');
     }
-    if (trainRes.ok) {
-      setTrainingData(await trainRes.json());
-    }
+    if (trainRes.ok) setTrainingData(await trainRes.json());
   };
 
   useEffect(() => {
     loadAll();
   }, [user]);
 
-  const handleRunSafetyTest = async (e: React.FormEvent) => {
+  const runSafetyTest = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await authFetch('/api/ai/test-safety', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sampleText,
         participantName: 'Sample Participant',
         participantEmail: 'participant@example.com'
       })
     });
-    if (res.ok) {
-      setSafetyTestResult(await res.json());
-    }
+    if (res.ok) setSafetyTestResult(await res.json());
   };
 
-  const handleRunOfflineBenchmark = async () => {
+  const runBenchmark = async () => {
     const res = await authFetch('/api/ai/benchmark/run', { method: 'POST' });
     const data = await res.json();
     if (res.ok && data.success) {
-      setNotice(`✓ Offline Benchmark Suite Executed (${data.passedCases}/${data.totalCases} gold cases passed). Audit event recorded.`);
+      setNotice(`Benchmark finished. ${data.passedCases} of ${data.totalCases} cases passed.`);
       loadAll();
     } else {
-      setNotice(`⚠ Switch to Guide or Admin role to execute benchmark runs (${data.error || 'Forbidden'}).`);
+      setNotice(data.error || 'Only an admin or curriculum owner can run the benchmark.');
     }
   };
 
-  const handleCurateExample = async (e: React.FormEvent) => {
+  const curateExample = async (e: React.FormEvent) => {
     e.preventDefault();
     const res = await authFetch('/api/ai/training/examples', {
       method: 'POST',
@@ -93,21 +99,20 @@ export const AIPipelinePage: React.FC = () => {
     });
     const data = await res.json();
     if (res.ok && data.success) {
-      setNotice(`✓ Curated Training Example ${data.exampleId} (${data.leakageGuardNote})`);
+      setNotice(`Example ${data.exampleId} added to the ${curationSplit.toLowerCase()} set.`);
       loadAll();
     } else {
-      setNotice(`⚠ ${data.error || 'Curation requires Guide or Admin authorisation.'}`);
+      setNotice(data.error || 'A guide or admin has to sign off on this example.');
     }
   };
 
-  const handleExportJSONL = async () => {
+  const exportJSONL = async () => {
     const res = await authFetch('/api/ai/training/dataset.jsonl');
     if (res.ok) {
-      const text = await res.text();
-      setJsonlPreview(text);
-      setNotice('✓ Exported verified training dataset in JSONL format and recorded audit trail.');
+      setJsonlPreview(await res.text());
+      setNotice('Dataset exported and the export is on the audit trail.');
     } else {
-      setNotice('⚠ Switch to Guide or Admin role to export JSONL dataset.');
+      setNotice('A guide or admin can export the dataset.');
     }
   };
 
@@ -123,336 +128,324 @@ export const AIPipelinePage: React.FC = () => {
     );
   }
 
+  const splits = trainingData?.splits || {};
+  const benchmark = trainingData?.benchmarks?.[0];
+  const passedCases = (benchmark?.cases || []).filter((item: any) => item.passed).length;
+  const model = aiStatus?.modelName || 'frins-deterministic-mock-v1';
+  const live = aiStatus?.liveProviderConfigured;
+
   return (
-    <div className="workspace-shell">
-      <div className="container-wide">
-        <div className="workspace-header-banner">
-          <div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-              <span className="micro-tag accent">FRI-AI-001..004 &middot; FRI-LLM-001 &middot; FRI-ML-001..002</span>
-              <span className="micro-tag warn">
-                Active Runtime Mode: {aiStatus?.providerMode || 'MOCK_DETERMINISTIC'}
-              </span>
-              <span className="micro-tag">Model: {aiStatus?.modelName}</span>
-            </div>
-            <h1 style={{ fontSize: 30, marginBottom: 6 }}>
-              Three-Agent AI Orchestrator &amp; Governed Training Pipeline
-            </h1>
-            <p style={{ maxWidth: 780, fontSize: 14.5 }}>
-              Pipeline sequence: <code>Sanitize Context &rarr; Observational Agent &rarr; Safety Validator &rarr; Governed Decision Agent &rarr; Generative Agent &rarr; Final Safety Gate &rarr; Guide Review Queue</code>.
-            </p>
-          </div>
+    <div>
+      <PageHead
+        title="AI engine"
+        meta={aiStatus ? `Running ${live ? 'a live model' : 'the offline mock'}` : undefined}
+        actions={
+          <button type="button" className="btn btn-secondary" onClick={runBenchmark}>
+            <FlaskConical size={14} /> Run benchmark
+          </button>
+        }
+      />
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button className="btn btn-dark btn-sm" onClick={handleRunOfflineBenchmark}>
-              Run Offline Gold Benchmark Suite (6 Cases)
-            </button>
-          </div>
+      {notice && <div className="governance-alert success">{notice}</div>}
+
+      <div className="kpi-grid" style={{ marginBottom: 14 }}>
+        <div className="kpi">
+          <span className="kpi-icon">
+            <Sparkles size={14} />
+          </span>
+          <span className="kpi-body">
+            <span className="kpi-label">Model</span>
+            <span className="kpi-value" style={{ fontSize: 14 }}>
+              {model}
+            </span>
+            <span className="kpi-hint">{human(aiStatus?.providerMode)}</span>
+          </span>
         </div>
-
-        {notice && (
-          <div className="governance-alert success">
-            {notice}
-          </div>
-        )}
-
-        {/* Truthful Distinction Banner: LLM API vs Fine-Tuning Roadmap (Requirement 3, 9, 10) */}
-        <div className="panel-card dark">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ maxWidth: 820 }}>
-              <span className="micro-tag dark">Transparency &amp; Truthful AI Disclosure (Requirement 10)</span>
-              <h3 style={{ fontSize: 20, margin: '8px 0 6px' }}>
-                LLM Integration, Evaluation &amp; Proprietary Fine-Tuning Stage Gates
-              </h3>
-              <p style={{ fontSize: 13.5 }}>
-                {aiStatus?.truthfulTrainingStatus?.notice} Raw learner chats are never automatically used for training. Only explicitly consented, de-identified, Guide-verified examples enter the curated JSONL store.
-              </p>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span className="micro-tag success">Stage 1–3: Curation &amp; Offline Eval ACTIVE</span>
-              <span className="micro-tag warn">Stage 4–5: Fine-Tuning Weights NOT_IMPLEMENTED (Future Gate)</span>
-            </div>
-          </div>
-
-          {/* 6-Stage Roadmap Track */}
-          <div className="workspace-grid-3" style={{ marginTop: 18 }}>
-            <div style={{ padding: 14, background: 'var(--bg-dark-surface)', borderRadius: 8, border: '1px solid var(--border-dark)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#8AE2A8' }}>STAGE 1 &amp; 2 · IMPLEMENTED</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#FFF', marginTop: 4 }}>Gold Rubric &amp; Offline Benchmark</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dark-muted)', marginTop: 4 }}>
-                Evaluates evidence citations, uncertainty calibration, contradiction detection, and blocks prohibited stock tips.
-              </div>
-            </div>
-
-            <div style={{ padding: 14, background: 'var(--bg-dark-surface)', borderRadius: 8, border: '1px solid var(--border-dark)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#8AE2A8' }}>STAGE 3 · IMPLEMENTED</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#FFF', marginTop: 4 }}>Consented De-Identified Curation</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dark-muted)', marginTop: 4 }}>
-                Participant-hashed TRAIN / VALIDATION / TEST splits preventing data leakage, with audited JSONL export.
-              </div>
-            </div>
-
-            <div style={{ padding: 14, background: 'var(--bg-dark-surface)', borderRadius: 8, border: '1px solid var(--border-dark)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#F5C469' }}>STAGE 4–6 · LOCKED FUTURE GATE</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#FFF', marginTop: 4 }}>Fine-Tuning &amp; Canary Release</div>
-              <div style={{ fontSize: 12, color: 'var(--text-dark-muted)', marginTop: 4 }}>
-                Requires owner sign-off, privacy audit, and measured gap over prompting before any model weights are trained.
-              </div>
-            </div>
-          </div>
+        <div className="kpi">
+          <span className="kpi-icon">
+            <Beaker size={14} />
+          </span>
+          <span className="kpi-body">
+            <span className="kpi-label">Runs recorded</span>
+            <span className="kpi-value">{runs.length}</span>
+            <span className="kpi-hint">Every run keeps its trace</span>
+          </span>
         </div>
-
-        {/* Three Specialised Agent Contracts */}
-        <div className="workspace-grid-3" style={{ marginBottom: 20 }}>
-          {aiStatus?.agents?.map((ag: any, idx: number) => (
-            <div key={ag.name} className="panel-card" style={{ marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span className="micro-tag accent">Agent 0{idx + 1}</span>
-                <span className="micro-tag success">{ag.mode}</span>
-              </div>
-              <h3 style={{ fontSize: 18, marginBottom: 6 }}>{ag.name}</h3>
-              <p style={{ fontSize: 13 }}>
-                <strong>Forbidden Authority:</strong> {ag.forbiddenAuthority}
-              </p>
-            </div>
-          ))}
+        <div className="kpi">
+          <span className="kpi-icon">
+            <Check size={14} />
+          </span>
+          <span className="kpi-body">
+            <span className="kpi-label">Benchmark</span>
+            <span className="kpi-value">
+              {benchmark ? `${passedCases}/${benchmark.cases.length}` : 'Not run'}
+            </span>
+            <span className="kpi-hint">Gold cases passing</span>
+          </span>
         </div>
+        <div className="kpi">
+          <span className="kpi-icon">
+            <Download size={14} />
+          </span>
+          <span className="kpi-body">
+            <span className="kpi-label">Curated examples</span>
+            <span className="kpi-value">
+              {(splits.TRAIN || 0) + (splits.VALIDATION || 0) + (splits.TEST || 0)}
+            </span>
+            <span className="kpi-hint">Across three splits</span>
+          </span>
+        </div>
+      </div>
 
-        <div className="workspace-grid-2">
-          {/* Left Column: Persisted AIWorkflowRun Inspector + Safety Validator Sandbox */}
-          <div>
-            <div className="panel-card">
-              <span className="micro-tag accent">Traceability &amp; Auditability</span>
-              <h3 style={{ fontSize: 19, margin: '6px 0 12px' }}>Persisted Three-Agent Workflow Runs</h3>
-
-              <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-                {runs.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    className={`btn btn-sm ${selectedRun?.id === r.id ? 'btn-primary' : 'btn-secondary'}`}
-                    onClick={() => setSelectedRun(r)}
-                  >
-                    {r.participantName} ({r.traceId.slice(0, 10)})
-                  </button>
-                ))}
-              </div>
-
-              {selectedRun && (
-                <div style={{ background: 'var(--bg-canvas)', padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)', fontSize: 12.5 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-                    <strong>Run ID: {selectedRun.id} &middot; Trace: {selectedRun.traceId}</strong>
-                    <span className="micro-tag warn">{selectedRun.providerMode}</span>
-                  </div>
-                  <div><strong>Participant Hash (De-identified):</strong> <code>{selectedRun.sanitizedInputSummary?.participantHash}</code></div>
-                  <div><strong>Deterministic Sufficiency:</strong> {selectedRun.sufficiencyStatus} &middot; <strong>Exit:</strong> {selectedRun.exitPathway}</div>
-                  <div><strong>Decision Agent Proposal:</strong> <code>{selectedRun.decisionStage?.proposedAction}</code> (Review State: <code>{selectedRun.reviewState}</code>)</div>
-                  <div><strong>Safety Validator Passed:</strong> {selectedRun.validatorResult?.passed ? 'TRUE (0 violations)' : 'FALSE'}</div>
-                </div>
-              )}
+      <div className="detail-grid">
+        <div className="detail-main">
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>Recent runs</h2>
+              <span className="section-note">Newest first</span>
             </div>
 
-            {/* Interactive Safety & PII Validator Sandbox */}
-            <div className="panel-card">
-              <span className="micro-tag accent">Validator / Safety Layer Test</span>
-              <h3 style={{ fontSize: 19, margin: '6px 0 6px' }}>Test Prohibited Advice &amp; PII Redaction</h3>
-              <p style={{ fontSize: 13, marginBottom: 12 }}>
-                Test how the FRINS Validator blocks stock tips, buy/sell directives, guaranteed return claims, clinical diagnoses, and redacts personal identifiers.
-              </p>
-
-              <form onSubmit={handleRunSafetyTest}>
-                <div className="form-group">
-                  <label className="form-label">Input Text to Validate &amp; Scrub</label>
-                  <textarea
-                    className="form-textarea"
-                    value={sampleText}
-                    onChange={(e) => setSampleText(e.target.value)}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button type="submit" className="btn btn-primary btn-sm">
-                    Run Safety &amp; PII Validator
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() =>
-                      setSampleText(
-                        'Participant reported hesitating on pre-defined invalidation exits in Q14 and Q20. Explore routine consistency in the 45-minute Guide conversation.'
-                      )
-                    }
-                  >
-                    Load Clean Compliant Observation
-                  </button>
-                </div>
-              </form>
-
-              {safetyTestResult && (
-                <div
-                  style={{
-                    marginTop: 14,
-                    padding: 14,
-                    borderRadius: 'var(--radius-md)',
-                    background: safetyTestResult.passedSafetyGate ? 'var(--success-bg)' : 'var(--danger-bg)',
-                    border: `1px solid ${safetyTestResult.passedSafetyGate ? 'var(--success-border)' : 'var(--danger-border)'}`,
-                    fontSize: 13
-                  }}
+            <TableShell
+              loading={!aiStatus && runs.length === 0}
+              isEmpty={runs.length === 0}
+              empty="No run has been recorded yet."
+              columns={[
+                { label: 'Participant' },
+                { label: 'Pathway' },
+                { label: 'Review', width: 140 },
+                { label: 'When', width: 160 }
+              ]}
+            >
+              {runs.map((run) => (
+                <tr
+                  key={run.id}
+                  className="clickable-row"
+                  onClick={() => setSelectedRun(run)}
+                  style={selectedRun?.id === run.id ? { background: '#F8FAFC' } : undefined}
                 >
+                  <td data-label="Participant">
+                    <span className="row-title">{run.participantName}</span>
+                    <span className="row-sub">{run.traceId?.slice(0, 16)}</span>
+                  </td>
+                  <td data-label="Pathway" className="row-sub">
+                    {human(run.exitPathway)}
+                  </td>
+                  <td data-label="Review">
+                    <StatusPill
+                      status={human(run.reviewState)}
+                      tone={run.reviewState === 'APPROVED' ? 'approved' : 'warn'}
+                    />
+                  </td>
+                  <td data-label="When" className="row-sub" style={{ whiteSpace: 'nowrap' }}>
+                    {formatDateTime(run.createdAt)}
+                  </td>
+                </tr>
+              ))}
+            </TableShell>
+
+            {selectedRun && (
+              <div className="fact-list" style={{ marginTop: 14 }}>
+                <div className="fact">
+                  <span>Decision</span>
+                  <strong>{human(selectedRun.decisionStage?.proposedAction)}</strong>
+                </div>
+                <div className="fact">
+                  <span>Validator</span>
+                  <strong>{selectedRun.validatorResult?.passed ? 'Passed' : 'Stopped'}</strong>
+                </div>
+                <div className="fact">
+                  <span>Sufficiency</span>
+                  <strong>{human(selectedRun.sufficiencyStatus)}</strong>
+                </div>
+                <div className="fact">
+                  <span>Learner hash</span>
+                  <strong style={{ fontSize: 11 }}>
+                    {selectedRun.sanitizedInputSummary?.participantHash || 'Not recorded'}
+                  </strong>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>
+                <ShieldAlert size={13} /> Safety check
+              </h2>
+              <span className="section-note">Paste any text before it reaches a learner</span>
+            </div>
+
+            <form onSubmit={runSafetyTest}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="safetySample">
+                  Text to check
+                </label>
+                <textarea
+                  id="safetySample"
+                  className="form-textarea"
+                  rows={4}
+                  value={sampleText}
+                  onChange={(e) => setSampleText(e.target.value)}
+                />
+              </div>
+              <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
+                <button type="submit" className="btn btn-primary">
+                  Check text
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() =>
+                    setSampleText(
+                      'The participant paused on their invalidation exits in two of the scenarios. Worth a short conversation on routine consistency.'
+                    )
+                  }
+                >
+                  Load a clean example
+                </button>
+              </div>
+            </form>
+
+            {safetyTestResult && (
+              <div className={`feedback-note ${safetyTestResult.passedSafetyGate ? '' : 'danger'}`} style={{ marginTop: 12 }}>
+                <strong>{safetyTestResult.passedSafetyGate ? 'Clear to send' : 'Blocked'}</strong>
+                <p>
+                  {safetyTestResult.passedSafetyGate
+                    ? 'No advice and no personal details found.'
+                    : `Found ${safetyTestResult.prohibitedMatches.join(', ')}.`}
+                </p>
+                <span style={{ wordBreak: 'break-word' }}>{safetyTestResult.redactedText}</span>
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="detail-side">
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>Training data</h2>
+              <button type="button" className="link-button" onClick={exportJSONL}>
+                Export
+              </button>
+            </div>
+
+            <div className="fact-list fact-list-3" style={{ marginBottom: 14 }}>
+              <div className="fact">
+                <span>Train</span>
+                <strong>{splits.TRAIN || 0}</strong>
+              </div>
+              <div className="fact">
+                <span>Validation</span>
+                <strong>{splits.VALIDATION || 0}</strong>
+              </div>
+              <div className="fact">
+                <span>Test</span>
+                <strong>{splits.TEST || 0}</strong>
+              </div>
+            </div>
+
+            <form onSubmit={curateExample}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="curationRun">
+                  From run
+                </label>
+                <select
+                  id="curationRun"
+                  className="form-select"
+                  value={curationRunId}
+                  onChange={(e) => setCurationRunId(e.target.value)}
+                  required
+                >
+                  {runs.map((run) => (
+                    <option key={run.id} value={run.id}>
+                      {run.participantName} · {human(run.reviewState)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="curationSplit">
+                  Split
+                </label>
+                <select
+                  id="curationSplit"
+                  className="form-select"
+                  value={curationSplit}
+                  onChange={(e) => setCurationSplit(e.target.value as any)}
+                >
+                  <option value="TRAIN">Train</option>
+                  <option value="VALIDATION">Validation</option>
+                  <option value="TEST">Test</option>
+                </select>
+              </div>
+
+              <div className="check-list">
+                <label>
+                  <input type="checkbox" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)} />
+                  Consent on record
+                </label>
+                <label>
+                  <input type="checkbox" checked={deidChecked} onChange={(e) => setDeidChecked(e.target.checked)} />
+                  Names and contact details removed
+                </label>
+                <label>
+                  <input type="checkbox" checked={guideChecked} onChange={(e) => setGuideChecked(e.target.checked)} />
+                  A guide has verified it
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="curationReason">
+                  Why this example
+                </label>
+                <input
+                  id="curationReason"
+                  className="form-input"
+                  value={curationReason}
+                  onChange={(e) => setCurationReason(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button type="submit" className="btn btn-secondary" style={{ width: '100%' }}>
+                Add to the dataset
+              </button>
+            </form>
+
+            {jsonlPreview && <pre className="code-block">{jsonlPreview}</pre>}
+          </section>
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>Benchmark cases</h2>
+            </div>
+            <div className="audit-list">
+              {(benchmark?.cases || []).map((item: any) => (
+                <div key={item.id} className="audit-row">
                   <div>
-                    <strong>Safety Gate Verdict:</strong>{' '}
-                    {safetyTestResult.passedSafetyGate
-                      ? 'PASSED. Safe for Guide review queue'
-                      : `BLOCKED. ${safetyTestResult.prohibitedMatches.join(', ')}`}
+                    <strong>{item.name}</strong>
+                    <small>{item.details}</small>
                   </div>
-                  <div style={{ marginTop: 6 }}>
-                    <strong>PII-Scrubbed Output:</strong> <code>{safetyTestResult.redactedText}</code>
-                  </div>
+                  <span className={`status-pill ${item.passed ? 'approved' : 'danger'}`}>
+                    {item.passed ? 'Pass' : 'Fail'}
+                  </span>
                 </div>
-              )}
+              ))}
+              {!benchmark && <p className="section-note">Run the benchmark to fill this in.</p>}
             </div>
-          </div>
+          </section>
 
-          {/* Right Column: Training Curation & JSONL Export + Offline Benchmark Results */}
-          <div>
-            <div className="panel-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-                <div>
-                  <span className="micro-tag accent">FRI-ML-001 &middot; Curated Learning-Data Pipeline</span>
-                  <h3 style={{ fontSize: 19, marginTop: 4 }}>Consented Training Curation &amp; JSONL Export</h3>
-                </div>
-                <button type="button" className="btn btn-dark btn-sm" onClick={handleExportJSONL}>
-                  Export Curated Dataset (.jsonl)
-                </button>
-              </div>
-
-              {trainingData && (
-                <div className="workspace-grid-3" style={{ marginBottom: 14 }}>
-                  <div className="metric-stat-box" style={{ padding: 12 }}>
-                    <span className="metric-label">TRAIN Split</span>
-                    <span className="metric-value" style={{ fontSize: 20 }}>{trainingData.splits?.TRAIN || 0}</span>
-                  </div>
-                  <div className="metric-stat-box" style={{ padding: 12 }}>
-                    <span className="metric-label">VALIDATION Split</span>
-                    <span className="metric-value" style={{ fontSize: 20 }}>{trainingData.splits?.VALIDATION || 0}</span>
-                  </div>
-                  <div className="metric-stat-box" style={{ padding: 12 }}>
-                    <span className="metric-label">TEST Split</span>
-                    <span className="metric-value" style={{ fontSize: 20 }}>{trainingData.splits?.TEST || 0}</span>
-                  </div>
-                </div>
-              )}
-
-              <form onSubmit={handleCurateExample} style={{ background: 'var(--bg-canvas)', padding: 16, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                <div className="workspace-grid-2" style={{ gap: 10 }}>
-                  <div className="form-group">
-                    <label className="form-label">Source Verified AI Run</label>
-                    <select
-                      className="form-select"
-                      value={curationRunId}
-                      onChange={(e) => setCurationRunId(e.target.value)}
-                    >
-                      {runs.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.id} ({r.participantName}: {r.decisionStage?.proposedAction})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Target Split (Participant-Locked)</label>
-                    <select
-                      className="form-select"
-                      value={curationSplit}
-                      onChange={(e) => setCurationSplit(e.target.value as any)}
-                    >
-                      <option value="TRAIN">TRAIN</option>
-                      <option value="VALIDATION">VALIDATION</option>
-                      <option value="TEST">TEST</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12.5, marginBottom: 12 }}>
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input type="checkbox" checked={consentChecked} onChange={(e) => setConsentChecked(e.target.checked)} />
-                    <span>Explicit Participant Consent Verified (Q34 / Consent Record)</span>
-                  </label>
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input type="checkbox" checked={deidChecked} onChange={(e) => setDeidChecked(e.target.checked)} />
-                    <span>De-Identification &amp; PII Redaction Verified</span>
-                  </label>
-                  <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input type="checkbox" checked={guideChecked} onChange={(e) => setGuideChecked(e.target.checked)} />
-                    <span>Human Learning Guide Gold-Label Verification Complete</span>
-                  </label>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Curation Provenance &amp; Reason</label>
-                  <input
-                    className="form-input"
-                    value={curationReason}
-                    onChange={(e) => setCurationReason(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <button type="submit" className="btn btn-primary btn-sm">
-                  + Add Verified Example to Curated Store
-                </button>
-              </form>
-
-              {jsonlPreview && (
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
-                    Exported JSONL Dataset Preview (<code>/api/ai/training/dataset.jsonl</code>):
-                  </div>
-                  <pre
-                    style={{
-                      background: '#1B1A18',
-                      color: '#E7E3DC',
-                      padding: 12,
-                      borderRadius: 6,
-                      fontSize: 11,
-                      overflowX: 'auto',
-                      maxHeight: 180
-                    }}
-                  >
-                    {jsonlPreview}
-                  </pre>
-                </div>
-              )}
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>What is not built</h2>
             </div>
-
-            {/* Offline Benchmark Evaluation Cases */}
-            <div className="panel-card">
-              <span className="micro-tag success">Offline Evaluation Suite</span>
-              <h3 style={{ fontSize: 18, margin: '6px 0 10px' }}>Benchmark Cases (Grounding, Safety, Privacy)</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {trainingData?.benchmarks?.[0]?.cases?.map((c: any) => (
-                  <div
-                    key={c.id}
-                    style={{
-                      padding: 10,
-                      borderRadius: 6,
-                      background: 'var(--bg-canvas)',
-                      border: '1px solid var(--border-subtle)',
-                      fontSize: 12.5
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <strong>{c.id}: {c.name}</strong>
-                      <span className="micro-tag success" style={{ fontSize: 10, padding: '1px 7px' }}>
-                        {c.passed ? 'PASS' : 'FAIL'}
-                      </span>
-                    </div>
-                    <div style={{ color: 'var(--text-muted)', marginTop: 2 }}>{c.details}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+            <p className="prose-block muted">
+              A live model writes the draft and the rules below it decide what is allowed. The team trains
+              nothing online from chats. No FRINS model weights exist yet. Fine-tuning stays locked until the
+              curated set is big enough and an owner signs off.
+            </p>
+          </section>
         </div>
       </div>
     </div>

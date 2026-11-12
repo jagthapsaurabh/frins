@@ -76,7 +76,6 @@ export const AdminOverview: React.FC = () => {
     <div>
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">Admin console</span>
           <h1>Overview</h1>
         </div>
         <div className="page-head-actions">
@@ -145,10 +144,7 @@ export const AdminOverview: React.FC = () => {
       <div className="overview-split">
         <section className="panel-card">
           <div className="panel-head">
-            <div>
-              <h2>Waiting on a review</h2>
-              <p>Oldest uploads first once a learner sends work in.</p>
-            </div>
+            <h2>Waiting on a review</h2>
             <Link to="/admin/tasks" className="link-button" style={{ fontSize: 12 }}>
               Open queue
             </Link>
@@ -172,14 +168,16 @@ export const AdminOverview: React.FC = () => {
                     <tr
                       key={row.id}
                       className="clickable-row"
-                      onClick={() => navigate(`/admin/tasks?task=${row.id}`)}
+                      onClick={() => navigate(`/admin/tasks/${row.id}`)}
                     >
                       <td>
                         <span className="row-title">{row.learner_name}</span>
                         <span className="row-sub">{row.course_title || 'General task'}</span>
                       </td>
                       <td>{row.title}</td>
-                      <td className="row-sub">{timeAgo(row.submitted_at)}</td>
+                      <td className="row-sub" style={{ whiteSpace: 'nowrap' }}>
+                {timeAgo(row.submitted_at)}
+              </td>
                       <td style={{ width: 28 }}>
                         <ChevronRight size={14} color="#98A2B3" />
                       </td>

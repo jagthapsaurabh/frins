@@ -35,11 +35,13 @@ export const Pager: React.FC<PagerProps> = ({ page, pages, total, limit, onChang
   start = Math.max(1, end - 4);
 
   const numbers = range(start, end);
+  // "1 lead", not "1 leads".
+  const nounLabel = total === 1 ? noun.replace(/s$/, '') : noun;
 
   return (
     <div className="pager">
       <span className="pager-count">
-        {from}&ndash;{to} of {total.toLocaleString()} {noun}
+        {from}&ndash;{to} of {total.toLocaleString()} {nounLabel}
       </span>
       <div className="pager-controls">
         <button

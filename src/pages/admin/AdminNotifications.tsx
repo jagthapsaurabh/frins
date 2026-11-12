@@ -4,6 +4,14 @@ import { ArrowLeft, Plus, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { formatDateTime } from '../../utils/dates';
+import { Pager } from '../../components/Pager';
+import {
+  FilterSelect,
+  PageHead,
+  SearchBox,
+  TableShell,
+  Toolbar
+} from '../../components/console/ConsoleUI';
 
 interface SentNotice {
   id: string;
@@ -56,81 +64,87 @@ export const AdminNotifications: React.FC = () => {
     load();
   };
 
+  const [search, setSearch] = useState('');
+  const [audience, setAudience] = useState('ALL');
+  const [page, setPage] = useState(1);
+
+  const filtered = items.filter((item) => {
+    const term = search.trim().toLowerCase();
+    const matchesText = !term || `${item.title} ${item.message}`.toLowerCase().includes(term);
+    const matchesAudience = audience === 'ALL' || item.audience === audience;
+    return matchesText && matchesAudience;
+  });
+  const pages = Math.max(1, Math.ceil(filtered.length / 20));
+  const current = Math.min(page, pages);
+  const visible = filtered.slice((current - 1) * 20, current * 20);
+
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <span className="page-eyebrow">Growth</span>
-          <h1>Notifications</h1>
-        </div>
-        <div className="page-head-actions">
+      <PageHead
+        title="Notifications"
+        meta={items.length > 0 ? `${items.length} sent` : undefined}
+        actions={
           <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/notifications/new')}>
             <Plus size={14} /> New notice
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      <section className="panel-card" style={{ padding: 0 }}>
-        <div className="panel-head" style={{ padding: '14px 16px', margin: 0 }}>
-          <div>
-            <h2>Sent notices</h2>
-            <p>Read counts update as people open each one.</p>
-          </div>
-          <span className="section-note">{items.length} sent</span>
-        </div>
+      <Toolbar>
+        <SearchBox value={search} onChange={setSearch} placeholder="Search notice or text" />
+        <FilterSelect
+          label="Filter by audience"
+          value={audience}
+          onChange={setAudience}
+          options={[
+            { value: 'ALL', label: 'Every audience' },
+            { value: 'LEARNERS', label: 'All learners' },
+            { value: 'STAFF', label: 'All staff' },
+            { value: 'USER', label: 'One person' }
+          ]}
+        />
+      </Toolbar>
 
-        {loading ? (
-          <p className="section-note" style={{ padding: 16 }}>Loading.</p>
-        ) : items.length === 0 ? (
-          <div style={{ padding: 16 }}>
-            <div className="empty-state">
-              <strong>Nothing sent yet</strong>
-              A notice appears in the bell at the top of the workspace.
-            </div>
-          </div>
-        ) : (
-          <div className="table-wrap" style={{ border: 'none', borderRadius: 0 }}>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Notice</th>
-                  <th>Audience</th>
-                  <th>Read</th>
-                  <th>Sent</th>
-                  <th aria-label="Delete" style={{ width: 44 }} />
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((notice) => (
-                  <tr key={notice.id}>
-                    <td>
-                      <span className="row-title">{notice.title}</span>
-                      <span className="row-sub">{notice.message}</span>
-                    </td>
-                    <td>{AUDIENCE_LABEL[notice.audience] || notice.audience}</td>
-                    <td className="num">
-                      {notice.readCount} / {notice.recipientCount}
-                    </td>
-                    <td className="row-sub" style={{ whiteSpace: 'nowrap' }}>
-                      {formatDateTime(notice.createdAt)}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => setDeleteTarget(notice)}
-                        aria-label={`Delete ${notice.title}`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      <TableShell
+        loading={loading}
+        isEmpty={!loading && visible.length === 0}
+        empty="Nothing sent yet."
+        columns={[
+          { label: 'Notice' },
+          { label: 'Audience', width: 150 },
+          { label: 'Read', width: 90, align: 'right' },
+          { label: 'Sent', width: 170 },
+          { label: '', width: 44 }
+        ]}
+      >
+        {visible.map((notice) => (
+          <tr key={notice.id}>
+            <td data-label="Notice">
+              <span className="row-title">{notice.title}</span>
+              <span className="row-sub">{notice.message}</span>
+            </td>
+            <td data-label="Audience">{AUDIENCE_LABEL[notice.audience] || notice.audience}</td>
+            <td data-label="Read" className="num">
+              {notice.readCount} / {notice.recipientCount}
+            </td>
+            <td data-label="Sent" className="row-sub" style={{ whiteSpace: 'nowrap' }}>
+              {formatDateTime(notice.createdAt)}
+            </td>
+            <td>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setDeleteTarget(notice)}
+                aria-label={`Delete ${notice.title}`}
+              >
+                <Trash2 size={14} />
+              </button>
+            </td>
+          </tr>
+        ))}
+      </TableShell>
+
+      <Pager page={current} pages={pages} total={filtered.length} limit={20} onChange={setPage} noun="notices" />
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}
@@ -203,7 +217,6 @@ export const NewNotificationPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">New notice</span>
           <h1>Send a notification</h1>
         </div>
       </div>

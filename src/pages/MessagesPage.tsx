@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageSquare, Search, Send, UserRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { PageHead } from '../components/console/ConsoleUI';
 import { formatDateTime, timeAgo } from '../utils/dates';
 
 interface ThreadRow {
@@ -225,12 +226,7 @@ export const MessagesPage: React.FC = () => {
 
   return (
     <div className="messages-page">
-      <header className="compact-head">
-        <div>
-          <span className="admin-page-eyebrow">{isLearner ? 'Student workspace' : 'Work'}</span>
-          <h1>Messages</h1>
-        </div>
-      </header>
+      <PageHead title="Messages" />
 
       {error && <div className="governance-alert danger">{error}</div>}
 

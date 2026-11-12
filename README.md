@@ -241,14 +241,33 @@ own look, so a student sees a marketing page outside and a plain tool inside.
 
 Rules the console follows:
 
-- A page has one title. No subtitle under it and no empty space between the title and the content.
-  The eyebrow above the title (Work, People, Setup) is enough context.
-- Lists are tables, not cards. Every long list has a search box, its filters and a pager.
+- A page has one title. No subtitle under it, no eyebrow above it, and no empty space between the
+  title and the content. The sidebar already says where you are.
+- Every list is the same four blocks in the same order, built from
+  `src/components/console/ConsoleUI.tsx`:
+
+  1. `PageHead` - the title, an optional count beside it, and the one action on the right.
+  2. `Toolbar` - `SearchBox` first, then `FilterSelect` dropdowns in a fixed order.
+  3. `TableShell` - the same header style, the same row height, a chevron on rows that open.
+  4. `Pager` - the range on the left, page buttons on the right.
+
+  Tasks, Learners, Courses, Staff, Leads, Bookings, Notifications and Learner progress all use it,
+  so a screen cannot drift away from the rest. Detail pages use `PageHead`, then a `fact-list` of
+  labelled values, then a two column body that folds to one on a narrow screen.
 - Add, edit and open are routes. A list never grows a form inside it:
   `/admin/courses/new`, `/admin/staff/new`, `/admin/notifications/new`,
-  `/admin/discovery/questions/new`, `/admin/communities/new`, plus the matching detail pages.
+  `/admin/discovery/questions/new`, `/admin/communities/new`, `/admin/tasks/new`, plus the matching
+  detail pages such as `/admin/tasks/:taskId`.
 - Buttons carry an icon. Row actions are icon buttons with an accessible label.
 - Nothing is rounded beyond 8px and no card floats above the page.
+
+### Console type and spacing
+
+The admin console runs on one UI face with tabular numbers, so columns of dates and counts line up.
+Display headings are switched off inside the console only; the public site keeps its own fonts. The
+sidebar is 204px with 12px labels and 14px icons, which leaves the table the width it needs on a
+laptop. Below 640px every table becomes a stack of labelled rows, and the filters turn into one
+column so nothing scrolls sideways.
 
 ### Overview screens
 
@@ -325,6 +344,14 @@ Staff access is never linked from the public website, and each console has its o
   every API call, so a forged client redirect changes nothing.
 - The primary sign-in page at `/login` is for learners. It has no staff links on it.
 - **No dashboard opens without a session.** `src/auth/guard.ts` holds the rule (`decideDashboardAccess`): no user, no role, or the wrong role all resolve to `REDIRECT_TO_SIGN_IN`. The router applies it to `/dashboard`, `/admin`, `/guide` and `/ai-pipeline`, and the server independently rejects the same requests with 401 (no token) or 403 (wrong role) on every API route.
+
+### Admin sections
+
+Every tab has its own URL, so a link can point at one screen: `/admin` (overview), `/admin/tasks`
+and `/admin/tasks/:taskId`, `/admin/tasks/new`, `/admin/messages`, `/admin/courses`,
+`/admin/communities`, `/admin/learners` and `/admin/learners/:learnerId`, `/admin/progress`,
+`/admin/staff` and `/admin/staff/:userId`, `/admin/leads`, `/admin/bookings`, `/admin/notifications`,
+`/admin/discovery`, `/admin/settings`. The AI engine stays admin-only at `/ai-pipeline`.
 
 ## 9. Accounts and database scripts
 

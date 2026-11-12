@@ -213,7 +213,6 @@ export const CoursePlayerPage: React.FC = () => {
 
         <header className="player-head panel-card">
           <div>
-            <span className="admin-page-eyebrow">Your course</span>
             <h1>{data.course.title}</h1>
             <p>{data.course.description}</p>
           </div>

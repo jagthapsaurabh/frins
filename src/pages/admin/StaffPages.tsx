@@ -1,10 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, KeyRound, Plus, Search, ShieldCheck, UserRound, Users } from 'lucide-react';
+import { ArrowLeft, ChevronRight, KeyRound, Plus, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Pager } from '../../components/Pager';
 import { usePagedList } from '../../hooks/usePagedList';
+import {
+  FilterSelect,
+  PageHead,
+  SearchBox,
+  TableShell,
+  Toolbar
+} from '../../components/console/ConsoleUI';
 
 const ROLE_LABEL: Record<string, string> = {
   LEARNER: 'Student',
@@ -37,100 +44,72 @@ export const StaffDirectory: React.FC = () => {
 
   return (
     <div>
-      <div className="page-head">
-        <div>
-          <span className="page-eyebrow">People</span>
-          <h1>Staff &amp; access</h1>
-        </div>
-        <div className="page-head-actions">
+      <PageHead
+        title="Staff & access"
+        meta={list.total > 0 ? `${list.total} accounts` : undefined}
+        actions={
           <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/staff/new')}>
             <Plus size={14} /> New account
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {list.error && <div className="governance-alert danger">{list.error}</div>}
 
-      <div className="toolbar">
-        <div className="search-field">
-          <Search size={14} />
-          <input
-            className="form-input"
-            placeholder="Search name or email"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            aria-label="Search accounts"
-          />
-        </div>
-        <select
-          className="form-select"
+      <Toolbar>
+        <SearchBox value={q} onChange={setQ} placeholder="Search name or email" />
+        <FilterSelect
+          label="Filter by role"
           value={role}
-          onChange={(e) => setRole(e.target.value)}
-          aria-label="Filter by role"
-          style={{ width: 'auto' }}
-        >
-          <option value="ALL">Every role</option>
-          <option value="LEARNER">Students</option>
-          <option value="GUIDE">Guides</option>
-          <option value="ADMIN">Admins</option>
-          <option value="CURRICULUM_OWNER">Curriculum owners</option>
-        </select>
-        <span className="toolbar-meta">{list.total} accounts</span>
-      </div>
+          onChange={setRole}
+          options={[
+            { value: 'ALL', label: 'Every role' },
+            { value: 'LEARNER', label: 'Students' },
+            { value: 'GUIDE', label: 'Guides' },
+            { value: 'ADMIN', label: 'Admins' },
+            { value: 'CURRICULUM_OWNER', label: 'Curriculum owners' }
+          ]}
+        />
+      </Toolbar>
 
-      <div className="table-wrap">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th style={{ width: 110 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.rows.map((account) => (
-              <tr key={account.id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                    <span className="pick-avatar">{initialsOf(account.name)}</span>
-                    <span>
-                      <span className="row-title">{account.name}</span>
-                      {account.id === user?.id && <span className="row-sub">You</span>}
-                    </span>
-                  </div>
-                </td>
-                <td className="row-sub">{account.email}</td>
-                <td>{ROLE_LABEL[account.role] || account.role}</td>
-                <td>
-                  <span className={`status-pill ${account.account_status === 'ACTIVE' ? 'approved' : 'danger'}`}>
-                    {account.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
-                  </span>
-                </td>
-                <td>
-                  <div className="table-actions">
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => navigate(`/admin/staff/${account.id}`)}
-                    >
-                      <UserRound size={13} /> Open
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!list.loading && list.rows.length === 0 && (
-              <tr>
-                <td colSpan={5}>
-                  <p className="section-note" style={{ padding: '8px 0' }}>No account matches that search.</p>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <TableShell
+        loading={list.loading}
+        isEmpty={!list.loading && list.rows.length === 0}
+        empty="No account matches that search."
+        columns={[
+          { label: 'Name' },
+          { label: 'Email' },
+          { label: 'Role', width: 150 },
+          { label: 'Status', width: 120 },
+          { label: '', width: 90 }
+        ]}
+      >
+        {list.rows.map((account) => (
+          <tr key={account.id} className="clickable-row" onClick={() => navigate(`/admin/staff/${account.id}`)}>
+            <td data-label="Name">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <span className="pick-avatar">{initialsOf(account.name)}</span>
+                <span>
+                  <span className="row-title">{account.name}</span>
+                  {account.id === user?.id && <span className="row-sub">You</span>}
+                </span>
+              </div>
+            </td>
+            <td data-label="Email" className="row-sub">
+              {account.email}
+            </td>
+            <td data-label="Role">{ROLE_LABEL[account.role] || account.role}</td>
+            <td data-label="Status">
+              <span className={`status-pill ${account.account_status === 'ACTIVE' ? 'approved' : 'danger'}`}>
+                {account.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
+              </span>
+            </td>
+            <td>
+              <ChevronRight size={14} color="#98A2B3" />
+            </td>
+          </tr>
+        ))}
+      </TableShell>
 
       <Pager page={list.page} pages={list.pages} total={list.total} limit={20} onChange={setPage} noun="accounts" />
     </div>
@@ -171,7 +150,6 @@ export const NewStaffPage: React.FC = () => {
       <div>
         <div className="page-head">
           <div>
-            <span className="page-eyebrow">Account created</span>
             <h1>{created.name}</h1>
           </div>
         </div>
@@ -202,7 +180,6 @@ export const NewStaffPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">New account</span>
           <h1>Create an account</h1>
         </div>
       </div>
@@ -359,7 +336,6 @@ export const StaffAccountPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">Account</span>
           <h1>{account.name}</h1>
         </div>
         <div className="page-head-actions">

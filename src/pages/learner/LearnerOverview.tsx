@@ -78,7 +78,6 @@ export const LearnerOverview: React.FC = () => {
     <div>
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">Student workspace</span>
           <h1>Overview</h1>
         </div>
         <div className="page-head-actions">

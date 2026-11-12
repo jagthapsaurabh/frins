@@ -16,6 +16,8 @@ import { MessagesPage } from './pages/MessagesPage';
 import { NewNotificationPage } from './pages/admin/AdminNotifications';
 import { NewStaffPage, StaffAccountPage } from './pages/admin/StaffPages';
 import { DiscoveryQuestionPage } from './pages/admin/DiscoveryPages';
+import { TaskDetailPage } from './pages/admin/TaskDetailPage';
+import { AssignTaskPage } from './pages/admin/AssignTaskPage';
 import {
   CommunityListPage,
   CommunityMembersPage,
@@ -201,6 +203,26 @@ export const EcosystemShell: React.FC = () => {
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
             <AppShell>
               <NewNotificationPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/tasks/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <AssignTaskPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/tasks/:taskId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <TaskDetailPage />
             </AppShell>
           </RequireStaff>
         }

@@ -334,7 +334,6 @@ export const CourseBuilderPage: React.FC = () => {
             <ArrowLeft size={15} /> Courses
           </Link>
           <header className="admin-page-head">
-            <span className="admin-page-eyebrow">Course builder</span>
             <h1>New course</h1>
             <p>Start with the basics. Steps, files and videos come next, on the same page.</p>
           </header>
@@ -495,7 +494,6 @@ export const CourseBuilderPage: React.FC = () => {
 
         <header className="builder-head panel-card">
           <div>
-            <span className="admin-page-eyebrow">Course builder</span>
             <h1>{course.title}</h1>
             <p>{course.description}</p>
             <div className="dossier-chips">

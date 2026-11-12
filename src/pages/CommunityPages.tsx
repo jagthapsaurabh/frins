@@ -172,7 +172,6 @@ export const CommunityListPage: React.FC = () => {
     <div>
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">{canCreate ? 'Work' : 'Student workspace'}</span>
           <h1>Communities</h1>
         </div>
         <div className="page-head-actions">
@@ -321,7 +320,6 @@ export const NewCommunityPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">New community</span>
           <h1>Create a community</h1>
         </div>
       </div>
@@ -565,9 +563,6 @@ export const CommunityRoomPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">
-            {community ? `${counts.members} ${counts.members === 1 ? 'member' : 'members'} · ${counts.posts} ${counts.posts === 1 ? 'post' : 'posts'}` : 'Community'}
-          </span>
           <h1>{community?.name || 'Community'}</h1>
         </div>
         <div className="page-head-actions">
@@ -836,7 +831,6 @@ export const CommunityMembersPage: React.FC = () => {
 
       <div className="page-head">
         <div>
-          <span className="page-eyebrow">Community</span>
           <h1>Members and settings</h1>
         </div>
         <div className="page-head-actions">

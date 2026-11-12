@@ -66,7 +66,7 @@ const navForRole = (role: string | undefined): NavItem[] => {
       // The AI engine is admin-only, so a curriculum owner does not get the link
       // to a page that would turn them away.
       ...(role === 'ADMIN'
-        ? [{ path: '/ai-pipeline', label: 'AI Engine', icon: <SparklesIcon size={17} />, group: 'Tools' }]
+        ? [{ path: '/ai-pipeline', label: 'AI engine', icon: <SparklesIcon size={17} />, group: 'Setup' }]
         : [])
     ];
   }
@@ -143,14 +143,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
   };
   const current = nav.find(isActivePath) ||
     (location.pathname === '/prototype' ? nav[0] : undefined);
-  const homeLabel = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER'
-    ? 'Admin console'
-    : user?.role === 'GUIDE'
-      ? 'Guide'
-      : 'My learning';
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell role-${(user?.role || "guest").toLowerCase()}`}>
       {/* ---------- Sidebar ---------- */}
       <aside className={`app-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="app-sidebar-brand">
@@ -240,8 +235,6 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               <Menu size={19} />
             </button>
             <div className="app-breadcrumb">
-              <span>{homeLabel}</span>
-              <span className="app-breadcrumb-sep">/</span>
               <strong>{current?.label || 'Workspace'}</strong>
             </div>
 

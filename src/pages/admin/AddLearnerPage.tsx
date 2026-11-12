@@ -160,7 +160,6 @@ export const AddLearnerPage: React.FC = () => {
         </Link>
 
         <header className="admin-page-head">
-          <span className="admin-page-eyebrow">People</span>
           <h1>Add a learner</h1>
           <p>
             Create the account, put them on a track, hand them a guide and optionally enrol them in a course in

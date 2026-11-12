@@ -347,7 +347,6 @@ export const LearnerDashboardPage: React.FC = () => {
       <div className="container-wide">
         {section !== 'overview' && (
           <header className="admin-page-head">
-            <span className="admin-page-eyebrow">Student workspace</span>
             <h1>{SECTION_COPY[section].title}</h1>
             <p>{SECTION_COPY[section].blurb}</p>
           </header>

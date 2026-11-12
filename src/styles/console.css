@@ -416,10 +416,10 @@ a.kpi:hover { background: #FCFCFD; }
   height: 20px;
   padding: 0 7px;
   border-radius: 3px;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   border: 1px solid var(--border-subtle);
   background: #F9FAFB;
   color: var(--text-muted);
@@ -1035,4 +1035,258 @@ a.kpi:hover { background: #FCFCFD; }
     color: var(--text-light-muted);
   }
   .admin-mini-stats { flex-direction: column; gap: 2px; }
+}
+
+/* --------------------------------------------------------------------------
+   The one page pattern: title row, toolbar, table, pager. Every tab uses it.
+   -------------------------------------------------------------------------- */
+
+.page-head { align-items: center; margin-bottom: 14px; }
+.page-head-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.page-head h1 { font-size: 20px; }
+.page-head-meta { font-size: 12px; color: var(--text-light-muted); }
+
+.table-empty { padding: 26px 8px; text-align: center; color: var(--text-light-muted); font-size: 12.5px; }
+
+/* The category pill above a panel title is gone; the title carries itself. */
+.app-content .panel-card > .micro-tag:first-child { display: none; }
+.app-content .panel-card > h3:first-of-type { margin-top: 0; }
+
+/* Panel titles inside the console all sit on the same line height. */
+.app-content .panel-card h3 { font-size: 13.5px; margin: 0 0 10px; }
+
+/* Detail pages: a title row, then a two column body that folds on small screens. */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.detail-main, .detail-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.detail-main > .panel-card, .detail-side > .panel-card { margin: 0; }
+
+/* Definition rows used on every detail page. */
+.fact-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--border-subtle); border: 1px solid var(--border-subtle); border-radius: 6px; overflow: hidden; }
+.fact { background: #fff; padding: 11px 14px; }
+.fact span { display: block; font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-light-muted); }
+.fact strong { display: block; font-size: 13px; font-weight: 600; margin-top: 3px; color: var(--text-main); }
+
+/* Sidebar: smaller, quieter, same font as the rest of the console. */
+.app-sidebar { width: 204px; }
+.app-sidebar-brand { height: 52px; padding: 0 14px; }
+.app-brand-text strong { font-size: 13px; }
+.app-brand-text small { display: none; }
+.app-sidebar-nav { padding: 10px 8px 6px; gap: 14px; }
+.app-nav-section { font-size: 9.5px; letter-spacing: 0.08em; padding: 0 7px; margin-bottom: 4px; }
+.app-nav-item { height: 30px; padding: 0 7px; gap: 8px; font-size: 12px; }
+.app-nav-icon svg { width: 14px; height: 14px; }
+.app-sidebar-footer { padding: 8px; }
+.app-sidebar-card { padding: 10px; }
+.app-sidebar-card strong { font-size: 11.5px; }
+.app-sidebar-card p { font-size: 11px; }
+
+@media (max-width: 1080px) {
+  .detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 900px) {
+  .fact-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* A status picker inside a row. It reads as text until you point at it. */
+.row-select {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 5px;
+  padding: 3px 20px 3px 7px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 5px center;
+}
+.row-select:hover { border-color: var(--border-subtle); background-color: #F8FAFC; }
+.row-select:focus { outline: none; border-color: var(--accent-border); background-color: #fff; }
+
+/* Section header inside a card: a title and one quiet line on the right. */
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0 0 10px; }
+.panel-head h2 { font-size: 13.5px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 6px; }
+.panel-head.section-gap { margin-top: 18px; }
+
+.prose-block { font-size: 13px; line-height: 1.62; margin: 0; color: var(--text-main); white-space: pre-line; }
+.prose-block.muted { color: var(--text-muted); }
+.submission-image { display: block; max-width: 100%; margin-top: 10px; border: 1px solid var(--border-subtle); border-radius: 6px; }
+.form-error { margin: 8px 0 0; font-size: 12px; color: #B42318; font-weight: 500; }
+
+.ai-verdict { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.ai-verdict strong { text-transform: capitalize; }
+.ai-verdict span { font-size: 11.5px; color: var(--text-light-muted); }
+.ai-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.ai-two h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light-muted); margin: 0 0 5px; }
+.ai-two ul { margin: 0; padding-left: 16px; font-size: 12.5px; line-height: 1.65; color: var(--text-muted); }
+.task-chat { height: 300px; border: 1px solid var(--border-subtle); border-radius: 6px; margin: 0 14px 12px; }
+
+@media (max-width: 640px) {
+  .ai-two { grid-template-columns: 1fr; }
+}
+
+.form-row-3 { display: grid; grid-template-columns: 120px 1fr 100px; gap: 12px; }
+
+/* A thin progress meter, used in the learner progress table. */
+.meter { height: 5px; background: #EDF0F4; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+.audit-list { display: flex; flex-direction: column; }
+.audit-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.audit-row:last-child { border-bottom: none; }
+.audit-row strong { display: block; font-size: 12.5px; font-weight: 600; text-transform: capitalize; }
+.audit-row small { display: block; font-size: 11px; color: var(--text-light-muted); margin-top: 2px; }
+.audit-meta { text-align: right; flex-shrink: 0; }
+.audit-meta span { font-size: 10px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-light-muted); }
+
+@media (max-width: 640px) {
+  .form-row-3 { grid-template-columns: 1fr; }
+}
+
+.steps-list { margin: 0; padding-left: 18px; font-size: 12.5px; line-height: 1.85; color: var(--text-muted); }
+
+.check-list { display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; margin: 4px 0 12px; }
+.check-list label { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
+.code-block {
+  margin: 12px 0 0;
+  padding: 12px;
+  background: #101828;
+  color: #E4E7EC;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.5;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.feedback-note.danger { background: var(--danger-bg, #FEF3F2); border-color: var(--danger-border, #FDA29B); }
+
+/* --------------------------------------------------------------------------
+   Admin console type: one UI face everywhere, no display headings, numbers
+   that line up in columns. This is what makes it read as software.
+   -------------------------------------------------------------------------- */
+
+.app-shell.role-admin,
+.app-shell.role-curriculum_owner {
+  --font-display: var(--font-sans);
+  font-family: var(--font-sans);
+  font-feature-settings: 'tnum' 1, 'cv05' 1;
+}
+
+.app-shell.role-admin h1,
+.app-shell.role-admin h2,
+.app-shell.role-admin h3,
+.app-shell.role-admin h4,
+.app-shell.role-curriculum_owner h1,
+.app-shell.role-curriculum_owner h2,
+.app-shell.role-curriculum_owner h3,
+.app-shell.role-curriculum_owner h4 {
+  font-family: var(--font-sans);
+  letter-spacing: -0.011em;
+}
+
+.app-shell.role-admin .table-wrap { background: #FFFFFF; }
+.app-shell.role-admin .data-table th { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+.app-shell.role-admin .data-table td { font-size: 12.5px; }
+.app-shell.role-admin .row-title { font-size: 12.5px; font-weight: 600; }
+.app-shell.role-admin .row-sub { font-size: 11.5px; }
+
+
+.fact-list-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.data-table td.num, .data-table th.num { font-variant-numeric: tabular-nums; text-align: right; }
+.chat-bubbles { overflow-x: hidden; }
+
+/* The quiet cell style is only for the tabular layout. A phone still stacks. */
+@media (min-width: 641px) {
+  .data-table tbody td.row-sub,
+  .course-table tbody td.row-sub,
+  .roster-table tbody td.row-sub { display: table-cell; }
+}
+
+/* Filters shrink instead of pushing the page sideways. */
+.toolbar .form-select { max-width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .toolbar .search-field { grid-column: 1 / -1; flex: none; max-width: none; }
+  .toolbar .form-select { width: 100% !important; }
+  .data-table tbody td .row-select { max-width: 100%; }
+  .data-table tbody tr td:last-child { display: none; }
+  .data-table tbody td.row-sub { display: block; }
+}
+
+@media (max-width: 1080px) {
+  .detail-grid.settings-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .panel-head { flex-wrap: wrap; align-items: flex-start; }
+  .panel-head .section-note { display: none; }
+  .fact-list, .fact-list-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.kpi-value { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+
+/* --------------------------------------------------------------------------
+   Labels. The pill-with-caps tag was the loudest template leftover, so every
+   tag in the app now reads as a small label: sentence case, square corners,
+   no letter spacing. Public pages keep their accent colour, the console does
+   not.
+   -------------------------------------------------------------------------- */
+
+.app-shell .micro-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: #F4F5F7;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.app-shell .micro-tag.accent { background: var(--accent-soft); border-color: var(--accent-border); color: #1D4ED8; }
+.app-shell .micro-tag.success { background: var(--success-bg); border-color: var(--success-border); color: var(--success-text); }
+.app-shell .micro-tag.warn { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+.app-shell .micro-tag.danger { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+
+/* A one-line setting that sits above a list without becoming a card. */
+.config-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #FFFFFF;
+  margin-bottom: 12px;
+  font-size: 12.5px;
+}
+.config-bar label { font-weight: 600; color: var(--text-main); }
+.config-bar input[type='number'] { width: 68px; }
+.config-note { margin-left: auto; font-size: 11.5px; color: var(--text-light-muted); }
+@media (max-width: 640px) {
+  .config-note { margin-left: 0; width: 100%; }
 }

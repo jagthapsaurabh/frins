@@ -4116,6 +4116,11 @@ app.patch('/api/admin/users/:userId', requireRole(['ADMIN']), (req, res) => {
   res.json({ success: true, userId, role: nextRole, accountStatus: nextStatus });
 });
 
+app.get('/api/admin/competencies', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {
+  const rows = db.prepare('SELECT * FROM core_competencies ORDER BY code ASC').all();
+  res.json({ success: true, rows, total: rows.length });
+});
+
 app.post('/api/admin/competencies', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const code = String(req.body?.code || '').trim().toUpperCase();
   const title = String(req.body?.title || '').trim();

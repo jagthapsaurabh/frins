@@ -38,6 +38,11 @@ const statusTone = (status: string) =>
  * One learner, everything about them: contact details, what they bought,
  * how far they got, their tasks with all the timestamps, and their calls.
  */
+const statusLabel = (value: string) => {
+  const words = String(value || '').replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 export const LearnerDossierPage: React.FC = () => {
   const { learnerId = '' } = useParams<{ learnerId: string }>();
   const { authFetch } = useAuth();
@@ -198,7 +203,6 @@ export const LearnerDossierPage: React.FC = () => {
           <div className="dossier-identity">
             <span className="dossier-avatar">{initials}</span>
             <div>
-              <span className="admin-page-eyebrow">Learner file</span>
               <h1>{learner.name}</h1>
               <div className="dossier-meta">
                 <span>
@@ -434,7 +438,7 @@ export const LearnerDossierPage: React.FC = () => {
                             {enrollment.course_level} · enrolled {formatDate(enrollment.assigned_at)}
                           </div>
                         </div>
-                        <span className={`status-pill ${statusTone(enrollment.status)}`}>{enrollment.status}</span>
+                        <span className={`status-pill ${statusTone(enrollment.status)}`}>{statusLabel(enrollment.status)}</span>
                       </div>
 
                       <div className="progress-line">
@@ -570,7 +574,7 @@ export const LearnerDossierPage: React.FC = () => {
                   <article key={task.id} className="dossier-task">
                     <div className="dossier-task-top">
                       <strong>{task.title}</strong>
-                      <span className={`status-pill ${statusTone(task.status)}`}>{task.status}</span>
+                      <span className={`status-pill ${statusTone(task.status)}`}>{statusLabel(task.status)}</span>
                     </div>
                     <div className="admin-muted small">{task.course_title || 'General task'}</div>
                     <div className="task-timeline">
@@ -623,7 +627,7 @@ export const LearnerDossierPage: React.FC = () => {
                       <div className="admin-muted small">{call.topic || call.recommended_focus || 'General call'}</div>
                     </div>
                     <div className="call-history-side">
-                      <span className={`status-pill ${statusTone(call.status)}`}>{call.status}</span>
+                      <span className={`status-pill ${statusTone(call.status)}`}>{statusLabel(call.status)}</span>
                       <span className="admin-muted small">{call.staff_name || 'Any mentor'}</span>
                     </div>
                   </div>
