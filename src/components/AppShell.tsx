@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
+  Bell,
   LayoutDashboard,
   Users,
   ShieldCheck,
@@ -73,6 +74,7 @@ const navForRole = (role: string | undefined): NavItem[] => {
 
   if (role === 'GUIDE') {
     return [
+      { path: '/guide/reviews', label: 'Task reviews', icon: <ClipboardList size={17} />, group: 'Workspace' },
       { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace', exact: true },
       { path: '/guide/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Workspace' },
       { path: '/guide/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Workspace' }
@@ -86,7 +88,8 @@ const navForRole = (role: string | undefined): NavItem[] => {
     { path: '/dashboard/progress', label: 'Progress', icon: <TrendingUp size={17} />, group: 'Learning' },
     { path: '/dashboard/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Learning' },
     { path: '/dashboard/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Learning' },
-    { path: '/dashboard/calls', label: 'Calls', icon: <PhoneCall size={17} />, group: 'Learning' }
+    { path: '/dashboard/calls', label: 'Calls', icon: <PhoneCall size={17} />, group: 'Learning' },
+    { path: '/dashboard/notifications', label: 'Notifications', icon: <Bell size={17} />, group: 'Learning' }
   ];
 };
 
@@ -249,7 +252,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
               </button>
             )}
 
-            <NotificationBell />
+            <NotificationBell openTo={user?.role === 'LEARNER' ? '/dashboard/notifications' : undefined} />
 
             <div className="app-account" ref={menuRef}>
               <button

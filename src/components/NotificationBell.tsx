@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -10,6 +11,7 @@ interface Notice {
   createdByName: string | null;
   createdAt: string;
   isRead: boolean;
+  linkUrl?: string | null;
 }
 
 const timeAgo = (iso: string) => {
@@ -28,9 +30,13 @@ const timeAgo = (iso: string) => {
 /**
  * Bell in the app top bar. Reads notices the admin sent, shows an unread count,
  * and marks items read as they are opened.
+ *
+ * On the learner panel `openTo` is set, so the bell opens the Notifications tab
+ * instead of a dropdown. That page is the fuller view of the same notices.
  */
-export const NotificationBell: React.FC = () => {
+export const NotificationBell: React.FC<{ openTo?: string }> = ({ openTo }) => {
   const { authFetch, user } = useAuth();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
@@ -80,6 +86,14 @@ export const NotificationBell: React.FC = () => {
     }
   };
 
+  const openNotice = async (item: Notice) => {
+    if (!item.isRead) await markRead(item.id);
+    if (item.linkUrl) {
+      setOpen(false);
+      navigate(item.linkUrl);
+    }
+  };
+
   const markAll = async () => {
     const unreadItems = items.filter((n) => !n.isRead);
     for (const item of unreadItems) {
@@ -98,13 +112,19 @@ export const NotificationBell: React.FC = () => {
         className="notif-trigger"
         aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
         aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (openTo) {
+            navigate(openTo);
+            return;
+          }
+          setOpen((v) => !v);
+        }}
       >
         <Bell size={17} />
         {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
       </button>
 
-      {open && (
+      {open && !openTo && (
         <div className="notif-panel" role="dialog" aria-label="Notifications">
           <div className="notif-head">
             <strong>Notifications</strong>
@@ -120,7 +140,11 @@ export const NotificationBell: React.FC = () => {
           ) : (
             <ul className="notif-list">
               {items.map((item) => (
-                <li key={item.id} className={item.isRead ? 'read' : 'unread'}>
+                <li
+                  key={item.id}
+                  className={`${item.isRead ? 'read' : 'unread'} ${item.linkUrl ? 'clickable' : ''}`}
+                  onClick={() => (item.linkUrl ? openNotice(item) : undefined)}
+                >
                   <div className="notif-item-head">
                     <strong>{item.title}</strong>
                     <span className="notif-time">{timeAgo(item.createdAt)}</span>

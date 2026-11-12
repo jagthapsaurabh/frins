@@ -6,6 +6,7 @@ import { PublicWebsitePage } from './pages/PublicWebsitePage';
 import { DiscoveryPage } from './pages/DiscoveryPage';
 import { LearnerDashboardPage } from './pages/LearnerDashboardPage';
 import { GuideWorkspacePage } from './pages/GuideWorkspacePage';
+import { GuideReviewsPage } from './pages/GuideReviewsPage';
 import { AIPipelinePage } from './pages/AIPipelinePage';
 import { AdminWorkspacePage } from './pages/AdminWorkspacePage';
 import { AddLearnerPage } from './pages/admin/AddLearnerPage';
@@ -308,6 +309,26 @@ export const EcosystemShell: React.FC = () => {
           <RequireStaff roles={[...DASHBOARD_ROLES.guide]} loginPath="/guide/login">
             <AppShell>
               <MessagesPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/guide/reviews"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.guide]} loginPath="/guide/login">
+            <AppShell>
+              <GuideReviewsPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/guide/tasks/:taskId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.guide]} loginPath="/guide/login">
+            <AppShell>
+              <TaskDetailPage />
             </AppShell>
           </RequireStaff>
         }

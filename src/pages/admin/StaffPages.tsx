@@ -1,10 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, KeyRound, Plus, ShieldCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Clock,
+  KeyRound,
+  Plus,
+  ShieldCheck
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { Pager } from '../../components/Pager';
 import { usePagedList } from '../../hooks/usePagedList';
+import { formatDateTime, timeAgo } from '../../utils/dates';
 import {
   FilterSelect,
   PageHead,
@@ -254,13 +265,48 @@ export const NewStaffPage: React.FC = () => {
   );
 };
 
-/** One account: role, status, password. Every action here asks first. */
+/** Human words for an audit action. The raw values are for the log, not for people. */
+const actionLabel = (action: string) => {
+  const words = (action || '').replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+const ROLE_CAPABILITIES: Record<string, string[]> = {
+  LEARNER: [
+    'Works through the courses and tasks their guide assigns.',
+    'Sends notes, photos and PDFs to their guide for review.',
+    'Cannot mark their own tasks complete. Their guide does that.'
+  ],
+  GUIDE: [
+    'Reviews the work learners send and marks tasks complete.',
+    'Sends work back with notes until the learner gets it right.',
+    'Keeps learner files, plans and level decisions up to date.'
+  ],
+  CURRICULUM_OWNER: [
+    'Builds courses, steps and course questions.',
+    'Reads Discovery submissions and learner progress.',
+    'Cannot manage accounts, roles or passwords.'
+  ],
+  ADMIN: [
+    'Everything in the console, including accounts and roles.',
+    'Reviews Discovery submissions and converts them to learners.',
+    'Can act as a guide on any learner.'
+  ]
+};
+
+/** One account: who they are, what they can do, and everything done with it. */
 export const StaffAccountPage: React.FC = () => {
   const { userId = '' } = useParams();
   const { authFetch, user } = useAuth();
   const navigate = useNavigate();
 
   const [account, setAccount] = useState<any>(null);
+  const [guide, setGuide] = useState<any>(null);
+  const [learners, setLearners] = useState<any[]>([]);
+  const [learnerStats, setLearnerStats] = useState<any>(null);
+  const [latestDiscovery, setLatestDiscovery] = useState<any>(null);
+  const [activity, setActivity] = useState<any[]>([]);
+  const [lastActiveAt, setLastActiveAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -277,6 +323,12 @@ export const StaffAccountPage: React.FC = () => {
     } else {
       setAccount(json.account);
       setRole(json.account.role);
+      setGuide(json.guide || null);
+      setLearners(json.learners || []);
+      setLearnerStats(json.learnerStats || null);
+      setLatestDiscovery(json.latestDiscovery || null);
+      setActivity(json.activity || []);
+      setLastActiveAt(json.lastActiveAt || null);
       setError(null);
     }
     setLoading(false);
@@ -331,6 +383,8 @@ export const StaffAccountPage: React.FC = () => {
   if (!account) return <div className="governance-alert danger">{error || 'Account not found.'}</div>;
 
   const isSelf = account.id === user?.id;
+  const isActive = account.account_status === 'ACTIVE';
+  const capabilities = ROLE_CAPABILITIES[account.role] || [];
 
   return (
     <div>
@@ -338,75 +392,183 @@ export const StaffAccountPage: React.FC = () => {
         <ArrowLeft size={14} /> Staff &amp; access
       </button>
 
-      <div className="page-head">
-        <div>
-          <h1>{account.name}</h1>
-        </div>
-        <div className="page-head-actions">
-          <span className={`status-pill ${account.account_status === 'ACTIVE' ? 'approved' : 'danger'}`}>
-            {account.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
-          </span>
-        </div>
-      </div>
+      <PageHead
+        title={account.name}
+        meta={ROLE_LABEL[account.role] || account.role}
+        actions={
+          <>
+            <span className={`status-pill ${isActive ? 'approved' : 'danger'}`}>
+              {isActive ? 'Active' : 'Suspended'}
+            </span>
+            {!isSelf && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={() => setConfirm('status')}
+              >
+                {isActive ? 'Suspend account' : 'Activate account'}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {error && <div className="governance-alert danger">{error}</div>}
       {banner && <div className="governance-alert success">{banner}</div>}
 
-      <div className="members-layout">
-        <section className="panel-card">
-          <div className="panel-head">
-            <div>
-              <h2>Identity</h2>
-            </div>
-          </div>
-          <div className="list-stack">
-            <div className="list-row">
-              <span className="list-row-main">
-                <span className="list-row-title">Email</span>
-                <span className="list-row-sub">{account.email}</span>
-              </span>
-            </div>
-            <div className="list-row">
-              <span className="list-row-main">
-                <span className="list-row-title">Role</span>
-                <span className="list-row-sub">{ROLE_LABEL[account.role] || account.role}</span>
-              </span>
-            </div>
-            <div className="list-row">
-              <span className="list-row-main">
-                <span className="list-row-title">Track</span>
-                <span className="list-row-sub">{account.track || '—'}</span>
-              </span>
-            </div>
-          </div>
-        </section>
+      <div className="fact-list" style={{ marginBottom: 14 }}>
+        <div className="fact">
+          <span>Email</span>
+          <strong style={{ fontSize: 12 }}>{account.email}</strong>
+        </div>
+        <div className="fact">
+          <span>Role</span>
+          <strong>{ROLE_LABEL[account.role] || account.role}</strong>
+        </div>
+        <div className="fact">
+          <span>Status</span>
+          <strong>{isActive ? 'Can sign in' : 'Signed out'}</strong>
+        </div>
+        <div className="fact">
+          <span>Last activity</span>
+          <strong>{lastActiveAt ? timeAgo(lastActiveAt) : 'No activity yet'}</strong>
+        </div>
+      </div>
 
-        <section className="panel-card">
-          <div className="panel-head">
+      {learnerStats && (
+        <div className="stat-strip">
+          <div className="stat">
+            <span className="stat-icon"><BookOpen size={14} /></span>
             <div>
-              <h2>Access</h2>
-              <p>Every change lands in the audit trail.</p>
+              <strong>{learnerStats.courses}</strong>
+              <span>Courses assigned</span>
             </div>
           </div>
+          <div className="stat">
+            <span className="stat-icon"><ClipboardList size={14} /></span>
+            <div>
+              <strong>{learnerStats.openTasks}</strong>
+              <span>Tasks to do</span>
+            </div>
+          </div>
+          <div className="stat">
+            <span className="stat-icon"><Clock size={14} /></span>
+            <div>
+              <strong>{learnerStats.waitingTasks}</strong>
+              <span>With their guide</span>
+            </div>
+          </div>
+          <div className="stat">
+            <span className="stat-icon"><CheckCircle2 size={14} /></span>
+            <div>
+              <strong>{learnerStats.completedTasks}</strong>
+              <span>Completed</span>
+            </div>
+          </div>
+        </div>
+      )}
 
-          {isSelf ? (
-            <p className="section-note">You cannot change your own role or suspend yourself.</p>
-          ) : (
-            <>
-              <div className="form-group">
-                <label className="form-label" htmlFor="account-role">Role</label>
-                <select
-                  id="account-role"
-                  className="form-select"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                >
-                  <option value="LEARNER">Student</option>
-                  <option value="GUIDE">Guide</option>
-                  <option value="CURRICULUM_OWNER">Curriculum owner</option>
-                  <option value="ADMIN">Administrator</option>
-                </select>
+      <div className="detail-grid">
+        <div className="detail-main">
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>Account</h2>
+              {isSelf && <span className="section-note">This is you</span>}
+            </div>
+            <div className="list-stack">
+              <div className="list-row">
+                <span className="list-row-main">
+                  <span className="list-row-title">Full name</span>
+                  <span className="list-row-sub">{account.name}</span>
+                </span>
               </div>
+              <div className="list-row">
+                <span className="list-row-main">
+                  <span className="list-row-title">Email</span>
+                  <span className="list-row-sub">{account.email}</span>
+                </span>
+              </div>
+              <div className="list-row">
+                <span className="list-row-main">
+                  <span className="list-row-title">Track</span>
+                  <span className="list-row-sub">{account.track || 'Not set'}</span>
+                </span>
+              </div>
+              {account.phone && (
+                <div className="list-row">
+                  <span className="list-row-main">
+                    <span className="list-row-title">Phone</span>
+                    <span className="list-row-sub">{account.phone}</span>
+                  </span>
+                </div>
+              )}
+              {account.city && (
+                <div className="list-row">
+                  <span className="list-row-main">
+                    <span className="list-row-title">City</span>
+                    <span className="list-row-sub">{account.city}</span>
+                  </span>
+                </div>
+              )}
+              {account.role === 'LEARNER' && (
+                <div className="list-row">
+                  <span className="list-row-main">
+                    <span className="list-row-title">Guide</span>
+                    <span className="list-row-sub">
+                      {guide ? (
+                        <Link className="link-button" to={`/admin/staff/${guide.id}`}>
+                          {guide.name}
+                        </Link>
+                      ) : (
+                        'Not assigned'
+                      )}
+                    </span>
+                  </span>
+                </div>
+              )}
+              <div className="list-row">
+                <span className="list-row-main">
+                  <span className="list-row-title">Added</span>
+                  <span className="list-row-sub">{formatDateTime(account.created_at)}</span>
+                </span>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <div>
+                <h2>Access</h2>
+                <p>What this person can do in the console.</p>
+              </div>
+            </div>
+
+            <ul className="capability-list">
+              {capabilities.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+
+            <div className="form-group" style={{ marginTop: 14 }}>
+              <label className="form-label" htmlFor="account-role">Role</label>
+              <select
+                id="account-role"
+                className="form-select"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={isSelf}
+              >
+                <option value="LEARNER">Student</option>
+                <option value="GUIDE">Guide</option>
+                <option value="CURRICULUM_OWNER">Curriculum owner</option>
+                <option value="ADMIN">Administrator</option>
+              </select>
+            </div>
+
+            {isSelf ? (
+              <p className="section-note">You cannot change your own role or suspend yourself.</p>
+            ) : (
               <div className="page-head-actions">
                 <button
                   type="button"
@@ -416,49 +578,132 @@ export const StaffAccountPage: React.FC = () => {
                 >
                   <ShieldCheck size={14} /> Save role
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() => setConfirm('status')}
-                >
-                  {account.account_status === 'ACTIVE' ? 'Suspend account' : 'Activate account'}
-                </button>
               </div>
-            </>
-          )}
+            )}
+            <p className="form-hint">Every change lands in the audit trail.</p>
+          </section>
 
-          <div className="panel-head" style={{ marginTop: 20 }}>
-            <div>
-              <h2>Password</h2>
-              <p>A reset gives them a fresh temporary password, shown once.</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            disabled={busy}
-            onClick={() => setConfirm('password')}
-          >
-            <KeyRound size={14} /> Reset password
-          </button>
-        </section>
-
-        {account.role === 'LEARNER' && (
           <section className="panel-card">
             <div className="panel-head">
               <div>
-                <h2>Learner file</h2>
+                <h2>Password</h2>
+                <p>A reset gives them a fresh temporary password, shown once.</p>
               </div>
-              <Link className="link-button" style={{ fontSize: 12 }} to={`/admin/learners/${account.id}`}>
-                Open the file
-              </Link>
             </div>
-            <p className="section-note">
-              Courses, tasks, calls and payments for this learner live on the learner file.
-            </p>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => setConfirm('password')}
+            >
+              <KeyRound size={14} /> Reset password
+            </button>
           </section>
-        )}
+        </div>
+
+        <div className="detail-side">
+          {account.role === 'LEARNER' && (
+            <section className="panel-card">
+              <div className="panel-head">
+                <h2>Learning</h2>
+              </div>
+              <div className="list-stack">
+                <div className="list-row clickable-row" onClick={() => navigate(`/admin/learners/${account.id}`)}>
+                  <span className="list-row-main">
+                    <span className="list-row-title">Open the learner file</span>
+                    <span className="list-row-sub">Courses, tasks, calls and progress.</span>
+                  </span>
+                  <ChevronRight size={14} color="#98A2B3" />
+                </div>
+                {latestDiscovery ? (
+                  <div
+                    className="list-row clickable-row"
+                    onClick={() => navigate(`/admin/discovery/results/${latestDiscovery.id}`)}
+                  >
+                    <span className="list-row-main">
+                      <span className="list-row-title">Discovery</span>
+                      <span className="list-row-sub">
+                        {latestDiscovery.status === 'COMPLETED' ? 'Finished' : 'In progress'} ·{' '}
+                        {latestDiscovery.review_state === 'REVIEWED'
+                          ? 'reviewed'
+                          : latestDiscovery.review_state === 'FOLLOW_UP'
+                            ? 'follow up'
+                            : 'not reviewed yet'}
+                      </span>
+                    </span>
+                    <ChevronRight size={14} color="#98A2B3" />
+                  </div>
+                ) : (
+                  <div className="list-row">
+                    <span className="list-row-main">
+                      <span className="list-row-title">Discovery</span>
+                      <span className="list-row-sub">Not taken yet.</span>
+                    </span>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {account.role === 'GUIDE' && (
+            <section className="panel-card">
+              <div className="panel-head">
+                <h2>Learners</h2>
+                <span className="section-note">
+                  {learners.length} {learners.length === 1 ? 'person' : 'people'}
+                </span>
+              </div>
+              {learners.length === 0 ? (
+                <p className="section-note">Nobody is assigned to this guide yet.</p>
+              ) : (
+                <div className="list-stack">
+                  {learners.map((learner) => (
+                    <div
+                      key={learner.id}
+                      className="list-row clickable-row"
+                      onClick={() => navigate(`/admin/learners/${learner.id}`)}
+                    >
+                      <span className="list-row-main">
+                        <span className="list-row-title">{learner.name}</span>
+                        <span className="list-row-sub">
+                          {learner.waiting_tasks > 0
+                            ? `${learner.waiting_tasks} waiting review`
+                            : learner.open_tasks > 0
+                              ? `${learner.open_tasks} to do`
+                              : 'Nothing waiting'}
+                        </span>
+                      </span>
+                      <ChevronRight size={14} color="#98A2B3" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>Recent activity</h2>
+            </div>
+            {activity.length === 0 ? (
+              <p className="section-note">Nothing recorded for this account yet.</p>
+            ) : (
+              <div className="list-stack">
+                {activity.map((event, index) => (
+                  <div key={`${event.created_at}-${index}`} className="list-row">
+                    <span className="list-row-main">
+                      <span className="list-row-title">{actionLabel(event.action)}</span>
+                      <span className="list-row-sub">
+                        {String(event.entity_type || '').replace(/_/g, ' ').toLowerCase() || 'console'} ·{' '}
+                        {timeAgo(event.created_at)}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       </div>
 
       <ConfirmDialog
@@ -467,7 +712,7 @@ export const StaffAccountPage: React.FC = () => {
           confirm === 'role'
             ? 'Change this role?'
             : confirm === 'status'
-              ? account.account_status === 'ACTIVE'
+              ? isActive
                 ? 'Suspend this account?'
                 : 'Activate this account?'
               : 'Reset the password?'
@@ -476,11 +721,11 @@ export const StaffAccountPage: React.FC = () => {
           confirm === 'role'
             ? `Their console will change to ${ROLE_LABEL[role] || role} the next time they sign in.`
             : confirm === 'status'
-              ? `They are ${account.account_status === 'ACTIVE' ? 'signed out of the console' : 'able to sign in again'} after this.`
+              ? `They are ${isActive ? 'signed out of the console' : 'able to sign in again'} after this.`
               : 'The old password stops working straight away.'
         }
         confirmLabel={confirm === 'password' ? 'Reset' : 'Confirm'}
-        variant={confirm === 'status' && account.account_status === 'ACTIVE' ? 'danger' : 'primary'}
+        variant={confirm === 'status' && isActive ? 'danger' : 'primary'}
         busy={busy}
         onConfirm={() => run(confirm || 'role')}
         onCancel={() => setConfirm(null)}

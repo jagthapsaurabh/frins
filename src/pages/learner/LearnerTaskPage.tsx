@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowLeft,
+  CheckCircle2,
+  Clock,
   FileText,
   ImagePlus,
   Loader2,
@@ -12,16 +15,18 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead, labelFor, toneFor } from '../../components/console/ConsoleUI';
 import { formatDateTime, timeAgo } from '../../utils/dates';
 import { MAX_FILES_PER_SEND, PreparedFile, formatBytes, openStoredFile, prepareFile } from '../../utils/files';
 
 /**
- * One task, for the learner.
+ * One task, from the learner's side.
  *
- * The brief, the work they send, and the mentor thread. Work is not a single
- * box: a learner can send several notes, photos and PDFs, one after another,
- * and the whole set is what the mentor reviews.
+ * The page answers three questions in order: what am I meant to do, where is my
+ * work now, and what did my guide say. Sending work is one clear act, labelled
+ * the way the team talks about it. The learner can send as many times as the
+ * guide asks; only the guide can mark the task complete.
  */
 export const LearnerTaskPage: React.FC = () => {
   const { taskId = '' } = useParams();
@@ -38,6 +43,7 @@ export const LearnerTaskPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [confirmSend, setConfirmSend] = useState(false);
   const fileInput = useRef<HTMLInputElement | null>(null);
 
   const [draft, setDraft] = useState('');
@@ -98,13 +104,18 @@ export const LearnerTaskPage: React.FC = () => {
     setPreparing(false);
   };
 
-  const sendWork = async (e: React.FormEvent) => {
+  const askToSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!task) return;
     if (!note.trim() && files.length === 0) {
       setSendError('Write something or attach a file first.');
       return;
     }
+    setSendError(null);
+    setConfirmSend(true);
+  };
+
+  const sendWork = async () => {
+    if (!task) return;
     setBusy(true);
     setSendError(null);
     const res = await authFetch(`/api/learner/tasks/${task.id}/entries`, {
@@ -115,6 +126,7 @@ export const LearnerTaskPage: React.FC = () => {
       })
     });
     setBusy(false);
+    setConfirmSend(false);
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
       setSendError(json.error || 'Could not send your work.');
@@ -122,7 +134,7 @@ export const LearnerTaskPage: React.FC = () => {
     }
     setNote('');
     setFiles([]);
-    setBanner('Sent for review. Your mentor sees it straight away.');
+    setBanner('Sent. Your guide will read it and mark it complete or send it back with notes.');
     await load();
   };
 
@@ -158,7 +170,46 @@ export const LearnerTaskPage: React.FC = () => {
   const messages: any[] = task.messages || [];
   const entries: any[] = task.entries || [];
   const sent = entries.filter((entry) => entry.kind === 'NOTE' || entry.kind === 'IMAGE' || entry.kind === 'FILE');
-  const reviewed = ['REVIEWED', 'APPROVED'].includes(task.status);
+  const complete = ['REVIEWED', 'APPROVED'].includes(task.status);
+  const sentBack = task.status === 'CHANGES_REQUESTED';
+  const waiting = task.status === 'SUBMITTED';
+  const hasSent = entries.length > 0;
+
+  const state = complete
+    ? {
+        tone: 'approved',
+        icon: <CheckCircle2 size={15} />,
+        title: 'Completed by your guide',
+        body: task.reviewed_at
+          ? `Your guide marked this complete ${timeAgo(task.reviewed_at)}. Nothing else is needed.`
+          : 'Your guide marked this complete. Nothing else is needed.'
+      }
+    : sentBack
+      ? {
+          tone: 'danger',
+          icon: <AlertCircle size={15} />,
+          title: 'Your guide asked for changes',
+          body: 'Read their note, update your work and send it again. The task stays open until your guide is happy with it.'
+        }
+      : waiting
+        ? {
+            tone: 'warn',
+            icon: <Clock size={15} />,
+            title: 'With your guide',
+            body: `You sent this ${task.submitted_at ? timeAgo(task.submitted_at) : 'recently'}. Your guide reads it, then marks it complete or sends it back with notes. You can still add more work below.`
+          }
+        : {
+            tone: 'info',
+            icon: <FileText size={15} />,
+            title: 'To do',
+            body: 'Read the brief, do the work and send it when you are ready. Your guide reviews everything before it counts as complete.'
+          };
+
+  const stepState = (step: 1 | 2 | 3) => {
+    if (step === 1) return hasSent ? 'done' : 'current';
+    if (step === 2) return task.submitted_at && !sentBack ? 'done' : 'current';
+    return complete ? 'done' : waiting || sentBack ? 'current' : '';
+  };
 
   return (
     <div>
@@ -174,6 +225,38 @@ export const LearnerTaskPage: React.FC = () => {
       {banner && <div className="governance-alert success">{banner}</div>}
       {error && <div className="governance-alert danger">{error}</div>}
 
+      <div className={`state-card ${state.tone}`}>
+        <span className="state-icon">{state.icon}</span>
+        <div>
+          <strong>{state.title}</strong>
+          <p>{state.body}</p>
+        </div>
+      </div>
+
+      <div className="review-steps">
+        <div className={`review-step ${stepState(1)}`}>
+          <span className="step-dot">{hasSent ? '✓' : '1'}</span>
+          <div>
+            <strong>Do the work</strong>
+            <span className="step-hint">Notes, photos and PDFs go below.</span>
+          </div>
+        </div>
+        <div className={`review-step ${stepState(2)}`}>
+          <span className="step-dot">{task.submitted_at ? '✓' : '2'}</span>
+          <div>
+            <strong>Complete and send</strong>
+            <span className="step-hint">It lands in your guide's queue.</span>
+          </div>
+        </div>
+        <div className={`review-step ${stepState(3)}`}>
+          <span className="step-dot">{complete ? '✓' : '3'}</span>
+          <div>
+            <strong>Guide marks it complete</strong>
+            <span className="step-hint">Only your guide can close it.</span>
+          </div>
+        </div>
+      </div>
+
       <div className="fact-list" style={{ marginBottom: 14 }}>
         <div className="fact">
           <span>Course</span>
@@ -188,8 +271,8 @@ export const LearnerTaskPage: React.FC = () => {
           <strong>{task.due_date ? formatDateTime(task.due_date) : 'No date'}</strong>
         </div>
         <div className="fact">
-          <span>Mentor</span>
-          <strong>{data?.learner?.guide_name || 'Your guide'}</strong>
+          <span>Your guide</span>
+          <strong>{data?.assignedGuide?.name || data?.learner?.guide_name || 'Your guide'}</strong>
         </div>
       </div>
 
@@ -200,15 +283,29 @@ export const LearnerTaskPage: React.FC = () => {
               <h2>What to do</h2>
             </div>
             <p className="prose-block">{task.instructions || 'No instructions were added.'}</p>
+
+            {task.expected_criteria && (
+              <>
+                <div className="panel-head" style={{ marginTop: 16 }}>
+                  <h2>What a complete answer covers</h2>
+                </div>
+                <p className="prose-block muted">{task.expected_criteria}</p>
+              </>
+            )}
           </section>
 
           {task.guide_feedback && (
-            <section className="panel-card">
+            <section className={`panel-card decision-card ${sentBack ? 'sent-back' : ''}`}>
               <div className="panel-head">
-                <h2>Mentor feedback</h2>
-                <span className="section-note">{timeAgo(task.reviewed_at)}</span>
+                <h2>{sentBack ? 'Changes your guide asked for' : 'Your guide\u2019s note'}</h2>
+                {task.reviewed_at && <span className="section-note">{timeAgo(task.reviewed_at)}</span>}
               </div>
-              <p className="prose-block">{task.guide_feedback}</p>
+              <p className="decision-quote">{task.guide_feedback}</p>
+              {sentBack && (
+                <p className="section-note" style={{ marginTop: 10 }}>
+                  Make the changes, then send the task again below.
+                </p>
+              )}
             </section>
           )}
 
@@ -216,7 +313,11 @@ export const LearnerTaskPage: React.FC = () => {
             <div className="panel-head">
               <div>
                 <h2>Your work</h2>
-                <p>Notes, photos and PDFs. Send them one by one or all together.</p>
+                <p>
+                  {complete
+                    ? 'Everything you sent, kept together.'
+                    : 'Send as many notes, photos and PDFs as the task needs. Sending again puts it back in your guide\u2019s queue.'}
+                </p>
               </div>
               {task.submitted_at && <span className="section-note">Sent {timeAgo(task.submitted_at)}</span>}
             </div>
@@ -229,7 +330,7 @@ export const LearnerTaskPage: React.FC = () => {
                       {entry.kind === 'NOTE' ? <MessageSquare size={13} /> : <FileText size={13} />}
                       <span>{entry.kind === 'NOTE' ? 'Note' : entry.kind === 'IMAGE' ? 'Photo' : 'File'}</span>
                       <small>{timeAgo(entry.created_at)}</small>
-                      {!reviewed && (
+                      {!complete && (
                         <button
                           type="button"
                           className="icon-quiet"
@@ -270,14 +371,16 @@ export const LearnerTaskPage: React.FC = () => {
               </div>
             ) : (
               <p className="section-note" style={{ marginBottom: 12 }}>
-                Nothing sent yet. Your mentor sees everything you add here.
+                Nothing sent yet. Your guide sees everything you add here.
               </p>
             )}
 
-            {reviewed ? (
-              <p className="section-note">This task is reviewed. Add a message on the right if you want to follow up.</p>
+            {complete ? (
+              <p className="section-note" style={{ marginTop: 10 }}>
+                This task is closed. Send your guide a message if something still needs to change.
+              </p>
             ) : (
-              <form className="work-composer" onSubmit={sendWork}>
+              <form className="work-composer" onSubmit={askToSend}>
                 <textarea
                   className="form-textarea"
                   rows={4}
@@ -332,10 +435,12 @@ export const LearnerTaskPage: React.FC = () => {
                     hidden
                   />
                   <button type="submit" className="btn btn-primary" disabled={busy || preparing}>
-                    {busy ? 'Sending' : 'Send for review'} <Send size={14} />
+                    {busy ? 'Sending' : 'Complete task and send for review'} <Send size={14} />
                   </button>
                 </div>
-                <p className="form-hint">Up to {MAX_FILES_PER_SEND} files at once, 8 MB each.</p>
+                <p className="form-hint">
+                  Up to {MAX_FILES_PER_SEND} files at once, 8 MB each. Your guide marks the task complete.
+                </p>
               </form>
             )}
           </section>
@@ -344,7 +449,7 @@ export const LearnerTaskPage: React.FC = () => {
         <div className="detail-side">
           <section className="panel-card" style={{ padding: 0, overflow: 'hidden' }}>
             <div className="panel-head" style={{ padding: '12px 14px', margin: 0 }}>
-              <h2>Ask your mentor</h2>
+              <h2>Message your guide</h2>
               <Link className="link-button" to="/dashboard/messages" style={{ fontSize: 12 }}>
                 All messages
               </Link>
@@ -376,8 +481,35 @@ export const LearnerTaskPage: React.FC = () => {
               </button>
             </form>
           </section>
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <h2>How review works</h2>
+            </div>
+            <ul className="capability-list">
+              <li>You send the work whenever you are ready.</li>
+              <li>Your guide reads it and either marks it complete or sends it back with notes.</li>
+              <li>If it comes back, update it and send again. It stays open until your guide is satisfied.</li>
+              <li>Only your guide can mark a task complete.</li>
+            </ul>
+          </section>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmSend}
+        title="Send this task for review?"
+        message={
+          <>
+            Your guide will read everything in <strong>Your work</strong> and either mark the task complete
+            or send it back with notes.
+          </>
+        }
+        confirmLabel="Send for review"
+        busy={busy}
+        onConfirm={sendWork}
+        onCancel={() => setConfirmSend(false)}
+      />
     </div>
   );
 };

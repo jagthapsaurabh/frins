@@ -7,10 +7,11 @@ import { LearnerCourses } from './learner/LearnerCourses';
 import { LearnerTasks } from './learner/LearnerTasks';
 import { LearnerProgress } from './learner/LearnerProgress';
 import { LearnerCalls } from './learner/LearnerCalls';
+import { LearnerNotifications } from './learner/LearnerNotifications';
 
-type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress' | 'calls';
+type LearnerSection = 'overview' | 'courses' | 'tasks' | 'progress' | 'calls' | 'notifications';
 
-const SECTIONS: LearnerSection[] = ['overview', 'courses', 'tasks', 'progress', 'calls'];
+const SECTIONS: LearnerSection[] = ['overview', 'courses', 'tasks', 'progress', 'calls', 'notifications'];
 
 /**
  * The learner panel. Loads the learner's data once, then shows one section at a
@@ -91,6 +92,8 @@ export const LearnerDashboardPage: React.FC = () => {
       {section === 'progress' && <LearnerProgress data={data} onReload={load} />}
 
       {section === 'calls' && <LearnerCalls calls={calls} onReload={load} />}
+
+      {section === 'notifications' && <LearnerNotifications />}
 
       <BookCallDialog
         open={callOpen}

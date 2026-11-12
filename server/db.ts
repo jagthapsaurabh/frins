@@ -1227,7 +1227,8 @@ export function initDatabaseAndSeed() {
     'ALTER TABLE discovery_sessions ADD COLUMN review_note TEXT',
     'ALTER TABLE discovery_sessions ADD COLUMN reviewed_by TEXT',
     'ALTER TABLE discovery_sessions ADD COLUMN reviewed_at TEXT',
-    'ALTER TABLE discovery_sessions ADD COLUMN converted_user_id TEXT'
+    'ALTER TABLE discovery_sessions ADD COLUMN converted_user_id TEXT',
+    'ALTER TABLE notifications ADD COLUMN link_url TEXT'
   ];
   for (const sql of extraTaskColumns) {
     try {

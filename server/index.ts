@@ -751,7 +751,8 @@ app.get('/api/notifications', requireAuth, (req, res) => {
       audience: n.audience,
       createdByName: n.created_by_name,
       createdAt: n.created_at,
-      isRead: Boolean(n.is_read)
+      isRead: Boolean(n.is_read),
+      linkUrl: n.link_url || null
     }))
   });
 });
@@ -1112,6 +1113,31 @@ app.post('/api/discovery/answer', (req, res) => {
     now,
     sessionId
   );
+
+  // A finished Discovery is work for the admin team: they read it, review it and
+  // decide what happens next. The notice links straight to the result page.
+  if (newStatus === 'COMPLETED' && session.status !== 'COMPLETED') {
+    const admins = db
+      .prepare("SELECT id, name FROM users WHERE role = 'ADMIN' AND account_status = 'ACTIVE'")
+      .all() as any[];
+    const score = candidateResult.overallReadinessScore;
+    for (const admin of admins) {
+      db.prepare(
+        `INSERT INTO notifications (id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at, link_url)
+         VALUES (?, ?, ?, 'USER', ?, NULL, ?, ?, ?)`
+      ).run(
+        `ntf_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+        `Discovery finished: ${session.participant_name}`.slice(0, 120),
+        `${session.participant_name} answered the Discovery questions${
+          typeof score === 'number' ? ` and scored ${score}` : ''
+        }. Open the result, check it and decide the next step.`,
+        admin.id,
+        'FRINS Discovery',
+        now,
+        `/admin/discovery/results/${sessionId}`
+      );
+    }
+  }
 
   res.json({
     success: true,
@@ -1720,6 +1746,12 @@ app.post('/api/learner/tasks/:taskId/submit', requireRole(['LEARNER', 'GUIDE', '
   if (req.user!.role === 'LEARNER' && task.learner_id !== req.user!.id) {
     return res.status(403).json({ success: false, error: 'You may only submit your own assigned learning tasks.' });
   }
+  if (task.status === 'REVIEWED' || task.status === 'APPROVED') {
+    return res.status(400).json({
+      success: false,
+      error: 'This task is complete. Send your guide a message if something needs to change.'
+    });
+  }
 
   // Run Internal AI Pre-Review BEFORE Admin checks the task (stored for Admin & Team only, never returned to the student)
   const aiReview = analyzeStudentTaskSubmissionWithAI({
@@ -1784,12 +1816,13 @@ const notifyUser = (
   userId: string | null | undefined,
   title: string,
   message: string,
-  actor: { id: string; name: string }
+  actor: { id: string; name: string },
+  linkUrl?: string
 ) => {
   if (!userId) return;
   db.prepare(
-    `INSERT INTO notifications (id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at)
-     VALUES (?, ?, ?, 'USER', ?, ?, ?, ?)`
+    `INSERT INTO notifications (id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at, link_url)
+     VALUES (?, ?, ?, 'USER', ?, ?, ?, ?, ?)`
   ).run(
     `ntf_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
     title.slice(0, 120),
@@ -1797,8 +1830,24 @@ const notifyUser = (
     userId,
     actor.id,
     actor.name,
-    new Date().toISOString()
+    new Date().toISOString(),
+    linkUrl || null
   );
+};
+
+/** A guide acts on the learners assigned to them, plus anyone nobody guides yet. */
+const guideSeesLearner = (guideId: string, learnerId: string) => {
+  const row = db.prepare('SELECT assigned_guide_id FROM users WHERE id = ?').get(learnerId) as any;
+  if (!row) return false;
+  return !row.assigned_guide_id || row.assigned_guide_id === guideId;
+};
+
+/** Where a person opens a task from, depending on which console they use. */
+const taskLinkFor = (userId: string, taskId: string) => {
+  const row = db.prepare('SELECT role FROM users WHERE id = ?').get(userId) as any;
+  if (row?.role === 'LEARNER') return `/dashboard/tasks/${taskId}`;
+  if (row?.role === 'GUIDE') return `/guide/tasks/${taskId}`;
+  return `/admin/tasks/${taskId}`;
 };
 
 /** Everyone who should answer a learner: their guide, and admins as a fallback. */
@@ -1826,7 +1875,7 @@ const notifyTaskSide = (task: any, title: string, message: string, actor: { id: 
   targets.push(...admins.map((a) => a.id));
   for (const id of Array.from(new Set(targets))) {
     if (id === actor.id) continue;
-    notifyUser(id, title, message, actor);
+    notifyUser(id, title, message, actor, taskLinkFor(id, task.id));
   }
 };
 
@@ -1840,6 +1889,13 @@ app.post('/api/learner/tasks/:taskId/entries', requireRole(['LEARNER', 'GUIDE', 
   if (!task) return res.status(404).json({ success: false, error: 'Task not found.' });
   if (req.user!.role === 'LEARNER' && task.learner_id !== req.user!.id) {
     return res.status(403).json({ success: false, error: 'You can only send work on your own tasks.' });
+  }
+  // Only the guide marks a task complete, so a completed task stops taking work.
+  if (task.status === 'REVIEWED' || task.status === 'APPROVED') {
+    return res.status(400).json({
+      success: false,
+      error: 'This task is complete. Send your guide a message if something needs to change.'
+    });
   }
 
   const text = String(req.body?.text || '').trim();
@@ -1901,7 +1957,8 @@ app.post('/api/learner/tasks/:taskId/entries', requireRole(['LEARNER', 'GUIDE', 
   const firstImage = allEntries.find((entry) => entry.kind === 'IMAGE');
   const firstName = allEntries.find((entry) => entry.kind === 'FILE');
 
-  const nextStatus = task.status === 'REVIEWED' || task.status === 'APPROVED' ? 'REVIEWED' : 'SUBMITTED';
+  // Sending work always puts the task back in the guide's queue.
+  const nextStatus = 'SUBMITTED';
 
   db.prepare(`
     UPDATE learning_tasks
@@ -1988,7 +2045,8 @@ app.post('/api/tasks/:taskId/chat', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'C
         staffId,
         `New message from ${req.user!.name}`,
         `${req.user!.name} wrote about "${task.title}": ${message.slice(0, 180)}`,
-        { id: req.user!.id, name: req.user!.name }
+        { id: req.user!.id, name: req.user!.name },
+        taskLinkFor(staffId, taskId)
       );
     }
   } else {
@@ -1996,7 +2054,8 @@ app.post('/api/tasks/:taskId/chat', requireRole(['LEARNER', 'GUIDE', 'ADMIN', 'C
       task.learner_id,
       `New message about "${task.title}"`,
       `${req.user!.name}: ${message.slice(0, 180)}`,
-      { id: req.user!.id, name: req.user!.name }
+      { id: req.user!.id, name: req.user!.name },
+      `/dashboard/tasks/${taskId}`
     );
   }
 
@@ -3058,6 +3117,10 @@ app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']),
 
   const where: string[] = ['1 = 1'];
   const params: any[] = [];
+  if (req.user!.role === 'GUIDE') {
+    where.push('(u.assigned_guide_id = ? OR u.assigned_guide_id IS NULL)');
+    params.push(req.user!.id);
+  }
   if (status && status !== 'ALL') {
     where.push('t.status = ?');
     params.push(status);
@@ -3103,7 +3166,7 @@ app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']),
        JOIN users u ON u.id = t.learner_id
        LEFT JOIN courses c ON c.id = t.course_id
        ${whereSql}
-       ORDER BY CASE WHEN t.status = 'SUBMITTED' THEN 0 WHEN t.status = 'ASSIGNED' THEN 1 ELSE 2 END,
+       ORDER BY CASE WHEN t.status = 'SUBMITTED' THEN 0 WHEN t.status = 'CHANGES_REQUESTED' THEN 1 WHEN t.status = 'ASSIGNED' THEN 2 ELSE 3 END,
                 COALESCE(t.submitted_at, t.reviewed_at, t.due_date) DESC
        LIMIT ? OFFSET ?`
     )
@@ -3134,6 +3197,10 @@ app.get('/api/admin/tasks', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']),
 // Everything about one task: the submission, the AI pre-check and the chat.
 app.get('/api/admin/tasks/:taskId', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
   const taskId = String(req.params.taskId);
+  const scope = db.prepare('SELECT learner_id FROM learning_tasks WHERE id = ?').get(taskId) as any;
+  if (scope && req.user!.role === 'GUIDE' && !guideSeesLearner(req.user!.id, scope.learner_id)) {
+    return res.status(403).json({ success: false, error: 'That learner is not on your list.' });
+  }
   const task = db
     .prepare(
       `SELECT t.*, u.name AS learner_name, u.email AS learner_email, u.track AS learner_track,
@@ -4307,7 +4374,9 @@ app.post('/api/admin/tasks/:taskId/ai-reanalyze', requireRole(['ADMIN', 'CURRICU
 
 app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (req, res) => {
   const { taskId } = req.params;
-  const status = req.body?.status === 'ASSIGNED' || req.body?.status === 'CHANGES_REQUESTED' ? 'ASSIGNED' : 'REVIEWED';
+  const asked = String(req.body?.status || '').toUpperCase();
+  // A guide completes a task. Asking for changes reopens it for the learner.
+  const status = asked === 'CHANGES_REQUESTED' ? 'CHANGES_REQUESTED' : 'REVIEWED';
   const guideFeedback = String(req.body?.guideFeedback || '').trim();
 
   if (!guideFeedback) {
@@ -4317,6 +4386,9 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
   const task = db.prepare('SELECT * FROM learning_tasks WHERE id = ?').get(taskId) as any;
   if (!task) {
     return res.status(404).json({ success: false, error: 'Task not found.' });
+  }
+  if (req.user!.role === 'GUIDE' && !guideSeesLearner(req.user!.id, task.learner_id)) {
+    return res.status(403).json({ success: false, error: 'That learner is not on your list.' });
   }
 
   const now = new Date().toISOString();
@@ -4354,15 +4426,16 @@ app.post('/api/admin/tasks/:taskId/review', requireRole(['ADMIN', 'CURRICULUM_OW
     req.user!.id,
     `${req.user!.name} (${req.user!.role})`,
     req.user!.role,
-    `[Official Task Review: ${status === 'REVIEWED' ? 'APPROVED ✓' : 'REVISION REQUESTED'}] ${guideFeedback}`,
+    `[Official Task Review: ${status === 'REVIEWED' ? 'TASK COMPLETE ✓' : 'CHANGES REQUESTED'}] ${guideFeedback}`,
     now
   );
 
   notifyUser(
     task.learner_id,
-    status === 'REVIEWED' ? `Task reviewed: ${task.title}` : `Changes asked on: ${task.title}`,
+    status === 'REVIEWED' ? `Task completed: ${task.title}` : `Changes requested: ${task.title}`,
     guideFeedback,
-    { id: req.user!.id, name: req.user!.name }
+    { id: req.user!.id, name: req.user!.name },
+    `/dashboard/tasks/${taskId}`
   );
 
   writeAuditEvent({
@@ -4476,12 +4549,81 @@ app.patch('/api/admin/leads/:leadId', requireRole(['ADMIN', 'CURRICULUM_OWNER'])
 app.get('/api/admin/users/:userId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const row = db
     .prepare(
-      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at
+      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at, assigned_guide_id
          FROM users WHERE id = ?`
     )
     .get(req.params.userId) as any;
   if (!row) return res.status(404).json({ success: false, error: 'User not found.' });
-  res.json({ success: true, account: row });
+
+  const guide = row.assigned_guide_id
+    ? (db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(row.assigned_guide_id) as any)
+    : null;
+
+  // A guide's page answers "who is on their list and what is waiting".
+  const learners =
+    row.role === 'GUIDE'
+      ? (db
+          .prepare(
+            `SELECT u.id, u.name, u.email, u.account_status, u.track,
+                    (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.status IN ('ASSIGNED', 'IN_PROGRESS', 'CHANGES_REQUESTED')) AS open_tasks,
+                    (SELECT COUNT(*) FROM learning_tasks t WHERE t.learner_id = u.id AND t.status = 'SUBMITTED') AS waiting_tasks
+               FROM users u
+              WHERE u.role = 'LEARNER' AND u.assigned_guide_id = ?
+              ORDER BY u.name ASC`
+          )
+          .all(row.id) as any[])
+      : [];
+
+  // A learner's page shows the work in flight at a glance.
+  const learnerStats =
+    row.role === 'LEARNER'
+      ? {
+          courses: (db.prepare('SELECT COUNT(*) AS c FROM student_courses WHERE learner_id = ?').get(row.id) as any).c,
+          openTasks: (
+            db
+              .prepare(
+                "SELECT COUNT(*) AS c FROM learning_tasks WHERE learner_id = ? AND status IN ('ASSIGNED', 'IN_PROGRESS', 'CHANGES_REQUESTED')"
+              )
+              .get(row.id) as any
+          ).c,
+          waitingTasks: (db.prepare("SELECT COUNT(*) AS c FROM learning_tasks WHERE learner_id = ? AND status = 'SUBMITTED'").get(row.id) as any).c,
+          completedTasks: (db.prepare("SELECT COUNT(*) AS c FROM learning_tasks WHERE learner_id = ? AND status IN ('REVIEWED', 'APPROVED')").get(row.id) as any).c
+        }
+      : null;
+
+  const latestDiscovery =
+    row.role === 'LEARNER'
+      ? (db
+          .prepare(
+            `SELECT id, status, review_state, completeness_pct, started_at, completed_at
+               FROM discovery_sessions
+              WHERE participant_user_id = ? OR participant_email = ?
+              ORDER BY COALESCE(completed_at, started_at, updated_at) DESC
+              LIMIT 1`
+          )
+          .get(row.id, row.email) as any) || null
+      : null;
+
+  const activity = db
+    .prepare(
+      `SELECT action, entity_type, entity_id, created_at
+         FROM audit_events WHERE actor_user_id = ?
+         ORDER BY created_at DESC LIMIT 8`
+    )
+    .all(row.id) as any[];
+
+  const lastActiveAt = activity.length ? activity[0].created_at : null;
+
+  res.json({
+    success: true,
+    account: row,
+    guide,
+    learners,
+    learnerStats,
+    latestDiscovery,
+    activity,
+    lastActiveAt
+  });
 });
 
 app.post('/api/admin/users/:userId/reset-password', requireRole(['ADMIN']), (req, res) => {

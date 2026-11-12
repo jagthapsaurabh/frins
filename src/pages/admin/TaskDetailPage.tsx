@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, FileText, MessageSquare, Paperclip, Send, Sparkles, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, Clock, FileText, MessageSquare, Paperclip, Send, Sparkles, Undo2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead, StatusPill, labelFor, toneFor } from '../../components/console/ConsoleUI';
@@ -26,7 +26,8 @@ const initials = (name?: string) =>
  */
 export const TaskDetailPage: React.FC = () => {
   const { taskId = '' } = useParams();
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
+  const isGuide = user?.role === 'GUIDE';
   const navigate = useNavigate();
 
   const [task, setTask] = useState<any>(null);
@@ -87,7 +88,11 @@ export const TaskDetailPage: React.FC = () => {
       return;
     }
     setFeedbackError(null);
-    setBanner(pending === 'approve' ? 'Review saved and the learner was notified.' : 'Sent back with your notes.');
+    setBanner(
+      pending === 'approve'
+        ? 'Task marked complete. The learner has been notified.'
+        : 'Sent back. The learner has your note and can send it again.'
+    );
     load();
   };
 
@@ -114,8 +119,12 @@ export const TaskDetailPage: React.FC = () => {
 
   return (
     <div>
-      <button type="button" className="back-link" onClick={() => navigate('/admin/tasks')}>
-        <ArrowLeft size={14} /> Tasks
+      <button
+        type="button"
+        className="back-link"
+        onClick={() => navigate(isGuide ? '/guide/reviews' : '/admin/tasks')}
+      >
+        <ArrowLeft size={14} /> {isGuide ? 'Task reviews' : 'Tasks'}
       </button>
 
       <PageHead
@@ -132,6 +141,32 @@ export const TaskDetailPage: React.FC = () => {
 
       {banner && <div className="governance-alert success">{banner}</div>}
       {error && <div className="governance-alert danger">{error}</div>}
+
+      <div className={`state-card ${task.status === 'SUBMITTED' ? 'warn' : task.status === 'CHANGES_REQUESTED' ? 'danger' : task.status === 'REVIEWED' || task.status === 'APPROVED' ? 'approved' : 'info'}`}>
+        <span className="state-icon">
+          {task.status === 'SUBMITTED' ? <Clock size={15} /> : task.status === 'CHANGES_REQUESTED' ? <Undo2 size={15} /> : task.status === 'REVIEWED' || task.status === 'APPROVED' ? <Check size={15} /> : <FileText size={15} />}
+        </span>
+        <div>
+          <strong>
+            {task.status === 'SUBMITTED'
+              ? 'Waiting for your review'
+              : task.status === 'CHANGES_REQUESTED'
+                ? 'Sent back to the learner'
+                : task.status === 'REVIEWED' || task.status === 'APPROVED'
+                  ? 'Completed'
+                  : 'Not sent yet'}
+          </strong>
+          <p>
+            {task.status === 'SUBMITTED'
+              ? `The learner sent this ${task.submitted_at ? timeAgo(task.submitted_at) : 'recently'}. Read the work, then mark it complete or send it back with notes.`
+              : task.status === 'CHANGES_REQUESTED'
+                ? 'The learner has your note. They can update the work and send it again.'
+                : task.status === 'REVIEWED' || task.status === 'APPROVED'
+                  ? `Closed${task.reviewed_at ? ` ${timeAgo(task.reviewed_at)}` : ''}. Only a guide or admin can reopen it by sending it back.`
+                  : 'The learner has not sent anything yet. You can still message them below.'}
+          </p>
+        </div>
+      </div>
 
       <div className="fact-list" style={{ marginBottom: 14 }}>
         <div className="fact">
@@ -287,7 +322,7 @@ export const TaskDetailPage: React.FC = () => {
 
           <section className="panel-card">
             <div className="panel-head">
-              <h2>Your review</h2>
+              <h2>Your decision</h2>
               <span className="section-note">The learner sees this straight away</span>
             </div>
 
@@ -306,17 +341,17 @@ export const TaskDetailPage: React.FC = () => {
                 type="button"
                 className="btn btn-primary"
                 onClick={() => setPending('approve')}
-                disabled={busy || task.status === 'REVIEWED'}
+                disabled={busy || task.status === 'REVIEWED' || task.status === 'APPROVED' || !task.submitted_at}
               >
-                <Check size={14} /> Approve
+                <Check size={14} /> Mark completed
               </button>
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={() => setPending('changes')}
-                disabled={busy || !task.submitted_at}
+                disabled={busy || task.status === 'REVIEWED' || task.status === 'APPROVED' || !task.submitted_at}
               >
-                <Undo2 size={14} /> Ask for changes
+                <Undo2 size={14} /> Send back for changes
               </button>
             </div>
           </section>
@@ -377,13 +412,13 @@ export const TaskDetailPage: React.FC = () => {
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending === 'approve' ? 'Approve this task?' : 'Send it back?'}
+        title={pending === 'approve' ? 'Mark this task complete?' : 'Send this back to the learner?'}
         message={
           pending === 'approve'
-            ? 'The learner is notified and any milestone step it unlocks opens.'
-            : 'The learner is notified and can send it again.'
+            ? 'The learner is notified, the task closes and any milestone step it unlocks opens.'
+            : 'The learner is notified with your note, and can send the task again.'
         }
-        confirmLabel={pending === 'approve' ? 'Approve' : 'Send back'}
+        confirmLabel={pending === 'approve' ? 'Mark completed' : 'Send back'}
         variant={pending === 'approve' ? 'primary' : 'danger'}
         busy={busy}
         onConfirm={review}

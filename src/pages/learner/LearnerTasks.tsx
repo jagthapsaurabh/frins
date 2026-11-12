@@ -38,6 +38,7 @@ export const LearnerTasks: React.FC<{ tasks: any[]; courses: any[] }> = ({ tasks
       const matchesStatus =
         status === 'ALL' ||
         (status === 'OPEN' && ['ASSIGNED', 'IN_PROGRESS'].includes(task.status)) ||
+        (status === 'SENT_BACK' && task.status === 'CHANGES_REQUESTED') ||
         (status === 'SUBMITTED' && task.status === 'SUBMITTED') ||
         (status === 'REVIEWED' && ['REVIEWED', 'APPROVED'].includes(task.status));
       const matchesCourse = courseId === 'ALL' || task.course_id === courseId;
@@ -46,12 +47,17 @@ export const LearnerTasks: React.FC<{ tasks: any[]; courses: any[] }> = ({ tasks
   }, [tasks, search, status, courseId, courses]);
 
   const openCount = tasks.filter((task) => !['REVIEWED', 'APPROVED'].includes(task.status)).length;
+  const sentBackCount = tasks.filter((task) => task.status === 'CHANGES_REQUESTED').length;
 
   return (
     <div>
       <PageHead
         title="Tasks"
-        meta={tasks.length > 0 ? `${openCount} open, ${tasks.length} in total` : undefined}
+        meta={
+          tasks.length > 0
+            ? `${openCount} open${sentBackCount > 0 ? `, ${sentBackCount} sent back` : ''}, ${tasks.length} in total`
+            : undefined
+        }
       />
 
       <Toolbar>
@@ -63,6 +69,7 @@ export const LearnerTasks: React.FC<{ tasks: any[]; courses: any[] }> = ({ tasks
           options={[
             { value: 'ALL', label: 'Every status' },
             { value: 'OPEN', label: 'To do' },
+            { value: 'SENT_BACK', label: 'Sent back by your guide' },
             { value: 'SUBMITTED', label: 'With your mentor' },
             { value: 'REVIEWED', label: 'Reviewed' }
           ]}
@@ -97,7 +104,13 @@ export const LearnerTasks: React.FC<{ tasks: any[]; courses: any[] }> = ({ tasks
           >
             <td data-label="Task">
               <span className="row-title">{task.title}</span>
-              <span className="row-sub">{task.submitted_at ? 'Sent to your mentor' : 'Not sent yet'}</span>
+              <span className="row-sub">
+                {task.status === 'CHANGES_REQUESTED'
+                  ? 'Your guide asked for changes'
+                  : task.submitted_at
+                    ? 'Sent to your guide'
+                    : 'Not sent yet'}
+              </span>
             </td>
             <td data-label="Course" className="row-sub">
               {courseTitle(task)}
