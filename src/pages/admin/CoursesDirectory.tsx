@@ -219,23 +219,23 @@ export const CoursesDirectory: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td>{row.level}</td>
-                  <td>
+                  <td data-label="Level">{row.level}</td>
+                  <td data-label="Duration">
                     <span className="inline-meta">
                       <Clock size={13} />
                       {formatDuration(row.duration_hours ?? row.derived_hours)}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Price">
                     {Number(row.price) > 0 ? (
                       <span className="price-tag">{money(row.price)}</span>
                     ) : (
                       <span className="price-tag free">Free</span>
                     )}
                   </td>
-                  <td>{row.step_count}</td>
-                  <td>{row.learner_count}</td>
-                  <td>
+                  <td data-label="Steps">{row.step_count}</td>
+                  <td data-label="Learners">{row.learner_count}</td>
+                  <td data-label="Status">
                     <button
                       type="button"
                       className={`switch ${Number(row.is_active) === 1 ? 'on' : ''}`}

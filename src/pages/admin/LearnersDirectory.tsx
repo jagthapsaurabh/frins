@@ -149,14 +149,14 @@ export const LearnersDirectory: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  <td>{TRACK_LABEL[row.track] || row.track}</td>
-                  <td>{row.course_count}</td>
-                  <td>
+                  <td data-label="Track">{TRACK_LABEL[row.track] || row.track}</td>
+                  <td data-label="Courses">{row.course_count}</td>
+                  <td data-label="Tasks">
                     {row.reviewed_count}/{row.task_count}
                     <span className="admin-muted small"> reviewed</span>
                   </td>
-                  <td className="admin-muted">{timeAgo(row.last_activity)}</td>
-                  <td>
+                  <td className="admin-muted" data-label="Last activity">{timeAgo(row.last_activity)}</td>
+                  <td data-label="Status">
                     <span className={`micro-tag ${row.account_status === 'ACTIVE' ? 'success' : 'danger'}`}>
                       {row.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
                     </span>
