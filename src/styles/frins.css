@@ -12061,3 +12061,501 @@ a.footer-contact-row:hover { color: #D4A017; }
 @media (max-width: 760px) {
   .public-page-shell .closing-section { padding-bottom: calc(clamp(58px, 7vw, 104px) + 12px); }
 }
+
+/* -------------------------------------------------------------------- v20 */
+
+/* The Process page was four stacked left/right splits. It is now a fork, a
+   rail, a result band and a diptych. One shape per idea. */
+
+/* ---------- step one: the fork ----------------------------------------- */
+
+.fork-section {
+  background: #FBFAF6;
+  padding: clamp(52px, 6.5vw, 92px) 0 clamp(44px, 5.5vw, 76px);
+  scroll-margin-top: 92px;
+}
+
+.fork-head { max-width: 50em; margin-bottom: clamp(30px, 4vw, 50px); }
+
+.fork-head h2 {
+  margin: 16px 0 14px;
+  font-size: clamp(1.95rem, 3.5vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -0.038em;
+  text-wrap: balance;
+}
+
+.fork-head p { margin: 0; max-width: 40em; font-size: 15px; line-height: 1.7; color: #5F5F66; }
+
+.fork-branches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid #DCD5C4;
+}
+
+.fork-branch {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 18px;
+  align-items: start;
+  gap: 0;
+  width: 100%;
+  padding: 28px 34px 30px 0;
+  border: 0;
+  border-bottom: 1px solid #DCD5C4;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.fork-branch + .fork-branch {
+  padding-left: 34px;
+  padding-right: 0;
+  border-left: 1px solid #DCD5C4;
+}
+
+.fork-branch:hover { background: rgba(255, 255, 255, 0.72); }
+.fork-branch:focus-visible { outline: 2px solid #B08A2A; outline-offset: -2px; }
+
+.fork-letter {
+  font-family: var(--font-mono);
+  font-size: clamp(1.9rem, 2.6vw, 2.4rem);
+  font-weight: 500;
+  line-height: 1;
+  color: #DCD3BC;
+  transition: color 0.2s ease;
+}
+
+.fork-branch:hover .fork-letter { color: #B08A2A; }
+
+.fork-body { display: block; }
+
+.fork-meta { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+
+.fork-time {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8A8A92;
+}
+
+.fork-tag {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.fork-body strong {
+  display: block;
+  font-size: clamp(1.22rem, 1.9vw, 1.5rem);
+  font-weight: 700;
+  letter-spacing: -0.028em;
+  color: #0A0A0B;
+  margin-bottom: 8px;
+}
+
+.fork-copy { display: block; max-width: 27em; font-size: 13.5px; line-height: 1.65; color: #5F5F66; }
+
+.fork-arrow {
+  align-self: center;
+  font-size: 16px;
+  color: #B9B2A2;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.fork-branch:hover .fork-arrow { transform: translateX(4px); color: #B08A2A; }
+
+.fork-join { position: relative; height: 110px; }
+
+.fork-join svg {
+  display: block;
+  width: 100%;
+  height: 110px;
+  fill: none;
+  stroke: #CFC7B2;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.fork-join-dot {
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #B08A2A;
+  transform: translateX(-50%);
+}
+
+.fork-dest {
+  margin: 0;
+  text-align: center;
+  border-top: 1px solid #DCD5C4;
+  padding-top: 26px;
+}
+
+.fork-dest-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9A6B12;
+  margin-bottom: 10px;
+}
+
+.fork-dest strong {
+  display: block;
+  font-size: clamp(1.18rem, 1.9vw, 1.45rem);
+  letter-spacing: -0.028em;
+  color: #0A0A0B;
+  margin-bottom: 8px;
+}
+
+.fork-dest p { margin: 0 auto; max-width: 40em; font-size: 13px; line-height: 1.65; color: #6E6E76; }
+
+/* ---------- steps two to four: the rail -------------------------------- */
+
+.spine-section {
+  background: #FFFFFF;
+  padding: clamp(52px, 6.5vw, 92px) 0;
+}
+
+.spine-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.78fr);
+  gap: clamp(20px, 4vw, 56px);
+  align-items: end;
+  padding-bottom: 28px;
+  border-bottom: 1px solid #E7E4DC;
+}
+
+.spine-head h2 {
+  margin: 16px 0 0;
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.036em;
+}
+
+.spine-head p { margin: 0 0 4px; font-size: 14px; line-height: 1.7; color: #5F5F66; max-width: 34em; }
+
+.spine-list { position: relative; list-style: none; margin: 0; padding: 0; }
+
+.spine-list::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 16px;
+  bottom: 24px;
+  width: 1px;
+  background: #E7E2D4;
+}
+
+.spine-list > li {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1.02fr) minmax(0, 0.98fr);
+  gap: clamp(20px, 3.4vw, 52px);
+  padding: clamp(28px, 3.4vw, 44px) 0;
+  border-bottom: 1px solid #E7E4DC;
+}
+
+.spine-list > li:last-child { border-bottom: 0; padding-bottom: 6px; }
+
+.spine-num { position: relative; padding-left: 34px; }
+
+.spine-num::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #C9C1AC;
+  background: #FFFFFF;
+  box-shadow: 0 0 0 4px #FFFFFF;
+}
+
+.spine-list > li:last-child .spine-num::before { background: #B08A2A; border-color: #B08A2A; }
+
+.spine-num span {
+  font-family: var(--font-mono);
+  font-size: clamp(1.5rem, 2.1vw, 1.9rem);
+  color: #0A0A0B;
+  letter-spacing: -0.03em;
+}
+
+.spine-when {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9A6B12;
+  margin-bottom: 10px;
+}
+
+.spine-main h3 {
+  margin: 0 0 12px;
+  font-size: clamp(1.3rem, 2.1vw, 1.75rem);
+  line-height: 1.16;
+  letter-spacing: -0.032em;
+  color: #0A0A0B;
+}
+
+.spine-main > p { margin: 0; max-width: 40em; font-size: 14px; line-height: 1.72; color: #5F5F66; }
+
+.spine-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #EDE8DB;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8A8A92;
+}
+
+.spine-time::before { content: ''; width: 5px; height: 5px; background: #B08A2A; }
+
+.spine-notes { list-style: none; margin: 0; padding: 2px 0 0; align-self: start; }
+
+.spine-notes li {
+  position: relative;
+  padding: 0 0 14px 18px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #5A5A62;
+}
+
+.spine-notes li:last-child { padding-bottom: 0; }
+
+.spine-notes li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  background: #DCD5C4;
+}
+
+/* ---------- what you hold at the end ----------------------------------- */
+
+.deliver-section {
+  background: #F4F1E9;
+  padding: clamp(52px, 6.5vw, 92px) 0;
+}
+
+.deliver-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9A6B12;
+  margin-bottom: 14px;
+}
+
+.deliver-head h2 {
+  margin: 0;
+  max-width: 18em;
+  font-size: clamp(1.9rem, 3.1vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.036em;
+}
+
+.deliver-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: clamp(30px, 4vw, 48px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid #DCD5C4;
+}
+
+.deliver-grid li {
+  padding: 24px 28px 4px 0;
+  border-right: 1px solid #E2DCCC;
+}
+
+.deliver-grid li:not(:first-child) { padding-left: 28px; }
+.deliver-grid li:last-child { border-right: 0; padding-right: 0; }
+
+.deliver-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: #B08A2A;
+}
+
+.deliver-grid h3 {
+  margin: 16px 0 8px;
+  font-size: 1.06rem;
+  letter-spacing: -0.024em;
+  color: #0A0A0B;
+}
+
+.deliver-grid p { margin: 0; font-size: 12.8px; line-height: 1.66; color: #5F5F66; }
+
+.deliver-note {
+  margin: clamp(26px, 3.4vw, 42px) 0 0;
+  padding-top: 20px;
+  border-top: 1px solid #DCD5C4;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #5F5F66;
+}
+
+/* ---------- who it is for: the diptych --------------------------------- */
+
+.duo-section {
+  background: #FFFFFF;
+  padding: clamp(56px, 7vw, 100px) 0;
+}
+
+.duo-head { max-width: 52em; margin-bottom: clamp(32px, 4.2vw, 54px); }
+
+.duo-head h2 {
+  margin: 16px 0 14px;
+  font-size: clamp(1.95rem, 3.4vw, 2.95rem);
+  line-height: 1.06;
+  letter-spacing: -0.038em;
+  text-wrap: balance;
+}
+
+.duo-head p { margin: 0; max-width: 40em; font-size: 15px; line-height: 1.7; color: #5F5F66; }
+
+.duo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.duo-side { padding-right: clamp(24px, 4vw, 56px); }
+
+.duo-side + .duo-side {
+  padding-right: 0;
+  padding-left: clamp(24px, 4vw, 56px);
+  border-left: 1px solid #E4DFD2;
+}
+
+.duo-side-head { border-top: 1px solid #0A0A0B; padding-top: 22px; margin-bottom: 24px; }
+
+.duo-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9A6B12;
+  margin-bottom: 12px;
+}
+
+.duo-side-head h3 {
+  margin: 0 0 10px;
+  font-size: clamp(1.85rem, 3.1vw, 2.7rem);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: #0A0A0B;
+}
+
+.duo-side-head p { margin: 0; max-width: 30em; font-size: 13.5px; line-height: 1.7; color: #5F5F66; }
+
+.duo-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid #EDE8DB; }
+
+.duo-list li {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: 15px 0;
+  border-bottom: 1px solid #EDE8DB;
+  font-size: 13.5px;
+  line-height: 1.68;
+  color: #5A5A62;
+}
+
+.duo-num {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #B08A2A;
+  padding-top: 4px;
+}
+
+.duo-list strong { color: #0A0A0B; font-weight: 600; }
+
+/* ---------- responsive ------------------------------------------------- */
+
+@media (max-width: 1080px) {
+  .spine-list > li { grid-template-columns: 84px minmax(0, 1fr); }
+  .spine-notes {
+    grid-column: 2;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px;
+    margin-top: 6px;
+  }
+}
+
+@media (max-width: 900px) {
+  .fork-branches { grid-template-columns: minmax(0, 1fr); }
+  .fork-branch { padding: 24px 0 26px; }
+  .fork-branch + .fork-branch {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .fork-join { height: 64px; }
+  .fork-join svg { display: none; }
+  .fork-join::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: #CFC7B2;
+  }
+  .fork-dest { padding-top: 22px; }
+
+  .spine-head { grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+
+  .deliver-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .deliver-grid li { padding: 22px 22px 18px 0; }
+  .deliver-grid li:not(:first-child) { padding-left: 0; }
+  .deliver-grid li:nth-child(2n) { padding-left: 22px; border-right: 0; }
+  .deliver-grid li:nth-child(n + 3) { border-top: 1px solid #E2DCCC; }
+
+  .duo-grid { grid-template-columns: minmax(0, 1fr); }
+  .duo-side { padding-right: 0; }
+  .duo-side + .duo-side {
+    margin-top: 40px;
+    padding-left: 0;
+    padding-top: 36px;
+    border-left: 0;
+    border-top: 1px solid #E4DFD2;
+  }
+}
+
+@media (max-width: 640px) {
+  .fork-branch { grid-template-columns: 44px minmax(0, 1fr) 14px; }
+  .fork-letter { font-size: 1.55rem; }
+  .fork-meta { flex-wrap: wrap; gap: 6px 12px; }
+  .fork-copy { font-size: 13px; }
+  .fork-dest { text-align: left; }
+  .fork-dest p { margin: 0; }
+
+  .spine-list::before { left: 5px; }
+  .spine-list > li { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 24px 0 26px; }
+  .spine-num { padding-left: 24px; }
+  .spine-num::before { top: 6px; }
+  .spine-num span { font-size: 1.3rem; }
+  .spine-notes { grid-column: 1; grid-template-columns: minmax(0, 1fr); gap: 0; padding-left: 0; }
+
+  .deliver-grid { grid-template-columns: minmax(0, 1fr); }
+  .deliver-grid li,
+  .deliver-grid li:nth-child(2n) { padding: 20px 0 18px; border-right: 0; }
+  .deliver-grid li + li { border-top: 1px solid #E2DCCC; }
+  .deliver-grid h3 { margin-top: 10px; }
+}

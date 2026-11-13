@@ -1525,94 +1525,195 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               onCall={() => openDirectCallModal()}
             />
 
-            {/* Two doors, one fourth step. Read as a route, not as cards. */}
-            <section className="ways-section" id="ways">
+            {/* STEP 01 ---------------------------------------------------------
+                The fork. Two doors, drawn as two doors, joining into one line. */}
+            <section className="fork-section" id="ways">
               <div className="container">
-                <div className="ways-head">
-                  <span className="micro-tag accent">Two ways in</span>
+                <div className="fork-head" data-reveal>
+                  <span className="micro-tag accent">Step one &middot; Two ways in</span>
                   <h2>Start with a call, or start with the questions.</h2>
                   <p>
-                    Both are free and both end on the same call. Pick whichever feels less like paperwork.
+                    Both are free, both take minutes, and both end on the same call with a mentor.
+                    Pick whichever feels less like paperwork.
                   </p>
                 </div>
 
-                <div className="ways-grid">
-                  <button type="button" className="way-entry" onClick={() => openDirectCallModal()}>
-                    <span className="way-letter">A</span>
-                    <span className="way-body">
+                <div className="fork-branches">
+                  <button
+                    type="button"
+                    className="fork-branch"
+                    onClick={() => openDirectCallModal()}
+                    data-reveal
+                  >
+                    <span className="fork-letter" aria-hidden="true">A</span>
+                    <span className="fork-body">
+                      <span className="fork-meta">
+                        <span className="fork-time">About 15 minutes</span>
+                        <span className="fork-tag">Talk first</span>
+                      </span>
                       <strong>Book a call</strong>
-                      <small>Skip the questions. Talk it through.</small>
+                      <span className="fork-copy">
+                        Skip the questions and speak to a mentor. Tell us where you are and what you
+                        are trying to fix.
+                      </span>
                     </span>
-                    <span className="way-arrow" aria-hidden="true">
-                      &rarr;
-                    </span>
+                    <span className="fork-arrow" aria-hidden="true">&rarr;</span>
                   </button>
 
-                  <button type="button" className="way-entry" onClick={() => openModalWithTrack()}>
-                    <span className="way-letter">B</span>
-                    <span className="way-body">
+                  <button
+                    type="button"
+                    className="fork-branch"
+                    onClick={() => openModalWithTrack()}
+                    data-reveal
+                  >
+                    <span className="fork-letter" aria-hidden="true">B</span>
+                    <span className="fork-body">
+                      <span className="fork-meta">
+                        <span className="fork-time">About 10 minutes</span>
+                        <span className="fork-tag">Think first</span>
+                      </span>
                       <strong>Answer Discovery</strong>
-                      <small>See your readiness, then we call.</small>
+                      <span className="fork-copy">
+                        Work through a short set of questions and get a readiness result straight
+                        away. We read it before we call.
+                      </span>
                     </span>
-                    <span className="way-arrow" aria-hidden="true">
-                      &rarr;
-                    </span>
+                    <span className="fork-arrow" aria-hidden="true">&rarr;</span>
                   </button>
                 </div>
 
-                <div className="way-destination">
-                  <span className="way-dest-label">Either way, step four</span>
-                  <strong>Your own course</strong>
-                  <p>Modules, exercises and calls built around your answers.</p>
+                {/* The two lines meeting. Decorative, so it carries no text. */}
+                <div className="fork-join" aria-hidden="true">
+                  <svg viewBox="0 0 1000 110" preserveAspectRatio="none" focusable="false">
+                    <path d="M250 0 V52 Q250 74 272 74 H470 Q500 74 500 100" />
+                    <path d="M750 0 V52 Q750 74 728 74 H530 Q500 74 500 100" />
+                  </svg>
+                  <span className="fork-join-dot" />
+                </div>
+
+                <div className="fork-dest" data-reveal>
+                  <span className="fork-dest-label">Both routes arrive here</span>
+                  <strong>Step 02. We find the real gap.</strong>
+                  <p>
+                    Open to complete beginners, strategy learners, active traders and long term
+                    investors. There is no entrance test and no minimum experience.
+                  </p>
                 </div>
               </div>
             </section>
 
-            {/* The same shape as the block on Home, with the detail open. */}
-            <section className="process-section process-detail">
-              <div className="container process-grid">
-                <div className="process-intro">
-                  <span className="micro-tag accent">The four steps</span>
-                  <h2>What happens, in order.</h2>
-                  <p>
-                    Nothing is decided before we talk. Each step only exists because the one before it
-                    answered something.
-                  </p>
-                  <div className="process-intro-actions">
-                    <button type="button" className="btn btn-gold" onClick={() => openModalWithTrack()}>
-                      Start Discovery
-                    </button>
-                    <button type="button" className="btn btn-outline" onClick={() => openDirectCallModal()}>
-                      Book a Call
-                    </button>
+            {/* STEPS 02 TO 04 ------------------------------------------------
+                A rail with one column of numbers and one column of work. */}
+            <section className="spine-section">
+              <div className="container">
+                <div className="spine-head" data-reveal>
+                  <div>
+                    <span className="micro-tag accent">Steps two, three and four</span>
+                    <h2>What happens once you are in.</h2>
                   </div>
+                  <p>
+                    The first step was the choice above. These three follow it in order, and nothing
+                    is built before the call.
+                  </p>
                 </div>
 
-                <ol className="process-steps process-steps-detail">
-                  {journeySteps.map((st) => (
-                    <li key={st.num}>
-                      <span className="process-step-num">{st.num}</span>
-                      <div className="process-step-body">
-                        <span className="process-step-tag">{st.tag}</span>
-                        <h3>{st.headline}</h3>
-                        <p>{st.body}</p>
-                        <ul className="step-notes">
-                          {st.bullets.map((bullet) => (
-                            <li key={bullet}>{bullet}</li>
-                          ))}
-                        </ul>
+                <ol className="spine-list">
+                  {[
+                    {
+                      num: '02',
+                      when: 'Before the call',
+                      time: 'A few minutes of questions',
+                      step: journeySteps[1]
+                    },
+                    {
+                      num: '03',
+                      when: 'The call itself',
+                      time: '30 to 45 minutes, one on one',
+                      step: journeySteps[2]
+                    },
+                    {
+                      num: '04',
+                      when: 'After the call',
+                      time: 'Your plan, written within a few days',
+                      step: journeySteps[3]
+                    }
+                  ].map((row) => (
+                    <li key={row.num} data-reveal>
+                      <div className="spine-num">
+                        <span>{row.num}</span>
+                        <i aria-hidden="true" />
                       </div>
+
+                      <div className="spine-main">
+                        <span className="spine-when">{row.when}</span>
+                        <h3>{row.step.headline}</h3>
+                        <p>{row.step.body}</p>
+                        <span className="spine-time">{row.time}</span>
+                      </div>
+
+                      <ul className="spine-notes">
+                        {row.step.bullets.map((bullet) => (
+                          <li key={bullet}>{bullet}</li>
+                        ))}
+                      </ul>
                     </li>
                   ))}
                 </ol>
               </div>
             </section>
 
-            {/* Two kinds of participant, two different jobs. Warm band, two
-                columns, no boxes. */}
-            <section className="participants-section">
+            {/* WHAT YOU HOLD AT THE END --------------------------------------
+                The result of the four steps, stated plainly on a dark band. */}
+            <section className="deliver-section">
               <div className="container">
-                <div className="participants-head" data-reveal>
+                <div className="deliver-head" data-reveal>
+                  <span className="deliver-kicker">On the other side of the four steps</span>
+                  <h2>What you hold at the end.</h2>
+                </div>
+
+                <ol className="deliver-grid">
+                  {[
+                    {
+                      n: '01',
+                      head: 'A written plan',
+                      body: 'Your starting level, the gaps we agreed on, and the order we will close them in.'
+                    },
+                    {
+                      n: '02',
+                      head: 'A module sequence',
+                      body: 'Chapters written for you, not pulled off a shelf. They move as your work moves.'
+                    },
+                    {
+                      n: '03',
+                      head: 'Work that comes back marked',
+                      body: 'Every task you send is read and answered in writing, with what to fix next.'
+                    },
+                    {
+                      n: '04',
+                      head: 'A standing call slot',
+                      body: 'A mentor you can book, and a plan that gets reviewed instead of restarted.'
+                    }
+                  ].map((item) => (
+                    <li key={item.n} data-reveal>
+                      <span className="deliver-num">{item.n}</span>
+                      <h3>{item.head}</h3>
+                      <p>{item.body}</p>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="deliver-note" data-reveal>
+                  All of it starts with one honest question about your own approach. Bring that, and
+                  we will take it from there.
+                </p>
+              </div>
+            </section>
+
+            {/* WHO IT IS FOR -------------------------------------------------
+                Two kinds of participant, set as a diptych with numbered points. */}
+            <section className="duo-section">
+              <div className="container">
+                <div className="duo-head" data-reveal>
                   <span className="micro-tag accent">Different participants, different paths</span>
                   <h2>Every market participant thinks differently. The plan should too.</h2>
                   <p>
@@ -1621,62 +1722,90 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                   </p>
                 </div>
 
-                <div className="participants-grid">
-                  <article className="participant-col" data-reveal>
-                    <span className="participant-kicker">Active market participants</span>
-                    <h3>For traders</h3>
-                    <p className="participant-intro">
-                      If you trade actively, in equities, futures or options, we look at how you build
-                      a process you can actually stick to when money is moving.
-                    </p>
+                <div className="duo-grid">
+                  <article className="duo-side" data-reveal>
+                    <header className="duo-side-head">
+                      <span className="duo-kicker">Active market participants</span>
+                      <h3>Traders</h3>
+                      <p>
+                        If you trade actively, in equities, futures or options, we look at how you
+                        build a process you can actually stick to when money is moving.
+                      </p>
+                    </header>
 
-                    <ul className="participant-list">
+                    <ol className="duo-list">
                       <li>
-                        <strong>Preparation and process.</strong> A repeatable routine, from pre-market
-                        preparation to post-market review.
+                        <span className="duo-num">01</span>
+                        <div>
+                          <strong>Preparation and process.</strong> A repeatable routine, from
+                          pre-market preparation to post-market review.
+                        </div>
                       </li>
                       <li>
-                        <strong>Thinking about risk.</strong> Sizing positions and protecting capital
-                        before you go looking at potential gains.
+                        <span className="duo-num">02</span>
+                        <div>
+                          <strong>Thinking about risk.</strong> Sizing positions and protecting
+                          capital before you go looking at potential gains.
+                        </div>
                       </li>
                       <li>
-                        <strong>When markets move fast.</strong> Noticing hesitation, overtrading or
-                        impulsive reactions before they start dictating your orders.
+                        <span className="duo-num">03</span>
+                        <div>
+                          <strong>When markets move fast.</strong> Noticing hesitation, overtrading
+                          or impulsive reactions before they start dictating your orders.
+                        </div>
                       </li>
                       <li>
-                        <strong>Reviewing what happened.</strong> Judging decisions without hindsight
-                        bias, and separating how well you followed the plan from whether the trade made
-                        money.
+                        <span className="duo-num">04</span>
+                        <div>
+                          <strong>Reviewing what happened.</strong> Judging decisions without
+                          hindsight bias, and separating how well you followed the plan from whether
+                          the trade made money.
+                        </div>
                       </li>
-                    </ul>
+                    </ol>
                   </article>
 
-                  <article className="participant-col" data-reveal>
-                    <span className="participant-kicker">Long-term capital allocators</span>
-                    <h3>For investors</h3>
-                    <p className="participant-intro">
-                      If you invest for the longer term, we look at how you research, how you form your
-                      own view, and how steady you stay when the market shifts under you.
-                    </p>
+                  <article className="duo-side" data-reveal>
+                    <header className="duo-side-head">
+                      <span className="duo-kicker">Long term capital allocators</span>
+                      <h3>Investors</h3>
+                      <p>
+                        If you invest for the longer term, we look at how you research, how you form
+                        your own view, and how steady you stay when the market shifts under you.
+                      </p>
+                    </header>
 
-                    <ul className="participant-list">
+                    <ol className="duo-list">
                       <li>
-                        <strong>Forming a clear view.</strong> Structuring your reasoning before you
-                        commit capital, so you know why you own what you own.
+                        <span className="duo-num">01</span>
+                        <div>
+                          <strong>Forming a clear view.</strong> Structuring your reasoning before
+                          you commit capital, so you know why you own what you own.
+                        </div>
                       </li>
                       <li>
-                        <strong>Research and information.</strong> Separating business facts that matter
-                        from daily noise and headlines.
+                        <span className="duo-num">02</span>
+                        <div>
+                          <strong>Research and information.</strong> Separating business facts that
+                          matter from daily noise and headlines.
+                        </div>
                       </li>
                       <li>
-                        <strong>Thinking about downside.</strong> What could go wrong, where valuation
-                        limits sit, and how the position fits the rest of the portfolio.
+                        <span className="duo-num">03</span>
+                        <div>
+                          <strong>Thinking about downside.</strong> What could go wrong, where
+                          valuation limits sit, and how the position fits the rest of the portfolio.
+                        </div>
                       </li>
                       <li>
-                        <strong>Staying steady over time.</strong> Keeping your composure and sticking to
-                        your thesis when prices swing through a cycle.
+                        <span className="duo-num">04</span>
+                        <div>
+                          <strong>Staying steady over time.</strong> Keeping your composure and
+                          sticking to your thesis when prices swing through a cycle.
+                        </div>
                       </li>
-                    </ul>
+                    </ol>
                   </article>
                 </div>
               </div>
