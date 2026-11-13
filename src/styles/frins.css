@@ -8417,3 +8417,274 @@ button.stage-row .stage-desc {
 
 /* The step number sits opposite the title, so the title needs the room. */
 .steps-rail h3 { padding-right: 34px; }
+
+/* =============================================================================
+   v4 — one page. The header is the brand plus two actions, "Who this is for"
+   becomes three full-width editorial rows, and the footer signs off instead of
+   listing links.
+   ============================================================================= */
+
+/* ---------- header without tabs ------------------------------------------ */
+
+.header-inner { justify-content: space-between; }
+.header-cta-group { margin-left: auto; }
+
+/* ---------- who this is for: three editorial rows ------------------------ */
+
+.who-section {
+  padding: clamp(48px, 6.5vw, 96px) 0 clamp(40px, 5vw, 72px);
+  background: #FFFFFF;
+}
+
+.who-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+  gap: clamp(24px, 4vw, 64px);
+  align-items: end;
+  padding-bottom: clamp(28px, 4vw, 52px);
+  border-bottom: 1px solid #EAE6DC;
+  margin-bottom: clamp(28px, 4vw, 56px);
+}
+
+.who-head .micro-tag { grid-column: 1 / -1; margin-bottom: 14px; }
+
+.who-head h2 {
+  margin: 0;
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+  max-width: 13em;
+}
+
+.who-head p { font-size: 15px; line-height: 1.7; color: #6A6A70; max-width: 46ch; margin: 0 0 4px; }
+
+.who-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(26px, 4.5vw, 72px);
+  align-items: center;
+  padding: clamp(28px, 4vw, 56px) 0;
+  border-bottom: 1px solid #EFEBE2;
+}
+
+.who-row:last-child { border-bottom: 0; }
+
+.who-row.reverse .who-media { order: 2; }
+.who-row.reverse .who-copy { order: 1; }
+
+.who-media {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #111;
+  max-height: 340px;
+}
+
+.who-media img {
+  width: 100%;
+  height: clamp(220px, 26vw, 330px);
+  object-fit: cover;
+  display: block;
+  transition: transform 0.7s cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+
+.who-row:hover .who-media img { transform: scale(1.045); }
+
+.who-index {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(10, 10, 11, 0.55);
+  backdrop-filter: blur(6px);
+  color: #FFFFFF;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+}
+
+.who-copy { min-width: 0; }
+
+.who-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #8A6508;
+}
+
+.who-kicker::before { content: ''; width: 16px; height: 2px; background: #D4A017; }
+
+.who-copy h3 {
+  margin: 0 0 12px;
+  font-size: clamp(1.4rem, 2.2vw, 1.95rem);
+  line-height: 1.16;
+  letter-spacing: -0.035em;
+  max-width: 17em;
+}
+
+.who-copy > p {
+  margin: 0 0 18px;
+  font-size: 14.5px;
+  line-height: 1.68;
+  color: #6A6A70;
+  max-width: 46ch;
+}
+
+.who-points {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0 0 22px;
+  padding: 18px 0 0;
+  border-top: 1px solid #EFEBE2;
+}
+
+.who-points li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #55555C;
+}
+
+.who-points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 9px;
+  height: 2px;
+  border-radius: 2px;
+  background: #D4A017;
+}
+
+.who-actions { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 900px) {
+  .who-head { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
+  .who-row, .who-row.reverse { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .who-row.reverse .who-media { order: 0; }
+  .who-row.reverse .who-copy { order: 0; }
+  .who-media img { height: clamp(200px, 48vw, 280px); }
+}
+
+/* ---------- footer: a sign-off, not a sitemap ---------------------------- */
+
+.site-footer {
+  background: #08080A;
+  border-top: 1px solid #1C1C1F;
+  color: #A9A9B1;
+  padding: clamp(44px, 6vw, 80px) 0 26px;
+}
+
+.footer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(32px, 5vw, 76px);
+  padding-bottom: clamp(32px, 4vw, 52px);
+  border-bottom: 1px solid #1C1C1F;
+}
+
+.footer-logo { height: 54px; width: auto; margin-bottom: 26px; }
+
+.footer-ask h2 {
+  margin: 0 0 12px;
+  font-size: clamp(1.8rem, 2.6vw, 2.4rem);
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  color: #FFFFFF;
+}
+
+.footer-ask p { margin: 0 0 24px; font-size: 14.5px; line-height: 1.68; color: #9A9AA2; max-width: 40ch; }
+
+.footer-ask-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.public-page-shell .btn-outline-light {
+  background: transparent;
+  border-color: #35353A;
+  color: #EEEEF1;
+  border-radius: 999px;
+}
+
+.public-page-shell .btn-outline-light:hover { border-color: #FFFFFF; background: rgba(255, 255, 255, 0.06); }
+
+.footer-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(20px, 3vw, 40px);
+  align-content: start;
+}
+
+.footer-col { display: flex; flex-direction: column; gap: 11px; min-width: 0; }
+
+.footer-col-title {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #6B6B74;
+  padding-bottom: 12px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid #1C1C1F;
+}
+
+.footer-col button {
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #A9A9B2;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.footer-col button:hover { color: #D4A017; }
+
+.footer-contact-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #A9A9B2;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a.footer-contact-row:hover { color: #D4A017; }
+.footer-contact-row svg { flex: none; margin-top: 2px; color: #6B6B74; }
+
+.footer-legal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 22px;
+  font-size: 11px;
+  color: #6B6B74;
+}
+
+@media (max-width: 900px) {
+  .footer-top { grid-template-columns: minmax(0, 1fr); }
+  .footer-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 24px; }
+}
+
+@media (max-width: 560px) {
+  .footer-cols { grid-template-columns: minmax(0, 1fr); }
+  .footer-logo { height: 44px; margin-bottom: 20px; }
+  .footer-legal { flex-direction: column; align-items: flex-start; gap: 6px; }
+}
+
+/* The old 4-column footer rules still exist above; these win. */
+.public-page-shell .footer-grid { display: none; }
