@@ -708,6 +708,39 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
   const currentPath = location.pathname;
 
+  /* Sections fade in as they arrive, once. Nothing bounces, nothing loops. */
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll<HTMLElement>('[data-reveal]'));
+    if (!nodes.length) return;
+    if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      nodes.forEach((n) => n.classList.add('is-in'));
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-in');
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: '0px 0px -8% 0px', threshold: 0.08 }
+    );
+    nodes.forEach((n) => io.observe(n));
+
+    /* Safety net: anything still hidden after a few seconds is shown anyway,
+       so a failed observer never leaves a section blank. */
+    const fallback = window.setTimeout(() => {
+      nodes.forEach((n) => n.classList.add('is-in'));
+    }, 3500);
+
+    return () => {
+      io.disconnect();
+      window.clearTimeout(fallback);
+    };
+  }, [currentPath]);
+
   return (
     <div className="public-page-shell">
       <PublicSiteHeader
@@ -722,304 +755,218 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
            ================================================================= */}
         {currentPath === '/' && (
           <>
-            <section className="hero-section">
-              <div className="container hero-grid">
-                <div className="hero-content">
-                  <p className="hero-eyebrow">
-                    For students, strategy learners, traders and investors
-                  </p>
+            {/* A photograph, not a card. The first screen is the room the work
+                actually happens in, with the claim set over it. */}
+            <section className="hero-stage">
+              <div className="hero-media" aria-hidden="true">
+                <img src="/img/hero-desk.jpg" alt="" />
+              </div>
+              <div className="hero-veil" aria-hidden="true" />
 
-                  <h1 className="hero-title">
-                    Learn the market with a course <span className="text-gradient">built around you</span>.
-                  </h1>
+              <div className="container hero-inner">
+                <p className="hero-eyebrow">
+                  For students, strategy learners, traders and investors
+                </p>
 
-                  <p className="hero-lead">
-                    Start from zero, test a strategy, or fix the execution that keeps costing you. Your
-                    course starts where you are, not at page one of a template.
-                  </p>
+                <h1 className="hero-title">
+                  Learn the market with a course <em>built around you.</em>
+                </h1>
 
-                  {/* Primary CTA Bar with BOTH "Begin Discovery" AND Direct "Book a Call" */}
-                  <div className="hero-cta-bar">
-                    <button
-                      type="button"
-                      className="btn btn-primary btn-lg"
-                      onClick={() => openModalWithTrack()}
-                    >
-                      Start Discovery &rarr;
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-dark btn-lg"
-                      onClick={() => openDirectCallModal()}
-                    >
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
-                      </svg>
-                      <span>Book a Call Directly</span>
-                    </button>
-                  </div>
-                  <p className="hero-note">
-                    Rather talk to a person first? <strong>Book a Call Directly</strong>. No questionnaire
-                    needed.
-                  </p>
+                <p className="hero-lead">
+                  Start from zero, test a strategy, or fix the execution that keeps costing you. Your
+                  course starts where you are, not at page one of a template.
+                </p>
 
-                  <ul className="hero-points">
-                    <li>Anyone can join, from a first question to ten years in.</li>
-                    <li>Your course is built from your goals, not a template.</li>
-                    <li>Real mentors on 1-on-1 calls, whenever you need one.</li>
-                  </ul>
+                <div className="hero-cta-bar">
+                  <button type="button" className="btn btn-primary btn-lg" onClick={() => openModalWithTrack()}>
+                    Start Discovery
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                  <button type="button" className="btn btn-glass btn-lg" onClick={() => openDirectCallModal()}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                    Book a Call
+                  </button>
                 </div>
 
-                {/* Right: 2-Tab Interactive Preview Card */}
-                <div className="hero-artifact square" aria-label="Interactive FRINS System Preview">
-                  <div className="artifact-header" role="tablist" aria-label="FRINS Learning Views">
-                    <div className="artifact-tab-group">
-                      <button
-                        ref={tabArchRef}
-                        type="button"
-                        className={`artifact-tab-btn ${activeTab === 'architecture' ? 'active' : ''}`}
-                        id="tab-architecture"
-                        role="tab"
-                        aria-selected={activeTab === 'architecture'}
-                        aria-controls="panel-architecture"
-                        tabIndex={activeTab === 'architecture' ? 0 : -1}
-                        onClick={() => setActiveTab('architecture')}
-                        onKeyDown={handleTabKeyDown}
-                      >
-                        Custom Course
-                      </button>
-                      <button
-                        ref={tabSeqRef}
-                        type="button"
-                        className={`artifact-tab-btn ${activeTab === 'sequence' ? 'active' : ''}`}
-                        id="tab-sequence"
-                        role="tab"
-                        aria-selected={activeTab === 'sequence'}
-                        aria-controls="panel-sequence"
-                        tabIndex={activeTab === 'sequence' ? 0 : -1}
-                        onClick={() => setActiveTab('sequence')}
-                        onKeyDown={handleTabKeyDown}
-                      >
-                        Who Joins
-                      </button>
-                    </div>
+                <p className="hero-note">
+                  Rather talk to a person first? Book a Call directly. No questionnaire needed.
+                </p>
+              </div>
+
+              <div className="container">
+                <ul className="hero-facts">
+                  <li>
+                    <span>01</span>
+                    <p>Anyone can join, from a first question to ten years in.</p>
+                  </li>
+                  <li>
+                    <span>02</span>
+                    <p>Your course is built from your goals, not a template.</p>
+                  </li>
+                  <li>
+                    <span>03</span>
+                    <p>Real mentors on 1-on-1 calls, whenever you need one.</p>
+                  </li>
+                </ul>
+              </div>
+            </section>
+
+            {/* A quiet ticker. It gives the page movement without a single box. */}
+            <div className="ticker" aria-hidden="true">
+              <div className="ticker-track">
+                {[0, 1].map((run) => (
+                  <div className="ticker-run" key={run}>
+                    <span>Students</span><i />
+                    <span>Strategy learners</span><i />
+                    <span>Active traders</span><i />
+                    <span>Long-term investors</span><i />
+                    <span>Custom syllabus</span><i />
+                    <span>1-on-1 mentorship</span><i />
+                    <span>L1 to L4</span><i />
                   </div>
+                ))}
+              </div>
+            </div>
 
-                  <div
-                    id="panel-architecture"
-                    role="tabpanel"
-                    aria-labelledby="tab-architecture"
-                    className={`artifact-panel ${activeTab === 'architecture' ? 'active' : ''}`}
-                  >
-                    {/* Each step is a real button: 1 and 4 book a call, 2 and 3
-                        open Discovery. The chevron says it is clickable. */}
-                    <div className="artifact-stages">
-                      <button
-                        type="button"
-                        className="stage-row"
-                        onClick={() => openDirectCallModal()}
-                        aria-label="Step 1: book a call"
-                      >
-                        <div className="stage-num">01</div>
-                        <div className="stage-info">
-                          <div className="stage-name">Book a Call Directly or Take Guided Discovery</div>
-                          <div className="stage-desc">
-                            Speak with our team right away, or answer focused Discovery questions first to map your learning goals.
-                          </div>
-                        </div>
-                        <span className="stage-go">Book a call &rarr;</span>
-                      </button>
+            {/* Who this is for: a photograph on the left, three real situations
+                on the right. No three-up card grid. */}
+            <section className="audience-section">
+              <div className="container audience-grid">
+                <figure className="audience-figure" data-reveal>
+                  <img src="/img/mentor.jpg" alt="A mentor and a learner going through a chart together" />
+                  <figcaption>1-on-1 sessions with a mentor, not a support ticket.</figcaption>
+                </figure>
 
-                      <button
-                        type="button"
-                        className="stage-row highlight"
-                        onClick={() => navigate('/discovery')}
-                        aria-label="Step 2: start Discovery"
-                      >
-                        <div className="stage-num">02</div>
-                        <div className="stage-info">
-                          <div className="stage-name">Identify Your Concepts &amp; Strategy Goals</div>
-                          <div className="stage-desc">
-                            Whether you want market concepts, strategy understanding, or execution discipline, we pinpoint what to build.
-                          </div>
-                        </div>
-                        <span className="stage-go">Start Discovery &rarr;</span>
-                      </button>
+                <div className="audience-copy">
+                  <header data-reveal>
+                    <span className="micro-tag accent">Who this is for</span>
+                    <h2>Anyone can learn here. And your course is built for you.</h2>
+                    <p>
+                      You do not need years of trading behind you to start. Tell us what you want to
+                      understand, and we build the course around that. Same platform, different syllabus
+                      for every person.
+                    </p>
+                  </header>
 
-                      <button
-                        type="button"
-                        className="stage-row human"
-                        onClick={() => navigate('/discovery')}
-                        aria-label="Step 3: start Discovery"
-                      >
-                        <div className="stage-num">03</div>
-                        <div className="stage-info">
-                          <div className="stage-name">1-on-1 Session With Our Learning Guide Team</div>
-                          <div className="stage-desc">
-                            Meet 1-on-1 with our mentors to align on your custom course syllabus and practical milestones.
-                          </div>
+                  <ul className="audience-list">
+                    <li data-reveal>
+                      <span className="audience-num">01</span>
+                      <div>
+                        <h3>Still learning the basics</h3>
+                        <p>
+                          If market talk sounds like jargon right now, start here. We explain how markets
+                          work, how prices move, and why risk matters, in plain language with real charts.
+                        </p>
+                        <div className="audience-actions">
+                          <button type="button" className="text-link" onClick={() => openDirectCallModal('student_concepts')}>
+                            Book a Call
+                          </button>
+                          <button type="button" className="text-link muted" onClick={() => openModalWithTrack('student_concepts')}>
+                            Start Discovery
+                          </button>
                         </div>
-                        <span className="stage-go">Start Discovery &rarr;</span>
-                      </button>
+                      </div>
+                    </li>
 
-                      <button
-                        type="button"
-                        className="stage-row"
-                        onClick={() => openDirectCallModal()}
-                        aria-label="Step 4: book a call"
-                      >
-                        <div className="stage-num">04</div>
-                        <div className="stage-info">
-                          <div className="stage-name">Your Custom-Built Course (Never One-for-All)</div>
-                          <div className="stage-desc">
-                            Work through a course that matches your level, your strategy goals and your pace.
-                          </div>
+                    <li data-reveal>
+                      <span className="audience-num">02</span>
+                      <div>
+                        <h3>Working on a strategy</h3>
+                        <p>
+                          Bring whatever idea you are testing. We break it into entry rules, exit rules and
+                          risk limits, then look at where it holds up and where it breaks.
+                        </p>
+                        <div className="audience-actions">
+                          <button type="button" className="text-link" onClick={() => openDirectCallModal('strategy_learner')}>
+                            Book a Call
+                          </button>
+                          <button type="button" className="text-link muted" onClick={() => openModalWithTrack('strategy_learner')}>
+                            Start Discovery
+                          </button>
                         </div>
-                        <span className="stage-go">Book a call &rarr;</span>
-                      </button>
-                    </div>
-                  </div>
+                      </div>
+                    </li>
 
-                  <div
-                    id="panel-sequence"
-                    role="tabpanel"
-                    aria-labelledby="tab-sequence"
-                    className={`artifact-panel ${activeTab === 'sequence' ? 'active' : ''}`}
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {[
-                        {
-                          badge: 'Students',
-                          title: 'Market concepts from the ground up',
-                          desc: 'How markets work, why prices move, what liquidity means, and where risk actually sits.'
-                        },
-                        {
-                          badge: 'Strategy learners',
-                          title: 'How strategies actually work',
-                          desc: 'What makes a setup valid, why some ideas fail in live conditions, and how to test your own rules.'
-                        },
-                        {
-                          badge: 'Traders',
-                          title: 'Calm, repeatable execution',
-                          desc: 'Stop moving your stops. Stop entering on impulse. Learn to sit out when the setup is not there.'
-                        },
-                        {
-                          badge: 'Investors',
-                          title: 'Thesis first, position second',
-                          desc: 'Write down why you own something, how much you can lose, and when the idea is no longer true.'
-                        }
-                      ].map((item) => (
-                        <div
-                          key={item.title}
-                          style={{
-                            background: 'var(--bg-canvas)',
-                            padding: '12px 16px',
-                            borderRadius: 0,
-                            border: '1px solid var(--border-subtle)'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <strong style={{ fontSize: 13.5, color: 'var(--text-main)' }}>{item.title}</strong>
-                            <span className="micro-tag accent" style={{ fontSize: 10, padding: '2px 8px' }}>{item.badge}</span>
-                          </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-                            {item.desc}
-                          </div>
+                    <li data-reveal>
+                      <span className="audience-num">03</span>
+                      <div>
+                        <h3>Already trading or investing</h3>
+                        <p>
+                          You know the theory. The gap is usually in the doing: sizing, stops that stay put,
+                          and reviewing trades without excuses. That is what we work on.
+                        </p>
+                        <div className="audience-actions">
+                          <button type="button" className="text-link" onClick={() => openDirectCallModal('trader')}>
+                            Book a Call
+                          </button>
+                          <button type="button" className="text-link muted" onClick={() => openModalWithTrack('trader')}>
+                            Start Discovery
+                          </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            {/* One sentence, set large. The page needs somewhere to breathe. */}
+            <section className="statement-section">
+              <div className="container statement-grid">
+                <blockquote data-reveal>
+                  Most courses sell one set of videos to everyone. We write the syllabus for the person
+                  sitting in front of us.
+                </blockquote>
+
+                <div className="statement-side" data-reveal>
+                  <p>
+                    A student needs time on how markets work. A trader needs work on execution under
+                    pressure. Give both the same videos and one gets bored while the other stays confused.
+                  </p>
+                  <p>
+                    So the plan is written after we meet you, and it moves as you improve. Four levels,
+                    and you only move up when your work shows you are ready.
+                  </p>
+                  <div className="statement-stats">
+                    <div><strong>4</strong><span>Programs</span></div>
+                    <div><strong>L1–L4</strong><span>Levels</span></div>
+                    <div><strong>1-on-1</strong><span>Mentorship</span></div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* Dedicated "Built for Every Learner, Not One Course for All" + Direct Call Booking Section */}
-            <section className="problem-section section-pad">
+            {/* The four steps, as a line rather than four cards. */}
+            <section className="steps-strip">
               <div className="container">
-                <div className="section-header split">
-                  <span className="micro-tag accent">Who this is for</span>
-                  <h2>Anyone can learn here. And your course is built for you.</h2>
-                  <p>
-                    You do not need years of trading behind you to start. Tell us what you want to understand, and we build the course around that. Same platform, different syllabus for every person.
-                  </p>
+                <div className="steps-strip-head" data-reveal>
+                  <span className="micro-tag accent">How it works</span>
+                  <h2>Four steps from a first question to your own course.</h2>
+                  <button type="button" className="text-link" onClick={() => navigate('/how-it-works')}>
+                    See the full process
+                  </button>
                 </div>
 
-                <div className="problem-grid">
-                  <div className="problem-card">
-                    <div className="icon-badge-box">01</div>
-                    <h3>Still learning the basics</h3>
-                    <p>
-                      If market talk sounds like jargon right now, start here. We explain how markets work, how prices move, and why risk matters, in plain language with real charts.
-                    </p>
-                    <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => openDirectCallModal('student_concepts')}
-                      >
-                        Book a Call &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => openModalWithTrack('student_concepts')}
-                      >
-                        Start Discovery
-                      </button>
-                    </div>
-                  </div>
+                <ol className="steps-rail">
+                  {journeySteps.map((st, i) => (
+                    <li key={st.num} data-reveal style={{ ['--i' as string]: i }}>
+                      <span className="steps-rail-num">{st.num}</span>
+                      <h3>{st.shortTitle}</h3>
+                      <p>{st.shortDesc}</p>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
 
-                  <div className="problem-card">
-                    <div className="icon-badge-box">02</div>
-                    <h3>Working on a strategy</h3>
-                    <p>
-                      Bring whatever idea you are testing. We break it into entry rules, exit rules and risk limits, then look at where it holds up and where it breaks.
-                    </p>
-                    <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => openDirectCallModal('strategy_learner')}
-                      >
-                        Book a Call &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => openModalWithTrack('strategy_learner')}
-                      >
-                        Start Discovery
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="problem-card">
-                    <div className="icon-badge-box">03</div>
-                    <h3>Already trading or investing</h3>
-                    <p>
-                      You know the theory. The gap is usually in the doing: sizing, stops that stay put, and reviewing trades without excuses. That is what we work on.
-                    </p>
-                    <div style={{ marginTop: 'auto', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => openDirectCallModal('trader')}
-                      >
-                        Book a Call &rarr;
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => openModalWithTrack('trader')}
-                      >
-                        Start Discovery
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* One band, black, no card inside a card. */}
-                <div className="band-cta">
+            {/* The dark band that offers the shortcut. */}
+            <section className="band-section">
+              <div className="container">
+                <div className="band-cta" data-reveal>
                   <div className="band-cta-copy">
                     <p className="band-cta-kicker">Skip the questionnaire</p>
                     <h3>Want to talk it through before signing up?</h3>
@@ -1029,10 +976,10 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     </p>
                   </div>
                   <div className="band-cta-actions">
-                    <button type="button" className="btn band-btn-solid" onClick={() => openDirectCallModal()}>
-                      Book a 1-on-1 Call &rarr;
+                    <button type="button" className="btn btn-gold btn-lg" onClick={() => openDirectCallModal()}>
+                      Book a 1-on-1 Call
                     </button>
-                    <button type="button" className="btn band-btn-line" onClick={() => openModalWithTrack()}>
+                    <button type="button" className="btn btn-glass btn-lg" onClick={() => openModalWithTrack()}>
                       Or Take Discovery First
                     </button>
                   </div>
