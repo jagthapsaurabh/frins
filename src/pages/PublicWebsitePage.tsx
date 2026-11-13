@@ -1640,12 +1640,9 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             </button>
 
             <div className="call-head">
-              <span className="micro-tag accent">Direct 1-on-1 Consultation &middot; No Discovery Required</span>
+              <span className="micro-tag accent">1-on-1 call &middot; No Discovery needed</span>
               <h3 id="directCallModalTitle">Book a call with our team</h3>
-              <p>
-                Fifteen minutes, one mentor, no script. Tell us where you are and we will tell you
-                what the first two modules would be.
-              </p>
+              <p>Fifteen minutes with a mentor. Free, and no card needed.</p>
             </div>
 
             {confirmedDirectCall ? (
@@ -1707,177 +1704,146 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             ) : (
               <form className="call-form" onSubmit={handleDirectCallSubmit}>
                 <div className="call-body">
-                  <section className="call-step">
-                    <header className="call-step-head">
-                      <span className="call-step-num">01</span>
-                      <div>
-                        <strong>Your details</strong>
-                        <small>We confirm your slot on this email and phone.</small>
-                      </div>
-                    </header>
+                  <div className="call-grid call-grid--three">
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallName">
+                        Full name <span className="field-req">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        id="directCallName"
+                        className="form-input"
+                        placeholder="Your full name"
+                        autoComplete="name"
+                        value={callName}
+                        onChange={(e) => setCallName(e.target.value)}
+                        required
+                      />
+                    </div>
 
-                    <div className="call-grid call-grid--three">
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallName">
-                          Full name <span className="field-req">*</span>
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallEmail">
+                        Email <span className="field-req">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        id="directCallEmail"
+                        className="form-input"
+                        placeholder="name@example.com"
+                        autoComplete="email"
+                        value={callEmail}
+                        onChange={(e) => setCallEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallPhone">
+                        Phone <span className="field-req">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        id="directCallPhone"
+                        className="form-input"
+                        placeholder="+91 98765 43210"
+                        autoComplete="tel"
+                        inputMode="tel"
+                        value={callPhone}
+                        onChange={(e) => setCallPhone(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="call-grid call-grid--wide">
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallTrack">
+                        Where you are now <span className="field-req">*</span>
+                      </label>
+                      <select
+                        id="directCallTrack"
+                        className="form-select"
+                        value={callTrack}
+                        onChange={(e) => setCallTrack(e.target.value as LearnerOrientationTrack)}
+                        required
+                      >
+                        <option value="student_concepts">Student or beginner, learning the basics</option>
+                        <option value="strategy_learner">Working on understanding strategies</option>
+                        <option value="trader">Active trader (intraday or swing)</option>
+                        <option value="investor">Long-term investor</option>
+                        <option value="both">Concepts, strategies and investing</option>
+                        <option value="other">Other, I will describe it myself</option>
+                      </select>
+                    </div>
+
+                    {callTrack === 'other' && (
+                      <div className="field call-custom-reveal">
+                        <label className="field-label" htmlFor="directCallCustomTrack">
+                          In your own words <span className="field-req">*</span>
                         </label>
                         <input
                           type="text"
-                          id="directCallName"
+                          id="directCallCustomTrack"
                           className="form-input"
-                          placeholder="Your full name"
-                          autoComplete="name"
-                          value={callName}
-                          onChange={(e) => setCallName(e.target.value)}
+                          placeholder="e.g. Business owner learning about market risk"
+                          value={callCustomTrack}
+                          onChange={(e) => setCallCustomTrack(e.target.value)}
+                          maxLength={160}
                           required
                         />
                       </div>
+                    )}
+                  </div>
 
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallEmail">
-                          Email <span className="field-req">*</span>
-                        </label>
-                        <input
-                          type="email"
-                          id="directCallEmail"
-                          className="form-input"
-                          placeholder="name@example.com"
-                          autoComplete="email"
-                          value={callEmail}
-                          onChange={(e) => setCallEmail(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallPhone">
-                          Phone or WhatsApp <span className="field-req">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          id="directCallPhone"
-                          className="form-input"
-                          placeholder="+91 98765 43210"
-                          autoComplete="tel"
-                          inputMode="tel"
-                          value={callPhone}
-                          onChange={(e) => setCallPhone(e.target.value)}
-                          required
-                        />
-                      </div>
+                  <div className="call-grid call-grid--two">
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallDate">
+                        Preferred date <span className="field-req">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        id="directCallDate"
+                        className="form-input"
+                        min={tomorrowIso}
+                        value={callDate}
+                        onChange={(e) => setCallDate(e.target.value)}
+                        required
+                      />
                     </div>
-                  </section>
 
-                  <section className="call-step">
-                    <header className="call-step-head">
-                      <span className="call-step-num">02</span>
-                      <div>
-                        <strong>Where you are now</strong>
-                        <small>Pick the closest match. If none fit, choose Other and say it your way.</small>
-                      </div>
-                    </header>
-
-                    <div className="call-grid">
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallTrack">
-                          Background or focus <span className="field-req">*</span>
-                        </label>
-                        <select
-                          id="directCallTrack"
-                          className="form-select"
-                          value={callTrack}
-                          onChange={(e) => setCallTrack(e.target.value as LearnerOrientationTrack)}
-                          required
-                        >
-                          <option value="student_concepts">Student or beginner, learning the basics</option>
-                          <option value="strategy_learner">Working on understanding strategies</option>
-                          <option value="trader">Active trader (intraday or swing)</option>
-                          <option value="investor">Long-term investor</option>
-                          <option value="both">Concepts, strategies and investing</option>
-                          <option value="other">Other, I will describe it myself</option>
-                        </select>
-                      </div>
-
-                      {callTrack === 'other' && (
-                        <div className="field call-custom-reveal">
-                          <label className="field-label" htmlFor="directCallCustomTrack">
-                            In your own words <span className="field-req">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            id="directCallCustomTrack"
-                            className="form-input"
-                            placeholder="e.g. Business owner learning about market risk"
-                            value={callCustomTrack}
-                            onChange={(e) => setCallCustomTrack(e.target.value)}
-                            maxLength={160}
-                            required
-                          />
-                          <span className="field-hint">This only helps us match you with the right mentor.</span>
-                        </div>
-                      )}
+                    <div className="field">
+                      <label className="field-label" htmlFor="directCallSlot">
+                        Preferred time <span className="field-req">*</span>
+                      </label>
+                      <select
+                        id="directCallSlot"
+                        className="form-select"
+                        value={callSlot}
+                        onChange={(e) => setCallSlot(e.target.value)}
+                      >
+                        <option value="10:00 AM IST">10:00 AM (morning)</option>
+                        <option value="11:30 AM IST">11:30 AM (late morning)</option>
+                        <option value="02:30 PM IST">02:30 PM (afternoon)</option>
+                        <option value="04:30 PM IST">04:30 PM (post market)</option>
+                        <option value="06:00 PM IST">06:00 PM (evening)</option>
+                      </select>
                     </div>
-                  </section>
+                  </div>
 
-                  <section className="call-step">
-                    <header className="call-step-head">
-                      <span className="call-step-num">03</span>
-                      <div>
-                        <strong>When to call</strong>
-                        <small>All times are IST. The confirmation email carries the meeting link.</small>
-                      </div>
-                    </header>
-
-                    <div className="call-grid call-grid--two">
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallDate">
-                          Preferred date <span className="field-req">*</span>
-                        </label>
-                        <input
-                          type="date"
-                          id="directCallDate"
-                          className="form-input"
-                          min={tomorrowIso}
-                          value={callDate}
-                          onChange={(e) => setCallDate(e.target.value)}
-                          required
-                        />
-                      </div>
-
-                      <div className="field">
-                        <label className="field-label" htmlFor="directCallSlot">
-                          Preferred time <span className="field-req">*</span>
-                        </label>
-                        <select
-                          id="directCallSlot"
-                          className="form-select"
-                          value={callSlot}
-                          onChange={(e) => setCallSlot(e.target.value)}
-                        >
-                          <option value="10:00 AM IST">10:00 AM (morning)</option>
-                          <option value="11:30 AM IST">11:30 AM (late morning)</option>
-                          <option value="02:30 PM IST">02:30 PM (afternoon)</option>
-                          <option value="04:30 PM IST">04:30 PM (post market)</option>
-                          <option value="06:00 PM IST">06:00 PM (evening)</option>
-                        </select>
-                      </div>
-
-                      <div className="field field--full">
-                        <label className="field-label" htmlFor="directCallNotes">
-                          Anything to discuss before the call?
-                          <span className="field-optional">Optional</span>
-                        </label>
-                        <textarea
-                          id="directCallNotes"
-                          className="form-textarea"
-                          rows={2}
-                          placeholder="Your goals, your experience, or the questions you want answered."
-                          value={callNotes}
-                          onChange={(e) => setCallNotes(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </section>
+                  <div className="field field--full">
+                    <label className="field-label" htmlFor="directCallNotes">
+                      Anything to discuss before the call?
+                      <span className="field-optional">Optional</span>
+                    </label>
+                    <textarea
+                      id="directCallNotes"
+                      className="form-textarea"
+                      rows={2}
+                      placeholder="Your goals, your experience, or the questions you want answered."
+                      value={callNotes}
+                      onChange={(e) => setCallNotes(e.target.value)}
+                    />
+                  </div>
 
                   {callError && (
                     <p className="call-error" role="alert">
@@ -1891,8 +1857,8 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     <strong>Free, no card needed</strong>
                     <span>A mentor reads this before the call.</span>
                   </div>
-                  <button type="submit" className="btn btn-primary btn-lg" disabled={callSubmitting}>
-                    {callSubmitting ? 'Scheduling your call…' : 'Confirm and book my call'}
+                  <button type="submit" className="btn btn-primary" disabled={callSubmitting}>
+                    {callSubmitting ? 'Scheduling…' : 'Confirm and book my call'}
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M5 12h14M13 6l6 6-6 6" />
                     </svg>
