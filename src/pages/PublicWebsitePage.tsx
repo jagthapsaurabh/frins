@@ -207,7 +207,7 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
         >
           <img
             className="site-brand-logo"
-            src="/brand/frins-logo-gold-tight.png"
+            src="/brand/frins-logo-white-tight.png"
             alt="FRINS — Fly on your own wings"
           />
         </div>
@@ -936,7 +936,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             {/* Dedicated "Built for Every Learner, Not One Course for All" + Direct Call Booking Section */}
             <section className="problem-section section-pad">
               <div className="container">
-                <div className="section-header">
+                <div className="section-header split">
                   <span className="micro-tag accent">Who this is for</span>
                   <h2>Anyone can learn here. And your course is built for you.</h2>
                   <p>
@@ -1142,7 +1142,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
             <section className="problem-section section-pad">
               <div className="container">
-                <div className="section-header center">
+                <div className="section-header split">
                   <span className="micro-tag">What we will not do</span>
                   <h2>Clear limits. No grey areas.</h2>
                   <p>
@@ -1413,7 +1413,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
             <section className="problem-section section-pad">
               <div className="container">
-                <div className="section-header">
+                <div className="section-header split">
                   <span className="micro-tag accent">Your progress</span>
                   <h2>Four levels, and you only move up when you can show it</h2>
                   <p>
