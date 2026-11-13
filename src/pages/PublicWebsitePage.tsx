@@ -178,8 +178,13 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
 
   const accountLabel = user ? 'My Learning' : 'Student Login';
 
-  /* One page, so the header carries no tabs: just the brand and the two ways
-     in. Sign in on the left of the divider, book a call on the right. */
+  const navItems = [
+    { path: '/', label: 'Home' },
+    { path: '/why-frins', label: 'Why Us' },
+    { path: '/how-it-works', label: 'Process' },
+    { path: '/tracks', label: 'Programs' }
+  ];
+
   return (
     <header className="site-header">
       <div className="container header-inner">
@@ -196,15 +201,32 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
           <img
             className="site-brand-logo"
             src="/brand/frins-logo-white-tight.png"
-            alt="FRINS — Fly on your own wings"
+            alt="FRINS, Fly on your own wings"
           />
         </div>
 
-        {/* Right: the two ways in. Nothing else lives up here. */}
+        <nav className="nav-pill-shell" aria-label="Main Website Navigation">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                className={`nav-pill-link ${isActive ? 'active' : ''}`}
+                onClick={() => navigate(item.path)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right: sign in and book a call. Nothing else. */}
         <div className="header-cta-group">
           {(onOpenSignIn || user) && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={openAccount}>
-              {accountLabel}
+            <button type="button" className="btn btn-outline btn-sm" onClick={openAccount}>
+              {user ? 'My Learning' : 'Login'}
             </button>
           )}
           <button
@@ -245,7 +267,7 @@ export const PublicSiteFooter: React.FC<{
             <img
               className="footer-logo"
               src="/brand/frins-logo-white.png"
-              alt="FRINS — Fly on your own wings"
+              alt="FRINS, Fly on your own wings"
             />
             <h2>Ready when you are.</h2>
             <p>
@@ -633,7 +655,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
         {/* =================================================================
             PAGE 1: HOME PAGE (/)
            ================================================================= */}
-        {['/', '/why-frins', '/how-it-works', '/tracks'].includes(currentPath) && (
+        {currentPath === '/' && (
           <>
             {/* The opening screen is a photograph with the claim over it. */}
             <section className="hero-stage">
@@ -741,10 +763,10 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       <li>Why most beginners lose before they learn</li>
                     </ul>
                     <div className="who-actions">
-                      <button type="button" className="text-link" onClick={() => openModalWithTrack('student_concepts')}>
+                      <button type="button" className="btn btn-gold btn-sm" onClick={() => openModalWithTrack('student_concepts')}>
                         Start Discovery
                       </button>
-                      <button type="button" className="text-link muted" onClick={() => openDirectCallModal('student_concepts')}>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => openDirectCallModal('student_concepts')}>
                         Book a Call
                       </button>
                     </div>
@@ -769,10 +791,10 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       <li>How to test it without risking real money first</li>
                     </ul>
                     <div className="who-actions">
-                      <button type="button" className="text-link" onClick={() => openModalWithTrack('strategy_learner')}>
+                      <button type="button" className="btn btn-gold btn-sm" onClick={() => openModalWithTrack('strategy_learner')}>
                         Start Discovery
                       </button>
-                      <button type="button" className="text-link muted" onClick={() => openDirectCallModal('strategy_learner')}>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => openDirectCallModal('strategy_learner')}>
                         Book a Call
                       </button>
                     </div>
@@ -797,10 +819,10 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       <li>A review you actually complete</li>
                     </ul>
                     <div className="who-actions">
-                      <button type="button" className="text-link" onClick={() => openModalWithTrack('trader')}>
+                      <button type="button" className="btn btn-gold btn-sm" onClick={() => openModalWithTrack('trader')}>
                         Start Discovery
                       </button>
-                      <button type="button" className="text-link muted" onClick={() => openDirectCallModal('trader')}>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => openDirectCallModal('trader')}>
                         Book a Call
                       </button>
                     </div>
@@ -828,32 +850,46 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                   </p>
                   <div className="statement-stats">
                     <div><strong>4</strong><span>Programs</span></div>
-                    <div><strong>L1–L4</strong><span>Levels</span></div>
+                    <div><strong>L1 to L4</strong><span>Levels</span></div>
                     <div><strong>1-on-1</strong><span>Mentorship</span></div>
                   </div>
                 </div>
               </div>
             </section>
 
-            {/* The process, as a line rather than four cards. */}
-            <section className="steps-strip" id="process">
-              <div className="container">
-                <div className="steps-strip-head" data-reveal>
-                  <div>
-                    <span className="micro-tag accent">How it works</span>
-                    <h2>Four steps from a first question to your own course.</h2>
+            {/* How it works: a sticky claim on the left, four numbered moves on
+                the right. Each step reads as a paragraph, not a tile. */}
+            <section className="process-section" id="process">
+              <div className="container process-grid">
+                <div className="process-intro" data-reveal>
+                  <span className="micro-tag accent">How it works</span>
+                  <h2>Four steps from a first question to your own course.</h2>
+                  <p>
+                    Nothing is decided before we talk. You bring where you are, and the plan is written
+                    from that, not from a catalogue.
+                  </p>
+                  <div className="process-intro-actions">
+                    <button type="button" className="btn btn-gold" onClick={() => openModalWithTrack()}>
+                      Start Discovery
+                    </button>
+                    <button type="button" className="btn btn-outline" onClick={() => openDirectCallModal()}>
+                      Book a Call
+                    </button>
                   </div>
-                  <button type="button" className="text-link" onClick={() => navigate('/how-it-works')}>
-                    See the full process
+                  <button type="button" className="process-link" onClick={() => navigate('/how-it-works')}>
+                    Read the full process
                   </button>
                 </div>
 
-                <ol className="steps-rail">
-                  {journeySteps.map((st, i) => (
-                    <li key={st.num} data-reveal style={{ ['--i' as string]: i }}>
-                      <span className="steps-rail-num">{st.num}</span>
-                      <h3>{st.shortTitle}</h3>
-                      <p>{st.shortDesc}</p>
+                <ol className="process-steps">
+                  {journeySteps.map((st) => (
+                    <li key={st.num} data-reveal>
+                      <span className="process-step-num">{st.num}</span>
+                      <div className="process-step-body">
+                        <span className="process-step-tag">{st.tag}</span>
+                        <h3>{st.shortTitle}</h3>
+                        <p>{st.shortDesc}</p>
+                      </div>
                     </li>
                   ))}
                 </ol>
@@ -886,6 +922,8 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
           </>
         )}
 
+        {currentPath === '/why-frins' && (
+          <>
         <section className="page-intro">
           <div className="container page-intro-grid">
             <div className="page-intro-copy">
@@ -1036,6 +1074,11 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
           </div>
         </section>
 
+          </>
+        )}
+
+        {currentPath === '/how-it-works' && (
+          <>
         <section className="page-intro">
           <div className="container page-intro-grid">
             <div className="page-intro-copy">
@@ -1149,6 +1192,11 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
           </div>
         </section>
 
+          </>
+        )}
+
+        {currentPath === '/tracks' && (
+          <>
         <section className="page-intro">
           <div className="container page-intro-grid">
             <div className="page-intro-copy">
@@ -1281,6 +1329,9 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             </div>
           </div>
         </section>
+          </>
+        )}
+
         {/* Shared final call to action. Two ways in, each written as what happens
             next rather than a label, so nobody has to guess which one to pick. */}
         <section className="closing-section">

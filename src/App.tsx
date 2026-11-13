@@ -75,6 +75,7 @@ export const EcosystemShell: React.FC = () => {
       <Route path="/why-frins" element={<PublicWebsitePage onOpenSignIn={openLogin} />} />
       <Route path="/how-it-works" element={<PublicWebsitePage onOpenSignIn={openLogin} />} />
       <Route path="/tracks" element={<PublicWebsitePage onOpenSignIn={openLogin} />} />
+      <Route path="/programs" element={<Navigate to="/tracks" replace />} />
       <Route path="/discovery" element={<DiscoveryPage onOpenSignIn={openLogin} />} />
 
       {/* Learner sign-in + dashboard */}

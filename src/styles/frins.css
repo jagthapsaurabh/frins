@@ -8688,3 +8688,208 @@ a.footer-contact-row:hover { color: #D4A017; }
 
 /* The old 4-column footer rules still exist above; these win. */
 .public-page-shell .footer-grid { display: none; }
+
+/* =============================================================================
+   v5 — multipage chrome, real secondary buttons, and a rebuilt process block
+   ============================================================================= */
+
+/* ---------- header: tabs come back, login becomes a real button ---------- */
+
+.header-inner { justify-content: flex-start; }
+.header-cta-group { margin-left: auto; }
+
+.nav-pill-shell { margin-left: 8px; }
+
+/* An outlined button, so Login never reads as parked text. */
+.public-page-shell .btn-outline {
+  background: transparent;
+  border-color: #3A3A40;
+  color: #F0F0F3;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.public-page-shell .btn-outline:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #8A8A92;
+  color: #FFFFFF;
+}
+
+/* On paper the same button needs dark ink. */
+.who-actions .btn-outline,
+.process-intro-actions .btn-outline,
+.page-intro-actions .btn-outline {
+  border-color: #D6D0C2;
+  color: #0A0A0B;
+  background: #FFFFFF;
+}
+
+.who-actions .btn-outline:hover,
+.process-intro-actions .btn-outline:hover,
+.page-intro-actions .btn-outline:hover {
+  border-color: #0A0A0B;
+  background: #FFFFFF;
+  color: #0A0A0B;
+}
+
+/* Gold buttons stay gold on hover. They never flip to black. */
+.public-page-shell .btn-gold:hover {
+  background: #E9B62C;
+  border-color: #E9B62C;
+  color: #0A0A0B;
+}
+
+.who-actions { gap: 10px; }
+
+/* ---------- process block ------------------------------------------------ */
+
+.process-section {
+  padding: clamp(52px, 7vw, 100px) 0 clamp(48px, 6vw, 88px);
+  background: #FFFFFF;
+  border-top: 1px solid #EEEBE3;
+}
+
+.process-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(32px, 6vw, 96px);
+  align-items: start;
+}
+
+.process-intro { position: sticky; top: 108px; }
+
+.process-intro h2 {
+  margin: 16px 0 14px;
+  font-size: clamp(1.9rem, 3.1vw, 2.6rem);
+  line-height: 1.08;
+  letter-spacing: -0.038em;
+  max-width: 12em;
+}
+
+.process-intro p { margin: 0 0 26px; font-size: 15px; line-height: 1.7; color: #6A6A70; max-width: 38ch; }
+
+.process-intro-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.process-link {
+  margin-top: 22px;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0A0A0B;
+  border-bottom: 1px solid #D4A017;
+  padding-bottom: 3px;
+  cursor: pointer;
+}
+
+.process-link:hover { color: #8A6508; }
+
+.process-steps {
+  list-style: none;
+  counter-reset: pstep;
+  border-top: 1px solid #EAE6DC;
+}
+
+.process-steps li {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 22px;
+  padding: 26px 0 28px;
+  border-bottom: 1px solid #EAE6DC;
+  position: relative;
+  transition: padding-left 0.22s ease;
+}
+
+.process-steps li:hover { padding-left: 10px; }
+
+/* A gold rule grows down the left of the row you are reading. */
+.process-steps li::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 26px;
+  bottom: 28px;
+  width: 2px;
+  border-radius: 2px;
+  background: #D4A017;
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.22s ease;
+}
+
+.process-steps li:hover::before { transform: scaleY(1); }
+
+.process-step-num {
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  color: #E7E1D2;
+  transition: color 0.22s ease;
+  padding-top: 2px;
+}
+
+.process-steps li:hover .process-step-num { color: #D4A017; }
+
+.process-step-body { min-width: 0; }
+
+.process-step-tag {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9A9182;
+}
+
+.process-step-body h3 {
+  margin: 0 0 7px;
+  font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+  line-height: 1.25;
+  letter-spacing: -0.028em;
+}
+
+.process-step-body p { margin: 0; font-size: 13.5px; line-height: 1.65; color: #6A6A70; max-width: 44ch; }
+
+@media (max-width: 940px) {
+  .process-grid { grid-template-columns: minmax(0, 1fr); }
+  .process-intro { position: static; }
+}
+
+@media (max-width: 560px) {
+  .process-steps li { grid-template-columns: 46px minmax(0, 1fr); gap: 14px; padding: 20px 0; }
+  .process-step-num { font-size: 28px; }
+  .process-steps li::before { left: -10px; }
+  .process-intro-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---------- hero corrections -------------------------------------------- */
+
+/* The inner block is the container itself, so it must not shrink and centre. */
+.hero-stage .hero-inner {
+  max-width: var(--container);
+  margin: 0 auto;
+}
+
+.hero-stage .hero-title { max-width: 11.5em; }
+.hero-stage .hero-lead { max-width: 30em; }
+
+/* The primary action over the photograph is gold, not black on black. */
+.public-page-shell .hero-stage .btn-primary {
+  background: #D4A017;
+  border-color: #D4A017;
+  color: #0A0A0B;
+  font-weight: 700;
+}
+
+.public-page-shell .hero-stage .btn-primary:hover {
+  background: #E9B62C;
+  border-color: #E9B62C;
+  color: #0A0A0B;
+}
