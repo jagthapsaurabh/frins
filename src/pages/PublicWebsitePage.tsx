@@ -156,6 +156,74 @@ export const PathwayCard: React.FC<{
   </article>
 );
 
+/** The arrow that sits inside a primary action. */
+const ArrowRight = () => (
+  <svg
+    width="15"
+    height="15"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M5 12h14M13 6l6 6-6 6" />
+  </svg>
+);
+
+/**
+ * The opener every inner page shares with Home: a photograph, the claim over
+ * it, two ways in, and three short facts along the bottom rule.
+ */
+export const PageHero: React.FC<{
+  label: string;
+  title: React.ReactNode;
+  lead: string;
+  points: Array<{ head: string; body: string }>;
+  image: string;
+  imagePosition?: string;
+  startLabel?: string;
+  callLabel?: string;
+  onStart: () => void;
+  onCall: () => void;
+}> = ({ label, title, lead, points, image, imagePosition, startLabel, callLabel, onStart, onCall }) => (
+  <section className="page-hero">
+    <div className="page-hero-media" aria-hidden="true">
+      <img src={image} alt="" style={imagePosition ? { objectPosition: imagePosition } : undefined} />
+    </div>
+    <div className="page-hero-veil" aria-hidden="true" />
+
+    <div className="container page-hero-inner">
+      <p className="page-hero-label">{label}</p>
+      <h1 className="page-hero-title">{title}</h1>
+      <p className="page-hero-lead">{lead}</p>
+
+      <div className="page-hero-actions">
+        <button type="button" className="btn btn-primary btn-lg" onClick={onStart}>
+          {startLabel || 'Start Discovery'}
+          <ArrowRight />
+        </button>
+        <button type="button" className="btn btn-glass btn-lg" onClick={onCall}>
+          {callLabel || 'Book a Call'}
+        </button>
+      </div>
+
+      <ul className="page-hero-facts">
+        {points.map((point, i) => (
+          <li key={point.head}>
+            <span>{String(i + 1).padStart(2, '0')}</span>
+            <p>
+              <strong>{point.head}</strong> {point.body}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+);
+
 export interface PublicSiteNavProps {
   onOpenSignIn?: () => void;
   onStartDiscovery?: () => void;
@@ -170,10 +238,16 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
 
   const openAccount = () => {
     if (user) navigate('/dashboard');
     else if (onOpenSignIn) onOpenSignIn();
+  };
+
+  const requestCall = () => {
+    if (onBookCallDirect) onBookCallDirect();
+    else navigate('/?bookCall=1');
   };
 
   const accountLabel = user ? 'My Learning' : 'Student Login';
@@ -185,10 +259,35 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
     { path: '/tracks', label: 'Programs' }
   ];
 
+  const go = (path: string) => {
+    setNavOpen(false);
+    navigate(path);
+  };
+
+  // A new page always closes the drawer, and an open drawer owns the keyboard.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false);
+    };
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onKey);
+
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [navOpen]);
+
   return (
     <header className="site-header">
       <div className="container header-inner">
-        {/* Left: Precision-Aligned Brand Logo & Wordmark */}
         <div
           className="brand-group"
           role="button"
@@ -205,6 +304,7 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
           />
         </div>
 
+        {/* Desktop: the four pages, flat and in a row. */}
         <nav className="nav-pill-shell" aria-label="Main Website Navigation">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -213,7 +313,7 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
                 key={item.path}
                 type="button"
                 className={`nav-pill-link ${isActive ? 'active' : ''}`}
-                onClick={() => navigate(item.path)}
+                onClick={() => go(item.path)}
                 aria-current={isActive ? 'page' : undefined}
               >
                 {item.label}
@@ -222,29 +322,104 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
           })}
         </nav>
 
-        {/* Right: sign in and book a call. Nothing else. */}
         <div className="header-cta-group">
           {(onOpenSignIn || user) && (
-            <button type="button" className="btn btn-outline btn-sm" onClick={openAccount}>
+            <button type="button" className="btn btn-outline btn-sm header-login" onClick={openAccount}>
               {user ? 'My Learning' : 'Login'}
+            </button>
+          )}
+          <button type="button" className="btn btn-primary btn-sm" onClick={requestCall}>
+            Book a Call
+          </button>
+        </div>
+
+        {/* Mobile: one button that opens the page list. No word on it. */}
+        <button
+          type="button"
+          className={`nav-toggle ${navOpen ? 'is-open' : ''}`}
+          aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+          aria-expanded={navOpen}
+          aria-controls="site-nav-drawer"
+          onClick={() => setNavOpen((open) => !open)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      </div>
+
+      <div
+        className={`nav-drawer-scrim ${navOpen ? 'is-open' : ''}`}
+        aria-hidden="true"
+        onClick={() => setNavOpen(false)}
+      />
+
+      <aside
+        id="site-nav-drawer"
+        className={`nav-drawer ${navOpen ? 'is-open' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site navigation"
+        aria-hidden={!navOpen}
+      >
+        <div className="nav-drawer-top">
+          <img className="nav-drawer-logo" src="/brand/frins-logo-white.png" alt="FRINS" />
+          <button
+            type="button"
+            className="nav-drawer-close"
+            aria-label="Close navigation"
+            onClick={() => setNavOpen(false)}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+
+        <nav className="nav-drawer-links" aria-label="Pages">
+          {navItems.map((item, index) => {
+            const isActive = location.pathname === item.path;
+            return (
+              <button
+                key={item.path}
+                type="button"
+                className={`nav-drawer-link ${isActive ? 'active' : ''}`}
+                onClick={() => go(item.path)}
+                aria-current={isActive ? 'page' : undefined}
+              >
+                <span className="nav-drawer-num">0{index + 1}</span>
+                <span className="nav-drawer-word">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="nav-drawer-foot">
+          {(onOpenSignIn || user) && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => {
+                setNavOpen(false);
+                openAccount();
+              }}
+            >
+              {accountLabel}
             </button>
           )}
           <button
             type="button"
-            className="btn btn-primary btn-sm"
+            className="btn btn-primary"
             onClick={() => {
-              if (onBookCallDirect) {
-                onBookCallDirect();
-              } else {
-                navigate('/?bookCall=1');
-              }
+              setNavOpen(false);
+              requestCall();
             }}
           >
             Book a Call
           </button>
+          <p className="nav-drawer-note">Free to start. No card.</p>
         </div>
-      </div>
-
+      </aside>
     </header>
   );
 };
@@ -924,414 +1099,340 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
         {currentPath === '/why-frins' && (
           <>
-        <section className="page-intro">
-          <div className="container page-intro-grid">
-            <div className="page-intro-copy">
-              <p className="page-intro-eyebrow">Why we exist</p>
-              <h1>A beginner and a full-time trader do not need the same course.</h1>
-              <p className="page-intro-lede">
-                Most courses sell one set of videos to everyone. A student and someone running a live
-                book end up watching the same lesson 3 and skipping lesson 14. We write the syllabus per
-                person instead.
-              </p>
+            <PageHero
+              label="Why we exist"
+              title={<>A beginner and a full-time trader do not need the same course.</>}
+              lead="Most courses sell one set of videos to everyone. A student and someone running a live book end up watching the same lesson 3 and skipping lesson 14. We write the syllabus per person instead."
+              points={[
+                { head: 'Built after we meet you.', body: 'The modules, exercises and calls follow from where you actually are.' },
+                { head: 'Reasoning, not tricks.', body: 'You learn why a setup works, so you can still decide when conditions change.' },
+                { head: 'Yours to change.', body: 'The plan moves as you improve, not on a fixed calendar.' }
+              ]}
+              image="/img/study-night.jpg"
+              imagePosition="72% 45%"
+              onStart={() => openModalWithTrack()}
+              onCall={() => openDirectCallModal()}
+            />
 
-              <ul className="page-intro-points">
-                <li>
-                  <strong>Built after we meet you.</strong> The modules, exercises and calls follow from
-                  where you actually are.
-                </li>
-                <li>
-                  <strong>Reasoning, not tricks.</strong> You learn why a setup works, so you can still
-                  decide when conditions change.
-                </li>
-                <li>
-                  <strong>Yours to change.</strong> The plan moves as you improve, not on a fixed calendar.
-                </li>
-              </ul>
-
-              <div className="page-intro-actions">
-                <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
-                  Start Discovery &rarr;
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
-                  Book a Call
-                </button>
-              </div>
-            </div>
-
-            <aside className="page-intro-aside" aria-label="One syllabus against one built for you">
-              <div className="intro-compare">
-                <div className="intro-compare-col muted">
-                  <span className="intro-compare-title">Most courses</span>
-                  <ul>
-                    <li>One set of videos for everyone</li>
-                    <li>Same order, same pace</li>
-                    <li>You skip what you already know</li>
-                    <li>No one checks your work</li>
-                  </ul>
+            {/* One syllabus against one written for you. Two columns, hairline
+                between, no card around it. */}
+            <section className="compare-section">
+              <div className="container">
+                <div className="compare-head">
+                  <h2>Same subject. Two very different starting points.</h2>
+                  <p>
+                    On the left is the course most people buy. On the right is what the same money gets
+                    you here.
+                  </p>
                 </div>
-                <div className="intro-compare-col">
-                  <span className="intro-compare-title">FRINS</span>
-                  <ul>
-                    <li>Modules written for your level</li>
-                    <li>Pace set by what you can show</li>
-                    <li>Gaps found by your guide</li>
-                    <li>Every task read and marked</li>
-                  </ul>
+
+                <div className="compare-columns">
+                  <div className="compare-col muted">
+                    <span className="compare-col-title">Most courses</span>
+                    <ul>
+                      <li>One set of videos for everyone</li>
+                      <li>Same order, same pace</li>
+                      <li>You skip what you already know</li>
+                      <li>No one checks your work</li>
+                    </ul>
+                  </div>
+                  <div className="compare-col">
+                    <span className="compare-col-title">FRINS</span>
+                    <ul>
+                      <li>Modules written for your level</li>
+                      <li>Pace set by what you can show</li>
+                      <li>Gaps found by your guide</li>
+                      <li>Every task read and marked</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
-              <p className="intro-compare-note">
-                Same subject. Two very different starting points.
-              </p>
-            </aside>
-          </div>
-        </section>
+            </section>
 
-        <section className="section-pad">
-          <div className="container">
-            <div className="problem-grid">
-              <div className="problem-card">
-                <div className="icon-badge-box">01</div>
-                <h3>One syllabus cannot fit everyone</h3>
-                <p>
-                  A student needs time on how markets work. A trader needs work on execution under pressure. Give both the same videos and one gets bored while the other stays confused.
-                </p>
-              </div>
+            <section className="essay-section">
+              <div className="container">
+                <div className="essay-head">
+                  <span className="micro-tag accent">What goes wrong</span>
+                  <h2>Three reasons people stall.</h2>
+                </div>
 
-              <div className="problem-card">
-                <div className="icon-badge-box">02</div>
-                <h3>Copying calls teaches you nothing</h3>
-                <p>
-                  If you follow a tip or copy a pattern without knowing why it works, you are stuck the moment conditions change. We teach the reasoning, not the trick.
-                </p>
-              </div>
+                <div className="essay-rows">
+                  <article className="essay-row">
+                    <span className="essay-num">01</span>
+                    <div>
+                      <h3>One syllabus cannot fit everyone</h3>
+                      <p>
+                        A student needs time on how markets work. A trader needs work on execution under
+                        pressure. Give both the same videos and one gets bored while the other stays
+                        confused.
+                      </p>
+                    </div>
+                  </article>
 
-              <div className="problem-card">
-                <div className="icon-badge-box">03</div>
-                <h3>Built after we meet you</h3>
-                <p>
-                  We look at where you are, then write the modules, exercises and calls around that. Your plan changes as you improve.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
+                  <article className="essay-row">
+                    <span className="essay-num">02</span>
+                    <div>
+                      <h3>Copying calls teaches you nothing</h3>
+                      <p>
+                        If you follow a tip or copy a pattern without knowing why it works, you are stuck
+                        the moment conditions change. We teach the reasoning, not the trick.
+                      </p>
+                    </div>
+                  </article>
 
-        <section className="problem-section section-pad">
-          <div className="container">
-            <div className="section-header split">
-              <span className="micro-tag">What we will not do</span>
-              <h2>Clear limits. No grey areas.</h2>
-              <p>
-                Market education has a trust problem. Here is where we draw the line.
-              </p>
-            </div>
-
-            <div className="not-grid">
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>We will not sell you a fixed syllabus</h4>
-                  <p>No two learners get the same plan. If your goals change, the plan changes.</p>
+                  <article className="essay-row">
+                    <span className="essay-num">03</span>
+                    <div>
+                      <h3>Built after we meet you</h3>
+                      <p>
+                        We look at where you are, then write the modules, exercises and calls around that.
+                        Your plan changes as you improve.
+                      </p>
+                    </div>
+                  </article>
                 </div>
               </div>
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>Not a Tip or Signal Service</h4>
-                  <p>We never issue buy/sell calls, stock tips, option alerts, or price targets. We teach you how to think and understand.</p>
-                </div>
-              </div>
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>No Profit Guarantees</h4>
-                  <p>We never promise returns, fast wealth, or risk-free market outcomes.</p>
-                </div>
-              </div>
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>Not a Passive Video Dump</h4>
-                  <p>You learn with structured exercises, concept walkthroughs, strategy breakdowns, and human mentor feedback.</p>
-                </div>
-              </div>
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>No Prerequisite Barrier</h4>
-                  <p>You do not have to be an active trader already. Students learning market concepts and strategy learners are equally welcome.</p>
-                </div>
-              </div>
-              <div className="not-card">
-                <div className="not-mark">&times;</div>
-                <div className="not-body">
-                  <h4>No Manufactured Complexity</h4>
-                  <p>We teach concepts and strategy mechanics in clear, practical language tailored to your pace.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
 
+            <section className="problem-section section-pad">
+              <div className="container">
+                <div className="section-header split">
+                  <span className="micro-tag">What we will not do</span>
+                  <h2>Clear limits. No grey areas.</h2>
+                  <p>Market education has a trust problem. Here is where we draw the line.</p>
+                </div>
+
+                <div className="not-grid">
+                  {[
+                    {
+                      title: 'We will not sell you a fixed syllabus',
+                      body: 'No two learners get the same plan. If your goals change, the plan changes.'
+                    },
+                    {
+                      title: 'Not a Tip or Signal Service',
+                      body: 'We never issue buy/sell calls, stock tips, option alerts, or price targets. We teach you how to think and understand.'
+                    },
+                    {
+                      title: 'No Profit Guarantees',
+                      body: 'We never promise returns, fast wealth, or risk-free market outcomes.'
+                    },
+                    {
+                      title: 'Not a Passive Video Dump',
+                      body: 'You learn with structured exercises, concept walkthroughs, strategy breakdowns, and human mentor feedback.'
+                    },
+                    {
+                      title: 'No Prerequisite Barrier',
+                      body: 'You do not have to be an active trader already. Students learning market concepts and strategy learners are equally welcome.'
+                    },
+                    {
+                      title: 'No Manufactured Complexity',
+                      body: 'We teach concepts and strategy mechanics in clear, practical language tailored to your pace.'
+                    }
+                  ].map((item) => (
+                    <div className="not-card" key={item.title}>
+                      <span className="not-mark" aria-hidden="true">
+                        &times;
+                      </span>
+                      <div className="not-body">
+                        <h4>{item.title}</h4>
+                        <p>{item.body}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
           </>
         )}
-
         {currentPath === '/how-it-works' && (
           <>
-        <section className="page-intro">
-          <div className="container page-intro-grid">
-            <div className="page-intro-copy">
-              <p className="page-intro-eyebrow">How it works</p>
-              <h1>Four steps, and the first one is just a conversation.</h1>
-              <p className="page-intro-lede">
-                Book a call right away, or answer a few Discovery questions first. Both routes land in
-                the same place: a plan written around what you already know.
-              </p>
+            <PageHero
+              label="How it works"
+              title={<>Four steps, and the first one is just a conversation.</>}
+              lead="Book a call right away, or answer a few Discovery questions first. Both routes land in the same place: a plan written around what you already know."
+              points={[
+                { head: 'Nothing to pay to start.', body: 'The call and the questions are both free.' },
+                { head: 'You speak to a person.', body: 'A mentor reads your answers before the call.' },
+                { head: 'Written after we meet.', body: 'No module list exists until we know where you are.' }
+              ]}
+              image="/img/mentor.jpg"
+              imagePosition="35% 40%"
+              onStart={() => openModalWithTrack()}
+              onCall={() => openDirectCallModal()}
+            />
 
-              <ul className="page-intro-points">
-                <li>
-                  <strong>Nothing to pay to start.</strong> The call and the questions are both free.
-                </li>
-                <li>
-                  <strong>You speak to a person.</strong> A mentor reads your answers before the call.
-                </li>
-                <li>
-                  <strong>Written after we meet.</strong> No module list exists until we know where you are.
-                </li>
-              </ul>
-
-              <div className="page-intro-actions">
-                <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
-                  Start Discovery &rarr;
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
-                  Book a Call
-                </button>
-              </div>
-            </div>
-
-            <aside className="page-intro-aside" aria-label="Two ways in, one outcome">
-              <div className="route-diagram">
-                <button type="button" className="route-entry" onClick={() => openDirectCallModal()}>
-                  <span className="route-entry-num">A</span>
-                  <span className="route-entry-body">
-                    <strong>Book a call</strong>
-                    <small>Skip the questions. Talk it through.</small>
-                  </span>
-                </button>
-                <button type="button" className="route-entry" onClick={() => openModalWithTrack()}>
-                  <span className="route-entry-num">B</span>
-                  <span className="route-entry-body">
-                    <strong>Answer Discovery</strong>
-                    <small>See your readiness, then we call.</small>
-                  </span>
-                </button>
-
-                <div className="route-join" aria-hidden="true">
-                  <span>same destination</span>
+            {/* Two doors, one fourth step. Read as a route, not as cards. */}
+            <section className="ways-section">
+              <div className="container">
+                <div className="ways-head">
+                  <span className="micro-tag accent">Two ways in</span>
+                  <h2>Start with a call, or start with the questions.</h2>
+                  <p>
+                    Both are free and both end on the same call. Pick whichever feels less like paperwork.
+                  </p>
                 </div>
 
-                <div className="route-outcome">
-                  <span className="route-outcome-label">Step 4</span>
-                  <strong>Your own course</strong>
-                  <small>Modules, exercises and calls built around your answers.</small>
-                </div>
-              </div>
-              <p className="intro-compare-note">Different order, same destination. Neither route costs anything.</p>
-            </aside>
-          </div>
-        </section>
-
-        <section className="section-pad">
-          <div className="container">
-            <div className="journey-split-layout">
-              <div className="journey-step-list">
-                {journeySteps.map((st, idx) => (
-                  <button
-                    key={st.num}
-                    type="button"
-                    className={`journey-step-item ${activeStepPreview === idx ? 'active' : ''}`}
-                    onClick={() => setActiveStepPreview(idx)}
-                  >
-                    <div className="journey-step-num">{st.num}</div>
-                    <div>
-                      <h3 style={{ fontSize: 18, marginBottom: 4 }}>{st.shortTitle}</h3>
-                      <p style={{ fontSize: 14, lineHeight: 1.5 }}>{st.shortDesc}</p>
-                    </div>
+                <div className="ways-grid">
+                  <button type="button" className="way-entry" onClick={() => openDirectCallModal()}>
+                    <span className="way-letter">A</span>
+                    <span className="way-body">
+                      <strong>Book a call</strong>
+                      <small>Skip the questions. Talk it through.</small>
+                    </span>
+                    <span className="way-arrow" aria-hidden="true">
+                      &rarr;
+                    </span>
                   </button>
-                ))}
+
+                  <button type="button" className="way-entry" onClick={() => openModalWithTrack()}>
+                    <span className="way-letter">B</span>
+                    <span className="way-body">
+                      <strong>Answer Discovery</strong>
+                      <small>See your readiness, then we call.</small>
+                    </span>
+                    <span className="way-arrow" aria-hidden="true">
+                      &rarr;
+                    </span>
+                  </button>
+                </div>
+
+                <div className="way-destination">
+                  <span className="way-dest-label">Either way, step four</span>
+                  <strong>Your own course</strong>
+                  <p>Modules, exercises and calls built around your answers.</p>
+                </div>
               </div>
+            </section>
 
-              <div className="journey-spotlight-card">
-                <p className="spotlight-kicker">
-                  Stage {journeySteps[activeStepPreview].num} &middot; {journeySteps[activeStepPreview].tag}
-                </p>
-                <h3>{journeySteps[activeStepPreview].headline}</h3>
-                <p className="spotlight-body">{journeySteps[activeStepPreview].body}</p>
-
-                <ul className="spotlight-list">
-                  {journeySteps[activeStepPreview].bullets.map((b, i) => (
-                    <li key={i}>{b}</li>
-                  ))}
-                </ul>
-
-                <div className="spotlight-actions">
-                  <span>Book a call or take Discovery first</span>
-                  <div>
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => openDirectCallModal()}>
-                      Book a Call Directly
+            {/* The same shape as the block on Home, with the detail open. */}
+            <section className="process-section process-detail">
+              <div className="container process-grid">
+                <div className="process-intro">
+                  <span className="micro-tag accent">The four steps</span>
+                  <h2>What happens, in order.</h2>
+                  <p>
+                    Nothing is decided before we talk. Each step only exists because the one before it
+                    answered something.
+                  </p>
+                  <div className="process-intro-actions">
+                    <button type="button" className="btn btn-gold" onClick={() => openModalWithTrack()}>
+                      Start Discovery
                     </button>
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => openModalWithTrack()}>
-                      Start Discovery &rarr;
+                    <button type="button" className="btn btn-outline" onClick={() => openDirectCallModal()}>
+                      Book a Call
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </section>
 
+                <ol className="process-steps process-steps-detail">
+                  {journeySteps.map((st) => (
+                    <li key={st.num}>
+                      <span className="process-step-num">{st.num}</span>
+                      <div className="process-step-body">
+                        <span className="process-step-tag">{st.tag}</span>
+                        <h3>{st.headline}</h3>
+                        <p>{st.body}</p>
+                        <ul className="step-notes">
+                          {st.bullets.map((bullet) => (
+                            <li key={bullet}>{bullet}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
           </>
         )}
-
         {currentPath === '/tracks' && (
           <>
-        <section className="page-intro">
-          <div className="container page-intro-grid">
-            <div className="page-intro-copy">
-              <p className="page-intro-eyebrow">Who can join</p>
-              <h1>Four starting points. One platform.</h1>
-              <p className="page-intro-lede">
-                Pick the one that sounds most like you. It sets where you begin, not how far you can go.
-              </p>
+            <PageHero
+              label="Who can join"
+              title={<>Four starting points. One platform.</>}
+              lead="Pick the one that sounds most like you. It sets where you begin, not how far you can go."
+              points={[
+                { head: 'Nothing to qualify for.', body: 'No entrance test and no minimum experience.' },
+                { head: 'The work sets your level.', body: 'You move up when your guide signs off, not on a calendar.' },
+                { head: 'You can switch.', body: 'Change track later if your goal changes. Nothing is locked.' }
+              ]}
+              image="/img/hero-desk.jpg"
+              imagePosition="68% 45%"
+              callLabel="Not sure? Book a Call"
+              onStart={() => openModalWithTrack()}
+              onCall={() => openDirectCallModal()}
+            />
 
-              <ul className="page-intro-points">
-                <li>
-                  <strong>Nothing to qualify for.</strong> No entrance test and no minimum experience.
-                </li>
-                <li>
-                  <strong>The work sets your level.</strong> You move up when your guide signs off, not on a calendar.
-                </li>
-                <li>
-                  <strong>You can switch.</strong> Change track later if your goal changes. Nothing is locked.
-                </li>
-              </ul>
-
-              <div className="page-intro-actions">
-                <button type="button" className="btn btn-primary" onClick={() => openModalWithTrack()}>
-                  Start Discovery &rarr;
-                </button>
-                <button type="button" className="btn btn-secondary" onClick={() => openDirectCallModal()}>
-                  Not sure? Book a Call
-                </button>
-              </div>
-            </div>
-
-            <aside className="page-intro-aside" aria-label="The four tracks on this page">
-              <div className="track-index">
-                <p className="track-index-heading">On this page</p>
-                <ul>
-                  <li>
-                    <span className="track-index-num">01</span>
-                    <span>
-                      <strong>Students and beginners</strong>
-                      <small>How markets actually work, before any risk.</small>
-                    </span>
-                  </li>
-                  <li>
-                    <span className="track-index-num">02</span>
-                    <span>
-                      <strong>Strategy learners</strong>
-                      <small>Rules you can explain out loud.</small>
-                    </span>
-                  </li>
-                  <li>
-                    <span className="track-index-num">03</span>
-                    <span>
-                      <strong>Active traders</strong>
-                      <small>Execution under pressure.</small>
-                    </span>
-                  </li>
-                  <li>
-                    <span className="track-index-num">04</span>
-                    <span>
-                      <strong>Long-term investors</strong>
-                      <small>Patience, sizing and review.</small>
-                    </span>
-                  </li>
-                </ul>
-              </div>
-              <p className="intro-compare-note">
-                Unsure which one? Discovery picks the closest match for you.
-              </p>
-            </aside>
-          </div>
-        </section>
-
-        <section className="section-pad">
-          <div className="container">
-            <div className="pathway-grid">
-              {PATHWAYS.map((pathway) => (
-                <PathwayCard
-                  key={pathway.number}
-                  pathway={pathway}
-                  onStart={() => openModalWithTrack(pathway.track)}
-                  onCall={() => openDirectCallModal(pathway.track)}
-                />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="problem-section section-pad">
-          <div className="container">
-            <div className="section-header split">
-              <span className="micro-tag accent">Your progress</span>
-              <h2>Four levels, and you only move up when you can show it</h2>
-              <p>
-                Levels are not attendance badges. You move to the next one when your work shows you are ready, and your mentor signs off.
-              </p>
-            </div>
-
-            <div className="steps-grid">
-              {[
-                {
-                  lvl: 'L1',
-                  name: 'Foundational Understanding',
-                  desc: 'You can explain how the market works, what a strategy is doing, and why position size matters.'
-                },
-                {
-                  lvl: 'L2',
-                  name: 'Guided Application',
-                  desc: 'You apply your rules with a checklist and write down decisions, with a mentor reviewing the work.'
-                },
-                {
-                  lvl: 'L3',
-                  name: 'Independent Application',
-                  desc: 'You follow your own rules under live conditions, without needing someone to remind you.'
-                },
-                {
-                  lvl: 'L4',
-                  name: 'Adaptive Mastery',
-                  desc: 'You adapt the plan when conditions change and review your own work honestly.'
-                }
-              ].map((item, idx) => (
-                <div key={item.lvl} className="level-card">
-                  <span className="level-chip">{item.lvl}</span>
-                  <h3>{item.name}</h3>
-                  <p>{item.desc}</p>
-                  <div className="level-meter" aria-hidden="true">
-                    <span style={{ width: `${(idx + 1) * 25}%` }} />
-                  </div>
+            <section className="tracks-section">
+              <div className="container">
+                <div className="tracks-head">
+                  <span className="micro-tag accent">The four starting points</span>
+                  <h2>Find the one that sounds like you.</h2>
+                  <p>
+                    Each one sets your first module and your first call. It does not cap where you end up.
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
+
+                <div className="pathway-grid">
+                  {PATHWAYS.map((pathway) => (
+                    <PathwayCard
+                      key={pathway.number}
+                      pathway={pathway}
+                      onStart={() => openModalWithTrack(pathway.track)}
+                      onCall={() => openDirectCallModal(pathway.track)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="levels-section">
+              <div className="container">
+                <div className="levels-head">
+                  <span className="micro-tag accent">Your progress</span>
+                  <h2>Four levels, and you only move up when you can show it.</h2>
+                  <p>
+                    Levels are not attendance badges. You move to the next one when your work shows you
+                    are ready, and your mentor signs off.
+                  </p>
+                </div>
+
+                <ol className="level-ladder">
+                  {[
+                    {
+                      lvl: 'L1',
+                      name: 'Foundational Understanding',
+                      desc: 'You can explain how the market works, what a strategy is doing, and why position size matters.'
+                    },
+                    {
+                      lvl: 'L2',
+                      name: 'Guided Application',
+                      desc: 'You apply your rules with a checklist and write down decisions, with a mentor reviewing the work.'
+                    },
+                    {
+                      lvl: 'L3',
+                      name: 'Independent Application',
+                      desc: 'You follow your own rules under live conditions, without needing someone to remind you.'
+                    },
+                    {
+                      lvl: 'L4',
+                      name: 'Adaptive Mastery',
+                      desc: 'You adapt the plan when conditions change and review your own work honestly.'
+                    }
+                  ].map((item) => (
+                    <li key={item.lvl} className="level-step">
+                      <span className="level-step-chip">{item.lvl}</span>
+                      <div>
+                        <h3>{item.name}</h3>
+                        <p>{item.desc}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </section>
           </>
         )}
-
         {/* Shared final call to action. Two ways in, each written as what happens
             next rather than a label, so nobody has to guess which one to pick. */}
         <section className="closing-section">
