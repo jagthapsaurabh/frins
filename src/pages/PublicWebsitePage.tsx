@@ -1291,48 +1291,127 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
-            {/* The difference, as a table: the same four questions answered
-                two ways. The right column is the one we are arguing for. */}
-            <section className="diff-section">
+            {/* Two kinds of participant, two different jobs. Warm band, two
+                columns, no boxes. */}
+            <section className="participants-section">
               <div className="container">
-                <div className="diff-head" data-reveal>
-                  <span className="micro-tag accent">Same questions, two answers</span>
-                  <h2>What you get here, against the usual course.</h2>
+                <div className="participants-head" data-reveal>
+                  <span className="micro-tag accent">Different participants, different paths</span>
+                  <h2>Every market participant thinks differently. The plan should too.</h2>
+                  <p>
+                    We are not here to tell you what to become. We help you see how you already
+                    think, then build the course around that.
+                  </p>
                 </div>
 
-                <div className="diff-table" role="table" aria-label="A usual course against FRINS">
-                  <div className="diff-row diff-row--head" role="row">
-                    <span className="diff-key" role="columnheader" />
-                    <span className="diff-col-head" role="columnheader">Most courses</span>
-                    <span className="diff-col-head diff-col-head--ours" role="columnheader">FRINS</span>
-                  </div>
+                <div className="participants-grid">
+                  <article className="participant-col" data-reveal>
+                    <span className="participant-kicker">Active market participants</span>
+                    <h3>For traders</h3>
+                    <p className="participant-intro">
+                      If you trade actively, in equities, futures or options, we look at how you build
+                      a process you can actually stick to when money is moving.
+                    </p>
 
+                    <ul className="participant-list">
+                      <li>
+                        <strong>Preparation and process.</strong> A repeatable routine, from pre-market
+                        preparation to post-market review.
+                      </li>
+                      <li>
+                        <strong>Thinking about risk.</strong> Sizing positions and protecting capital
+                        before you go looking at potential gains.
+                      </li>
+                      <li>
+                        <strong>When markets move fast.</strong> Noticing hesitation, overtrading or
+                        impulsive reactions before they start dictating your orders.
+                      </li>
+                      <li>
+                        <strong>Reviewing what happened.</strong> Judging decisions without hindsight
+                        bias, and separating how well you followed the plan from whether the trade made
+                        money.
+                      </li>
+                    </ul>
+                  </article>
+
+                  <article className="participant-col" data-reveal>
+                    <span className="participant-kicker">Long-term capital allocators</span>
+                    <h3>For investors</h3>
+                    <p className="participant-intro">
+                      If you invest for the longer term, we look at how you research, how you form your
+                      own view, and how steady you stay when the market shifts under you.
+                    </p>
+
+                    <ul className="participant-list">
+                      <li>
+                        <strong>Forming a clear view.</strong> Structuring your reasoning before you
+                        commit capital, so you know why you own what you own.
+                      </li>
+                      <li>
+                        <strong>Research and information.</strong> Separating business facts that matter
+                        from daily noise and headlines.
+                      </li>
+                      <li>
+                        <strong>Thinking about downside.</strong> What could go wrong, where valuation
+                        limits sit, and how the position fits the rest of the portfolio.
+                      </li>
+                      <li>
+                        <strong>Staying steady over time.</strong> Keeping your composure and sticking to
+                        your thesis when prices swing through a cycle.
+                      </li>
+                    </ul>
+                  </article>
+                </div>
+              </div>
+            </section>
+
+            {/* Same four questions, answered two ways. Each row is a small
+                switch: what they do, then what we do. */}
+            <section className="switch-section">
+              <div className="container switch-grid">
+                <div className="switch-intro" data-reveal>
+                  <span className="micro-tag accent">Same questions, two answers</span>
+                  <h2>Four things every course promises. Only one of us does them.</h2>
+                  <p>
+                    These are the questions worth asking before you pay anyone for market education.
+                    Here is our answer next to the usual one.
+                  </p>
+                </div>
+
+                <div className="switch-list">
                   {[
                     {
-                      key: 'What you get',
-                      other: 'One set of videos, sold to everyone',
-                      ours: 'Modules written for your level'
+                      q: 'What do I actually get?',
+                      them: 'One set of videos, sold to everyone in the same order.',
+                      us: 'Modules written for your level, in the order you need them.'
                     },
                     {
-                      key: 'Where it starts',
-                      other: 'Lesson one, whether you need it or not',
-                      ours: 'At the gap we find in the first call'
+                      q: 'Where does it start?',
+                      them: 'Lesson one, whether you need it or not.',
+                      us: 'At the gap we find in the first call, not at the start of a catalogue.'
                     },
                     {
-                      key: 'How fast it moves',
-                      other: 'Whatever the calendar says',
-                      ours: 'As fast as your work proves out'
+                      q: 'How fast does it move?',
+                      them: 'Whatever the calendar says. Week four is week four.',
+                      us: 'As fast as your work proves out, and it waits when it has to.'
                     },
                     {
-                      key: 'Who reads your work',
-                      other: 'Nobody, unless you ask',
-                      ours: 'A mentor, on every task'
+                      q: 'Who reads what I send?',
+                      them: 'Nobody, unless you go looking for help.',
+                      us: 'A mentor, on every task, with a written response.'
                     }
-                  ].map((row) => (
-                    <div className="diff-row" role="row" key={row.key}>
-                      <span className="diff-key" role="rowheader">{row.key}</span>
-                      <span className="diff-cell" role="cell">{row.other}</span>
-                      <span className="diff-cell diff-cell--ours" role="cell">{row.ours}</span>
+                  ].map((item, index) => (
+                    <div className="switch-item" data-reveal key={item.q}>
+                      <span className="switch-index">{String(index + 1).padStart(2, '0')}</span>
+                      <h3>{item.q}</h3>
+                      <p className="switch-them">
+                        <span className="switch-label switch-label--them">Most courses</span>
+                        {item.them}
+                      </p>
+                      <p className="switch-us">
+                        <span className="switch-label switch-label--us">FRINS</span>
+                        {item.us}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -1381,38 +1460,56 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
-            {/* The boundaries, said as a contrast rather than a list of noes:
-                five refusals, five things we do instead. */}
-            <section className="bounds-section">
+            {/* What we are not, with the alternative beside every refusal. */}
+            <section className="limits-section">
               <div className="container">
-                <div className="bounds-head" data-reveal>
-                  <span className="micro-tag accent">Clear limits</span>
+                <div className="limits-head" data-reveal>
+                  <span className="micro-tag accent">What FRINS is not</span>
                   <h2>No grey areas.</h2>
                   <p>Market education has a trust problem. Here is exactly where we stand.</p>
                 </div>
 
-                <div className="bounds-grid">
-                  <div className="bounds-col bounds-col--no" data-reveal>
-                    <span className="bounds-title">What we will not do</span>
-                    <ul>
-                      <li>Sell you a fixed syllabus</li>
-                      <li>Issue buy or sell calls, tips or price targets</li>
-                      <li>Promise returns, fast wealth or risk-free outcomes</li>
-                      <li>Hand you a video library and call it a course</li>
-                      <li>Set an experience bar before you can start</li>
-                    </ul>
+                <div className="limits-table">
+                  <div className="limits-row limits-row--head" aria-hidden="true">
+                    <span className="limits-not">We will not</span>
+                    <span className="limits-yes">What we do instead</span>
                   </div>
 
-                  <div className="bounds-col bounds-col--yes" data-reveal>
-                    <span className="bounds-title">What we do instead</span>
-                    <ul>
-                      <li>Write the syllabus after we meet you</li>
-                      <li>Teach the reasoning, so you can decide without us</li>
-                      <li>Keep the plan moving as your work improves</li>
-                      <li>Read and mark every task you send</li>
-                      <li>Explain it in plain language, at your pace</li>
-                    </ul>
-                  </div>
+                  {[
+                    {
+                      not: 'Sell you a fixed syllabus',
+                      yes: 'Write the syllabus after we meet you, then move it as your work improves'
+                    },
+                    {
+                      not: 'Issue buy or sell calls, tips or price targets',
+                      yes: 'Teach the reasoning, so you can reach your own decision without us'
+                    },
+                    {
+                      not: 'Promise returns, fast wealth or risk free outcomes',
+                      yes: 'Talk about what can go wrong, and how to size for it first'
+                    },
+                    {
+                      not: 'Hand you a video library and call it a course',
+                      yes: 'Read and mark every task you send, and answer in writing'
+                    },
+                    {
+                      not: 'Set an experience bar before you can start',
+                      yes: 'Start at your level, whether that is the first question or the tenth year'
+                    }
+                  ].map((row) => (
+                    <div className="limits-row" key={row.not}>
+                      <p className="limits-not">
+                        <span className="limits-mark limits-mark--not" aria-hidden="true">
+                          &times;
+                        </span>
+                        {row.not}
+                      </p>
+                      <p className="limits-yes">
+                        <span className="limits-mark limits-mark--yes" aria-hidden="true" />
+                        {row.yes}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>

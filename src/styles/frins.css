@@ -11350,3 +11350,310 @@ a.footer-contact-row:hover { color: #D4A017; }
   .bounds-col { padding: 24px 0 8px; }
   .bounds-col + .bounds-col { padding-left: 0; border-left: 0; border-top: 1px solid #E4DFD2; margin-top: 20px; }
 }
+
+/* -------------------------------------------------------------------- v16 */
+
+/* ------------------------------ Why Us: two kinds of participant ------- */
+
+.public-page-shell .participants-section {
+  padding: clamp(52px, 6.5vw, 96px) 0 clamp(46px, 5.5vw, 80px);
+  background: #F4F1E9;
+  border-top: 1px solid #E7E1D2;
+  border-bottom: 1px solid #E7E1D2;
+}
+
+.participants-head { max-width: 54em; margin-bottom: clamp(30px, 4vw, 52px); }
+
+.participants-head h2 {
+  margin: 16px 0 14px;
+  max-width: 18em;
+  font-size: clamp(1.85rem, 3.3vw, 2.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.038em;
+  color: #0A0A0B;
+}
+
+.participants-head p {
+  margin: 0;
+  max-width: 46em;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #5F5F66;
+}
+
+.participants-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid #DCD5C4;
+}
+
+.participant-col { padding: 30px 44px 10px 0; }
+.participant-col + .participant-col { padding-left: 44px; border-left: 1px solid #DCD5C4; }
+
+.participant-kicker {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.participant-col h3 {
+  margin: 0 0 14px;
+  font-size: clamp(1.5rem, 2.3vw, 2rem);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: #0A0A0B;
+}
+
+.participant-intro {
+  margin: 0 0 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #DCD5C4;
+  max-width: 40em;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: #5F5F66;
+}
+
+.participant-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+
+.participant-list li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.66;
+  color: #5F5F66;
+}
+
+.participant-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #D4A017;
+}
+
+.participant-list strong { color: #0A0A0B; font-weight: 600; }
+
+@media (max-width: 860px) {
+  .participants-grid { grid-template-columns: minmax(0, 1fr); }
+  .participant-col { padding: 26px 0 8px; }
+  .participant-col + .participant-col {
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid #DCD5C4;
+    margin-top: 24px;
+  }
+}
+
+/* ------------------------------ Why Us: the four switches -------------- */
+
+.switch-section {
+  padding: clamp(52px, 6.5vw, 96px) 0;
+  background: #FFFFFF;
+}
+
+.switch-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: clamp(32px, 5.5vw, 88px);
+  align-items: start;
+}
+
+.switch-intro { position: sticky; top: 108px; }
+
+.switch-intro h2 {
+  margin: 16px 0 16px;
+  max-width: 13em;
+  font-size: clamp(1.85rem, 3.2vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.038em;
+  color: #0A0A0B;
+}
+
+.switch-intro p {
+  margin: 0;
+  max-width: 30em;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #5F5F66;
+}
+
+.switch-list { border-top: 1px solid #E4DFD2; }
+
+.switch-item {
+  position: relative;
+  padding: 26px 0 26px 44px;
+  border-bottom: 1px solid #E4DFD2;
+}
+
+.switch-index {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #B9B3A2;
+}
+
+.switch-item h3 {
+  margin: 0 0 14px;
+  font-size: clamp(1.15rem, 1.7vw, 1.4rem);
+  line-height: 1.25;
+  letter-spacing: -0.028em;
+  color: #0A0A0B;
+}
+
+.switch-them,
+.switch-us {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.switch-them { color: #8A8A92; margin-bottom: 10px; }
+.switch-us { color: #0A0A0B; }
+
+.switch-label {
+  display: inline-block;
+  margin-right: 10px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+
+.switch-label--them { background: #F1EFE9; color: #8A8A92; }
+.switch-label--us { background: rgba(212, 160, 23, 0.16); color: #6F4E0C; }
+
+@media (max-width: 940px) {
+  .switch-grid { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .switch-intro { position: static; }
+  .switch-intro h2 { max-width: 18em; }
+}
+
+@media (max-width: 520px) {
+  .switch-item { padding-left: 32px; }
+  .switch-label { display: block; width: fit-content; margin: 0 0 5px; }
+  .switch-them { margin-bottom: 12px; }
+}
+
+/* ------------------------------ Why Us: what we are not ---------------- */
+
+.limits-section {
+  padding: clamp(52px, 6.5vw, 96px) 0;
+  background: #FBFAF6;
+  border-top: 1px solid #EAE6DC;
+  border-bottom: 1px solid #EAE6DC;
+}
+
+.limits-head { max-width: 44em; margin-bottom: clamp(26px, 3.4vw, 44px); }
+
+.limits-head h2 {
+  margin: 16px 0 12px;
+  font-size: clamp(1.8rem, 3.2vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -0.038em;
+  color: #0A0A0B;
+}
+
+.limits-head p { margin: 0; font-size: 15px; line-height: 1.7; color: #5F5F66; }
+
+.limits-table { border-top: 1px solid #DCD5C4; }
+
+.limits-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  align-items: stretch;
+  border-bottom: 1px solid #E4DFD2;
+}
+
+.limits-row--head { border-bottom-color: #CFC8B4; }
+
+.limits-not,
+.limits-yes {
+  margin: 0;
+  padding: 18px 26px 18px 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.limits-yes {
+  padding-left: 30px;
+  padding-right: 0;
+  border-left: 1px solid #E4DFD2;
+  color: #0A0A0B;
+  font-weight: 500;
+}
+
+.limits-row--head .limits-not,
+.limits-row--head .limits-yes {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.limits-row--head .limits-not { color: #8A8A92; }
+.limits-row--head .limits-yes { color: #9A6B12; border-left: 0; }
+
+.limits-not { color: #7A7A82; }
+
+.limits-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  margin-right: 12px;
+  vertical-align: 1px;
+}
+
+.limits-mark--not {
+  width: 14px;
+  height: 14px;
+  color: #B5AF9F;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.limits-mark--yes {
+  width: 6px;
+  height: 6px;
+  margin-top: -2px;
+  background: #D4A017;
+  border-radius: 0;
+}
+
+.limits-row:not(.limits-row--head) .limits-not { display: flex; align-items: baseline; }
+.limits-row:not(.limits-row--head) .limits-yes { display: flex; align-items: baseline; }
+
+@media (max-width: 760px) {
+  .limits-row { grid-template-columns: minmax(0, 1fr); }
+
+  .limits-row--head { display: none; }
+
+  .limits-not { padding: 16px 0 6px; font-size: 13.5px; }
+
+  .limits-yes {
+    padding: 0 0 18px;
+    border-left: 0;
+    font-size: 13.5px;
+  }
+
+  /* Each pair gets its own hairline, so the two halves read as one answer. */
+  .limits-row + .limits-row { border-top: 1px solid #E4DFD2; border-bottom: 0; }
+  .limits-row:first-child { border-top: 0; }
+}
