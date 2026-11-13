@@ -1087,9 +1087,6 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       Book a Call
                     </button>
                   </div>
-                  <button type="button" className="process-link" onClick={() => navigate('/how-it-works')}>
-                    Read the full process
-                  </button>
                 </div>
 
                 <ol className="process-steps">
@@ -1105,7 +1102,9 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                             <span className="process-step-copy">{st.shortDesc}</span>
                             <span className="process-step-go">
                               {step.label}
-                              <span aria-hidden="true">&rarr;</span>
+                              <span className="process-step-arrow" aria-hidden="true">
+                                &rarr;
+                              </span>
                             </span>
                           </span>
                         </button>
