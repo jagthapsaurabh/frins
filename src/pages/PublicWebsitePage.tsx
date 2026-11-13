@@ -432,11 +432,11 @@ export const PublicSiteFooter: React.FC<{
   const navigate = useNavigate();
   const start = () => (onStartDiscovery ? onStartDiscovery() : navigate('/discovery'));
   const call = () => (onBookCallDirect ? onBookCallDirect() : navigate('/?bookCall=1'));
+  const login = () => (onOpenSignIn ? onOpenSignIn() : navigate('/login'));
 
   return (
     <footer className="site-footer">
       <div className="container">
-        {/* The sign-off: one big ask on the left, the practical details on the right. */}
         <div className="footer-top">
           <div className="footer-ask">
             <img
@@ -444,63 +444,59 @@ export const PublicSiteFooter: React.FC<{
               src="/brand/frins-logo-white.png"
               alt="FRINS, Fly on your own wings"
             />
-            <h2>Ready when you are.</h2>
+            <h2>Fly on your own wings.</h2>
             <p>
-              A conversation or a few questions. Both are free, and both end with a course written for
-              your level.
+              One learner at a time, written around where you actually are. Start with Discovery, or
+              talk it through with a mentor first.
             </p>
             <div className="footer-ask-actions">
-              <button type="button" className="btn btn-gold" onClick={call}>
-                Book a Call
-              </button>
-              <button type="button" className="btn btn-outline-light" onClick={start}>
+              <button type="button" className="btn btn-gold" onClick={start}>
                 Start Discovery
+              </button>
+              <button type="button" className="btn btn-outline-light" onClick={call}>
+                Book a Call
               </button>
             </div>
           </div>
 
           <div className="footer-cols">
-            <div className="footer-col">
+            <div className="footer-col footer-col--contact">
               <span className="footer-col-title">Contact</span>
               <a className="footer-contact-row" href="tel:+918793885079">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
                 </svg>
-                +91 87938 85079
+                <span className="footer-contact-value">+91 87938 85079</span>
               </a>
               <a className="footer-contact-row" href="mailto:support@frins.in">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <rect x="2.5" y="4.5" width="19" height="15" rx="2" />
                   <path d="m3 6 9 7 9-7" />
                 </svg>
-                support@frins.in
+                <span className="footer-contact-value">support@frins.in</span>
               </a>
               <span className="footer-contact-row">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M21 10c0 6-9 12-9 12S3 16 3 10a9 9 0 0 1 18 0Z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                Nagpur, Maharashtra, India
+                <span className="footer-contact-value footer-contact-value--wrap">Nagpur, Maharashtra, India</span>
               </span>
             </div>
 
             <div className="footer-col">
-              <span className="footer-col-title">On this page</span>
+              <span className="footer-col-title">Pages</span>
               <button type="button" onClick={() => navigate('/')}>Home</button>
-              <button type="button" onClick={() => navigate('/#why')}>Why FRINS &amp; boundaries</button>
-              <button type="button" onClick={() => navigate('/#process')}>How it works</button>
-              <button type="button" onClick={() => navigate('/#who')}>Who this is for</button>
-              <button type="button" onClick={start}>Discovery</button>
+              <button type="button" onClick={() => navigate('/why-frins')}>Why Us</button>
+              <button type="button" onClick={() => navigate('/how-it-works')}>How it works</button>
+              <button type="button" onClick={() => navigate('/tracks')}>Programs</button>
             </div>
 
             <div className="footer-col">
               <span className="footer-col-title">For learners</span>
-              <button type="button" onClick={() => (onOpenSignIn ? onOpenSignIn() : navigate('/login'))}>
-                Student login
-              </button>
+              <button type="button" onClick={login}>Student Login</button>
               <button type="button" onClick={start}>Start Discovery</button>
-              <button type="button" onClick={call}>Book a call</button>
-              <button type="button" onClick={() => navigate('/#who')}>Programs</button>
+              <button type="button" onClick={call}>Book a Call</button>
             </div>
           </div>
         </div>
@@ -777,6 +773,14 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
   ];
 
   const currentPath = location.pathname;
+
+  /* Each step on the home page goes where that step actually happens. */
+  const stepLinks = [
+    { label: 'Compare both routes', go: () => navigate('/how-it-works#ways') },
+    { label: 'Take the Discovery', go: () => navigate('/discovery') },
+    { label: 'Book your call', go: () => openDirectCallModal() },
+    { label: 'See the four tracks', go: () => navigate('/tracks') }
+  ];
 
   /* Deep links from the old section pages land on the matching block. */
   useEffect(() => {
@@ -1057,16 +1061,25 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                 </div>
 
                 <ol className="process-steps">
-                  {journeySteps.map((st) => (
-                    <li key={st.num} data-reveal>
-                      <span className="process-step-num">{st.num}</span>
-                      <div className="process-step-body">
-                        <span className="process-step-tag">{st.tag}</span>
-                        <h3>{st.shortTitle}</h3>
-                        <p>{st.shortDesc}</p>
-                      </div>
-                    </li>
-                  ))}
+                  {journeySteps.map((st, idx) => {
+                    const step = stepLinks[idx];
+                    return (
+                      <li key={st.num} data-reveal>
+                        <button type="button" className="process-step" onClick={step.go}>
+                          <span className="process-step-num">{st.num}</span>
+                          <span className="process-step-body">
+                            <span className="process-step-tag">{st.tag}</span>
+                            <span className="process-step-title">{st.shortTitle}</span>
+                            <span className="process-step-copy">{st.shortDesc}</span>
+                            <span className="process-step-go">
+                              {step.label}
+                              <span aria-hidden="true">&rarr;</span>
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ol>
               </div>
             </section>
@@ -1262,7 +1275,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             />
 
             {/* Two doors, one fourth step. Read as a route, not as cards. */}
-            <section className="ways-section">
+            <section className="ways-section" id="ways">
               <div className="container">
                 <div className="ways-head">
                   <span className="micro-tag accent">Two ways in</span>
@@ -1433,60 +1446,69 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             </section>
           </>
         )}
-        {/* Shared final call to action. Two ways in, each written as what happens
-            next rather than a label, so nobody has to guess which one to pick. */}
+        {/* Shared final call to action. Two real buttons, one gold, so the
+            section reads as a decision rather than a paragraph. */}
         <section className="closing-section">
-          <div className="container">
-            <div className="closing-head">
+          <div className="container closing-layout">
+            <div className="closing-intro">
               <p className="closing-eyebrow">Ready when you are</p>
-              <h2>Pick the way in that suits you.</h2>
+              <h2>Two ways to start. Both free.</h2>
               <p className="closing-lede">
-                Both are free. One is a conversation, the other is a few questions. Either way you end up
-                with a plan built for your level, not a template.
+                Talk to a mentor, or answer a few questions first. Either way you end up with a plan
+                written for your level instead of a template.
               </p>
-            </div>
 
-            <div className="closing-grid">
-              <button type="button" className="closing-card" onClick={() => openDirectCallModal()}>
-                <span className="closing-card-top">
-                  <span className="closing-step">Fastest</span>
-                  <span className="closing-card-go" aria-hidden="true">&rarr;</span>
-                </span>
-                <strong>Talk to a person</strong>
-                <span className="closing-card-body">
-                  Book a 1-on-1 call and tell us where you are. No questionnaire first.
-                </span>
-                <span className="closing-card-foot">Book a call directly</span>
-              </button>
+              <ul className="closing-facts">
+                <li>No card, no commitment</li>
+                <li>A person reads everything you send</li>
+                <li>Nobody calls you unless you ask</li>
+              </ul>
 
-              <button type="button" className="closing-card primary" onClick={() => openModalWithTrack()}>
-                <span className="closing-card-top">
-                  <span className="closing-step">Most useful</span>
-                  <span className="closing-card-go" aria-hidden="true">&rarr;</span>
-                </span>
-                <strong>Answer the Discovery questions</strong>
-                <span className="closing-card-body">
-                  A short set of questions about how you work. We read your answers before anyone calls.
-                </span>
-                <span className="closing-card-foot">Start Discovery</span>
-              </button>
-            </div>
-
-            <div className="closing-foot">
-              <span>Free, and no card needed.</span>
-              <span aria-hidden="true">·</span>
-              <span>Nobody calls you unless you ask.</span>
               {(onOpenSignIn || user) && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <button type="button" className="closing-link" onClick={openAccount}>
-                    {accountLabel}
-                  </button>
-                </>
+                <button type="button" className="closing-account" onClick={openAccount}>
+                  {accountLabel}
+                  <span aria-hidden="true">&rarr;</span>
+                </button>
               )}
+            </div>
+
+            <div className="closing-options">
+              <article className="closing-option">
+                <div className="closing-option-head">
+                  <span className="closing-option-tag">Fastest</span>
+                  <span className="closing-option-meta">One call, about 15 minutes</span>
+                </div>
+                <h3>Talk it through on a call</h3>
+                <p>
+                  Tell us where you are and what you want to fix. You leave the call knowing what the
+                  first two modules would be.
+                </p>
+                <button type="button" className="btn btn-outline closing-option-btn" onClick={() => openDirectCallModal()}>
+                  Book a Call
+                </button>
+              </article>
+
+              <article className="closing-option closing-option--primary">
+                <div className="closing-option-head">
+                  <span className="closing-option-tag">Most useful</span>
+                  <span className="closing-option-meta">A few minutes, on your own</span>
+                </div>
+                <h3>Answer the Discovery questions</h3>
+                <p>
+                  A short set of questions about how you work. You get a readiness read straight away,
+                  and a mentor reads your answers before anyone calls.
+                </p>
+                <button type="button" className="btn btn-primary closing-option-btn" onClick={() => openModalWithTrack()}>
+                  Start Discovery
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M5 12h14M13 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </article>
             </div>
           </div>
         </section>
+
       </main>
 
       <PublicSiteFooter

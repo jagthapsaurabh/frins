@@ -8958,7 +8958,8 @@ a.footer-contact-row:hover { color: #D4A017; }
   }
 
   .public-page-shell section[id],
-  .public-page-shell [id="process"] { scroll-margin-top: 132px; }
+  .public-page-shell [id="process"],
+  .public-page-shell [id="ways"] { scroll-margin-top: 132px; }
 
   .public-page-shell .process-intro { top: 132px; }
 }
@@ -9183,7 +9184,8 @@ a.footer-contact-row:hover { color: #D4A017; }
   }
   .nav-toggle { order: 3; }
   .public-page-shell section[id],
-  .public-page-shell [id="process"] { scroll-margin-top: 96px; }
+  .public-page-shell [id="process"],
+  .public-page-shell [id="ways"] { scroll-margin-top: 96px; }
   .public-page-shell .process-intro { top: 96px; }
 }
 
@@ -9762,3 +9764,283 @@ a.footer-contact-row:hover { color: #D4A017; }
 .page-hero { padding-top: clamp(52px, 6vw, 88px); }
 .page-hero-facts { margin-top: clamp(34px, 4.4vw, 60px); }
 .page-hero-title { font-size: clamp(2.3rem, 4.4vw, 3.7rem); max-width: 16em; }
+
+/* --------------------------------------------------------------------- v8 */
+
+/* ---------- home process: every step is a door --------------------------- */
+
+/* The row is a button now, so the grid moves off the list item. */
+.public-page-shell .process-steps li {
+  display: block;
+  padding: 0;
+}
+
+.public-page-shell .process-steps li:hover { padding-left: 0; }
+
+.process-step {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 22px;
+  width: 100%;
+  padding: 26px 0 28px;
+  background: none;
+  border: 0;
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: padding-left 0.22s ease;
+}
+
+.process-steps li:hover .process-step { padding-left: 10px; }
+.process-step:focus-visible { outline: 2px solid #D4A017; outline-offset: 4px; }
+
+.process-step .process-step-body { display: block; }
+
+.process-step-title {
+  display: block;
+  margin: 0 0 7px;
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 1.6vw, 1.4rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.028em;
+  color: #0A0A0B;
+}
+
+.process-step-copy {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #6A6A70;
+  max-width: 44ch;
+}
+
+.process-step-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 13px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.process-step-go span { transition: transform 0.18s ease; }
+.process-steps li:hover .process-step-go span { transform: translateX(5px); }
+
+@media (max-width: 560px) {
+  .process-step { grid-template-columns: 46px minmax(0, 1fr); gap: 14px; padding: 20px 0 22px; }
+  .process-steps li:hover .process-step { padding-left: 4px; }
+}
+
+/* ---------- the close: white, two offers, real buttons -------------------- */
+
+.public-page-shell .closing-section {
+  background: #FFFFFF;
+  color: #0A0A0B;
+  border-top: 1px solid #E7E3D9;
+  padding: clamp(56px, 6.5vw, 96px) 0 clamp(58px, 7vw, 104px);
+}
+
+.public-page-shell .closing-section::after { display: none; }
+
+.closing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+  gap: clamp(32px, 5vw, 84px);
+  align-items: start;
+}
+
+.closing-intro { min-width: 0; }
+
+.public-page-shell .closing-eyebrow {
+  color: #9A6B12;
+  margin-bottom: 18px;
+}
+
+.closing-intro h2 {
+  margin: 0 0 16px;
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  color: #0A0A0B;
+  max-width: 12em;
+}
+
+.public-page-shell .closing-lede {
+  margin: 0 0 24px;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: #5F5F66;
+  max-width: 38em;
+}
+
+.closing-facts { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 10px; }
+
+.closing-facts li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #3F3F45;
+}
+
+.closing-facts li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  background: #9A6B12;
+}
+
+.closing-account {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0A0A0B;
+  cursor: pointer;
+  border-bottom: 1px solid #D4A017;
+  padding-bottom: 3px;
+}
+
+.closing-account span { transition: transform 0.18s ease; }
+.closing-account:hover span { transform: translateX(3px); }
+
+.closing-options { display: grid; min-width: 0; }
+
+.closing-option {
+  padding: 26px 0 28px;
+  border-top: 1px solid #E7E3D9;
+}
+
+.closing-option:last-child { border-bottom: 1px solid #E7E3D9; }
+
+.closing-option--primary {
+  padding: 26px 26px 30px;
+  background: #FBFAF6;
+  border-left: 2px solid #D4A017;
+  margin-top: 14px;
+}
+
+.closing-option-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.closing-option-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.closing-option-meta { font-size: 11.5px; color: #8A8A92; }
+
+.closing-option h3 {
+  margin: 0 0 8px;
+  font-size: clamp(1.25rem, 1.8vw, 1.55rem);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: #0A0A0B;
+}
+
+.closing-option p {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.68;
+  color: #5F5F66;
+  max-width: 44em;
+}
+
+.closing-option-btn { align-self: flex-start; }
+
+/* An outlined button on paper needs dark ink and a visible edge. */
+.public-page-shell .closing-option .btn-outline {
+  background: #FFFFFF;
+  border-color: #D6D0C2;
+  color: #0A0A0B;
+}
+
+.public-page-shell .closing-option .btn-outline:hover {
+  background: #FFFFFF;
+  border-color: #0A0A0B;
+  color: #0A0A0B;
+}
+
+@media (max-width: 940px) {
+  .closing-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .closing-option--primary { padding: 22px 18px 24px; }
+  .closing-option-head { flex-wrap: wrap; gap: 4px 12px; }
+  .closing-option .btn { width: 100%; justify-content: center; }
+}
+
+/* ---------- footer: fits a laptop, and the number never splits ----------- */
+
+.footer-cols {
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(18px, 2.4vw, 34px);
+}
+
+.footer-contact-row { align-items: center; }
+.footer-contact-value { white-space: nowrap; }
+.footer-contact-value--wrap { white-space: normal; }
+
+/* Below a wide laptop the sign-off gets the width and the columns sit in a
+   row of three underneath, so nothing is squeezed into 120px. */
+@media (max-width: 1180px) {
+  .footer-top { grid-template-columns: minmax(0, 1fr); gap: clamp(30px, 4vw, 44px); }
+  .footer-cols { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .footer-ask p { max-width: 52ch; }
+}
+
+@media (max-width: 700px) {
+  .footer-cols { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 26px 22px; }
+  .footer-col--contact { grid-column: 1 / -1; }
+  .footer-col--contact .footer-contact-row { max-width: 100%; }
+}
+
+@media (max-width: 400px) {
+  .footer-ask-actions .btn { width: 100%; justify-content: center; }
+}
+
+/* The step action reads as a button, not a line of text. */
+.process-step-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 7px 13px;
+  border: 1px solid #DFD8C8;
+  background: #FFFFFF;
+  color: #6F4E0C;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.process-steps li:hover .process-step-go {
+  background: #D4A017;
+  border-color: #D4A017;
+  color: #0A0A0B;
+}
+
+.process-steps li:hover .process-step-go span { transform: translateX(4px); }
