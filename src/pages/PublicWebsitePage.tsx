@@ -1224,6 +1224,57 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               onStart={() => openModalWithTrack()}
               onCall={() => openDirectCallModal()}
             />
+            {/* Why information alone does not fix this. Three failures, set as
+                columns with rules, no cards. */}
+            <section className="human-section">
+              <div className="container">
+                <div className="human-head" data-reveal>
+                  <span className="micro-tag accent">The human challenge in markets</span>
+                  <h2>More information does not mean better decisions.</h2>
+                  <p>
+                    Charts, indicators, news and commentary have never been easier to reach. Yet most
+                    people still find consistency hard to hold. The struggle is rarely a lack of
+                    information. It is understanding what is actually happening in your own approach.
+                  </p>
+                </div>
+
+                <ol className="human-grid">
+                  <li className="human-item" data-reveal>
+                    <span className="human-num">01</span>
+                    <span className="human-tag">Lack of process</span>
+                    <h3>Knowing a lot, and still lacking a process</h3>
+                    <p>
+                      You can read indicators, setups and valuation ratios and still struggle to
+                      bring them together into a clear, everyday process that holds up on an ordinary
+                      Tuesday.
+                    </p>
+                  </li>
+
+                  <li className="human-item" data-reveal>
+                    <span className="human-num">02</span>
+                    <span className="human-tag">Pressure and execution</span>
+                    <h3>Knowing what to do, and finding it hard to do</h3>
+                    <p>
+                      Rules look simple on paper. With real money involved, a position running against
+                      you and a market moving fast, what felt straightforward before the open gets
+                      complicated in the middle of a trade.
+                    </p>
+                  </li>
+
+                  <li className="human-item" data-reveal>
+                    <span className="human-num">03</span>
+                    <span className="human-tag">The repeated search</span>
+                    <h3>Looking for another answer</h3>
+                    <p>
+                      When something is not working, it is natural to look for a new strategy, a new
+                      indicator, a new course. Often the real question is simpler. What is actually
+                      getting in your way?
+                    </p>
+                  </li>
+                </ol>
+              </div>
+            </section>
+
             {/* Our principles: the rules behind everything else on the site.
                 Not four boxes. A sticky claim with four numbered rules beside
                 it, so each one gets a full line of attention. */}
@@ -1288,80 +1339,6 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     </div>
                   </li>
                 </ol>
-              </div>
-            </section>
-
-            {/* Two kinds of participant, two different jobs. Warm band, two
-                columns, no boxes. */}
-            <section className="participants-section">
-              <div className="container">
-                <div className="participants-head" data-reveal>
-                  <span className="micro-tag accent">Different participants, different paths</span>
-                  <h2>Every market participant thinks differently. The plan should too.</h2>
-                  <p>
-                    We are not here to tell you what to become. We help you see how you already
-                    think, then build the course around that.
-                  </p>
-                </div>
-
-                <div className="participants-grid">
-                  <article className="participant-col" data-reveal>
-                    <span className="participant-kicker">Active market participants</span>
-                    <h3>For traders</h3>
-                    <p className="participant-intro">
-                      If you trade actively, in equities, futures or options, we look at how you build
-                      a process you can actually stick to when money is moving.
-                    </p>
-
-                    <ul className="participant-list">
-                      <li>
-                        <strong>Preparation and process.</strong> A repeatable routine, from pre-market
-                        preparation to post-market review.
-                      </li>
-                      <li>
-                        <strong>Thinking about risk.</strong> Sizing positions and protecting capital
-                        before you go looking at potential gains.
-                      </li>
-                      <li>
-                        <strong>When markets move fast.</strong> Noticing hesitation, overtrading or
-                        impulsive reactions before they start dictating your orders.
-                      </li>
-                      <li>
-                        <strong>Reviewing what happened.</strong> Judging decisions without hindsight
-                        bias, and separating how well you followed the plan from whether the trade made
-                        money.
-                      </li>
-                    </ul>
-                  </article>
-
-                  <article className="participant-col" data-reveal>
-                    <span className="participant-kicker">Long-term capital allocators</span>
-                    <h3>For investors</h3>
-                    <p className="participant-intro">
-                      If you invest for the longer term, we look at how you research, how you form your
-                      own view, and how steady you stay when the market shifts under you.
-                    </p>
-
-                    <ul className="participant-list">
-                      <li>
-                        <strong>Forming a clear view.</strong> Structuring your reasoning before you
-                        commit capital, so you know why you own what you own.
-                      </li>
-                      <li>
-                        <strong>Research and information.</strong> Separating business facts that matter
-                        from daily noise and headlines.
-                      </li>
-                      <li>
-                        <strong>Thinking about downside.</strong> What could go wrong, where valuation
-                        limits sit, and how the position fits the rest of the portfolio.
-                      </li>
-                      <li>
-                        <strong>Staying steady over time.</strong> Keeping your composure and sticking to
-                        your thesis when prices swing through a cycle.
-                      </li>
-                    </ul>
-                  </article>
-                </div>
               </div>
             </section>
 
@@ -1613,6 +1590,80 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     </li>
                   ))}
                 </ol>
+              </div>
+            </section>
+
+            {/* Two kinds of participant, two different jobs. Warm band, two
+                columns, no boxes. */}
+            <section className="participants-section">
+              <div className="container">
+                <div className="participants-head" data-reveal>
+                  <span className="micro-tag accent">Different participants, different paths</span>
+                  <h2>Every market participant thinks differently. The plan should too.</h2>
+                  <p>
+                    We are not here to tell you what to become. We help you see how you already
+                    think, then build the course around that.
+                  </p>
+                </div>
+
+                <div className="participants-grid">
+                  <article className="participant-col" data-reveal>
+                    <span className="participant-kicker">Active market participants</span>
+                    <h3>For traders</h3>
+                    <p className="participant-intro">
+                      If you trade actively, in equities, futures or options, we look at how you build
+                      a process you can actually stick to when money is moving.
+                    </p>
+
+                    <ul className="participant-list">
+                      <li>
+                        <strong>Preparation and process.</strong> A repeatable routine, from pre-market
+                        preparation to post-market review.
+                      </li>
+                      <li>
+                        <strong>Thinking about risk.</strong> Sizing positions and protecting capital
+                        before you go looking at potential gains.
+                      </li>
+                      <li>
+                        <strong>When markets move fast.</strong> Noticing hesitation, overtrading or
+                        impulsive reactions before they start dictating your orders.
+                      </li>
+                      <li>
+                        <strong>Reviewing what happened.</strong> Judging decisions without hindsight
+                        bias, and separating how well you followed the plan from whether the trade made
+                        money.
+                      </li>
+                    </ul>
+                  </article>
+
+                  <article className="participant-col" data-reveal>
+                    <span className="participant-kicker">Long-term capital allocators</span>
+                    <h3>For investors</h3>
+                    <p className="participant-intro">
+                      If you invest for the longer term, we look at how you research, how you form your
+                      own view, and how steady you stay when the market shifts under you.
+                    </p>
+
+                    <ul className="participant-list">
+                      <li>
+                        <strong>Forming a clear view.</strong> Structuring your reasoning before you
+                        commit capital, so you know why you own what you own.
+                      </li>
+                      <li>
+                        <strong>Research and information.</strong> Separating business facts that matter
+                        from daily noise and headlines.
+                      </li>
+                      <li>
+                        <strong>Thinking about downside.</strong> What could go wrong, where valuation
+                        limits sit, and how the position fits the rest of the portfolio.
+                      </li>
+                      <li>
+                        <strong>Staying steady over time.</strong> Keeping your composure and sticking to
+                        your thesis when prices swing through a cycle.
+                      </li>
+                    </ul>
+                  </article>
+                </div>
               </div>
             </section>
           </>

@@ -11657,3 +11657,96 @@ a.footer-contact-row:hover { color: #D4A017; }
   .limits-row + .limits-row { border-top: 1px solid #E4DFD2; border-bottom: 0; }
   .limits-row:first-child { border-top: 0; }
 }
+
+/* -------------------------------------------------------------------- v17 */
+
+/* ------------------------------ Why Us: the human challenge ------------ */
+
+.public-page-shell .human-section {
+  padding: clamp(52px, 6.5vw, 96px) 0 clamp(46px, 5.5vw, 80px);
+  background: #FBFAF6;
+  border-bottom: 1px solid #EAE6DC;
+}
+
+.human-head { max-width: 56em; margin-bottom: clamp(30px, 4vw, 50px); }
+
+.human-head h2 {
+  margin: 16px 0 16px;
+  max-width: 17em;
+  font-size: clamp(1.9rem, 3.5vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+  color: #0A0A0B;
+  text-wrap: balance;
+}
+
+.human-head p {
+  margin: 0;
+  max-width: 52em;
+  font-size: 15.5px;
+  line-height: 1.72;
+  color: #5F5F66;
+}
+
+.human-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  border-top: 1px solid #DCD5C4;
+}
+
+.human-item {
+  position: relative;
+  padding: 30px 34px 8px 0;
+}
+
+.human-item + .human-item {
+  padding-left: 34px;
+  border-left: 1px solid #E2DCCC;
+}
+
+.human-num {
+  display: block;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: #B08A2A;
+}
+
+.human-tag {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.human-item h3 {
+  margin: 0 0 12px;
+  font-size: clamp(1.2rem, 1.8vw, 1.45rem);
+  line-height: 1.22;
+  letter-spacing: -0.03em;
+  color: #0A0A0B;
+  max-width: 18em;
+}
+
+.human-item p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #5F5F66;
+  max-width: 34em;
+}
+
+@media (max-width: 940px) {
+  .human-grid { grid-template-columns: minmax(0, 1fr); }
+  .human-item { padding: 26px 0 22px; }
+  .human-item + .human-item { padding-left: 0; border-left: 0; border-top: 1px solid #E2DCCC; }
+}
