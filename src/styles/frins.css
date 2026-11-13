@@ -10548,3 +10548,323 @@ a.footer-contact-row:hover { color: #D4A017; }
   /* Nothing depends on hovering a card on a phone. */
   .progression-card:hover { transform: none; }
 }
+
+/* -------------------------------------------------------------------- v13 */
+
+/* ---------- Book a Call: a form that lines up --------------------------- */
+
+/* The card is a column: a fixed head, a scrolling body, a fixed action bar.
+   Nothing important ends up below the fold of the dialog. */
+.public-page-shell .modal-card--call {
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
+  /* Tall enough for the whole form on a normal laptop, capped so it never
+     outgrows the screen, and never taller than its own content. */
+  max-height: max(720px, 92vh);
+  max-height: min(max(720px, 92vh), 860px);
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #FFFFFF;
+}
+
+.call-head {
+  flex: none;
+  padding: 24px 30px 18px;
+  border-bottom: 1px solid #EDE9DF;
+  padding-right: 64px;
+}
+
+.call-head .micro-tag { margin-bottom: 10px; }
+
+.call-head h3 {
+  margin: 0 0 8px;
+  font-size: clamp(1.3rem, 2vw, 1.65rem);
+  line-height: 1.15;
+  letter-spacing: -0.032em;
+  color: #0A0A0B;
+}
+
+.call-head p {
+  margin: 0;
+  max-width: 44em;
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: #5F5F66;
+}
+
+.public-page-shell .modal-card--call .modal-close-btn {
+  top: 18px;
+  right: 18px;
+  border-radius: 50%;
+  border-color: #E4E0D6;
+}
+
+/* Body scrolls, the action bar does not. */
+.call-form { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.call-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 30px 8px;
+}
+
+/* Three sections, separated by a rule and a number rather than a box. */
+.call-form .call-step {
+  border: 0;
+  background: none;
+  border-radius: 0;
+  padding: 22px 0 6px;
+  margin: 0;
+}
+
+.call-form .call-step + .call-step { border-top: 1px solid #EFEBE1; }
+
+.call-form .call-step-head {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.call-form .call-step-num {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  padding-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: #B08A2A;
+}
+
+.call-form .call-step-head strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #0A0A0B;
+  line-height: 1.3;
+}
+
+.call-form .call-step-head small {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #7A7A82;
+}
+
+/* The grid is the alignment: equal tracks, one gap value everywhere. */
+.call-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px 18px;
+}
+
+.call-grid--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.call-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.call-grid .field--full { grid-column: 1 / -1; }
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: #2A2A2E;
+  line-height: 1.4;
+}
+
+.field-req { color: #B08A2A; font-weight: 700; }
+
+.field-optional {
+  margin-left: 2px;
+  padding: 1px 7px;
+  border-radius: 3px;
+  background: #F3F0E7;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8A8A92;
+}
+
+.field-hint { font-size: 11.5px; line-height: 1.45; color: #8A8A92; }
+
+/* Inputs: one height, one radius, one focus ring, across every control. */
+.public-page-shell .call-form .form-input,
+.public-page-shell .call-form .form-select,
+.public-page-shell .call-form .form-textarea {
+  width: 100%;
+  height: 46px;
+  padding: 0 13px;
+  border: 1px solid #DCD7C9;
+  border-radius: 8px;
+  background: #FFFFFF;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: #0A0A0B;
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.public-page-shell .call-form .form-textarea {
+  height: auto;
+  min-height: 76px;
+  padding: 11px 13px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.public-page-shell .call-form .form-input::placeholder,
+.public-page-shell .call-form .form-textarea::placeholder { color: #A8A8B0; }
+
+.public-page-shell .call-form .form-input:hover,
+.public-page-shell .call-form .form-select:hover,
+.public-page-shell .call-form .form-textarea:hover { border-color: #C8C1AE; }
+
+.public-page-shell .call-form .form-input:focus,
+.public-page-shell .call-form .form-select:focus,
+.public-page-shell .call-form .form-textarea:focus {
+  outline: none;
+  border-color: #D4A017;
+  box-shadow: 0 0 0 3px rgba(212, 160, 23, 0.18);
+}
+
+/* The native date picker has its own box; keep it inside the field. */
+.public-page-shell .call-form input[type="date"] { padding-right: 10px; }
+.public-page-shell .call-form input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.public-page-shell .call-form .form-select {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5 6 6.5l5-5' stroke='%236A6A72' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+
+.call-error {
+  margin: 16px 0 4px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Action bar: pinned, so the button is never below the fold. */
+.call-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 30px;
+  border-top: 1px solid #EDE9DF;
+  background: #FBFAF6;
+}
+
+.call-foot-copy strong { display: block; font-size: 12.5px; color: #0A0A0B; }
+.call-foot-copy span { display: block; margin-top: 2px; font-size: 12px; color: #7A7A82; }
+
+.call-foot .btn { flex: none; border-radius: 999px; }
+.public-page-shell .call-foot .btn-primary { font-weight: 700; }
+
+/* ---------- confirmation reads like a receipt --------------------------- */
+
+.call-confirm { padding: 24px 30px 28px; overflow-y: auto; }
+
+.call-confirm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: #EAF6EE;
+  border: 1px solid #CBE7D4;
+  color: #1E7A3E;
+}
+
+.call-confirm h4 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+  letter-spacing: -0.025em;
+  color: #0A0A0B;
+}
+
+.call-confirm > p { margin: 0 0 20px; max-width: 44em; font-size: 13.5px; line-height: 1.62; color: #5F5F66; }
+
+.call-confirm-list { margin: 0 0 22px; border-top: 1px solid #EDE9DF; }
+
+.call-confirm-list > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #EDE9DF;
+}
+
+.call-confirm-list dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #8A8A92;
+  padding-top: 2px;
+}
+
+.call-confirm-list dd { margin: 0; font-size: 13.5px; line-height: 1.55; color: #0A0A0B; }
+.call-confirm-list code { font-family: var(--font-mono); font-size: 12px; color: #6F4E0C; }
+
+.call-confirm-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ---------- small screens: a full sheet, nothing cramped ---------------- */
+
+@media (max-width: 760px) {
+  .public-page-shell .modal-card--call {
+    max-width: 100%;
+    max-height: 94dvh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .call-head { padding: 20px 20px 16px; padding-right: 58px; }
+  .call-body { padding: 2px 20px 6px; }
+  .call-foot { padding: 14px 20px calc(14px + env(safe-area-inset-bottom)); }
+
+  .call-grid--three,
+  .call-grid--two { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+
+  .call-form .call-step { padding: 18px 0 4px; }
+
+  .call-foot { flex-direction: column-reverse; align-items: stretch; gap: 12px; }
+  .call-foot .btn { width: 100%; justify-content: center; }
+  .call-foot-copy { text-align: center; }
+
+  .call-confirm { padding: 20px; }
+  .call-confirm-list > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .call-confirm-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+@media (max-width: 420px) {
+  .call-head h3 { font-size: 1.2rem; }
+  .public-page-shell .call-form .form-input,
+  .public-page-shell .call-form .form-select,
+  .public-page-shell .call-form .form-textarea { font-size: 16px; }
+}

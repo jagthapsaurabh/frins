@@ -1629,7 +1629,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             if (e.target === e.currentTarget) setDirectCallModalOpen(false);
           }}
         >
-          <div className="modal-card">
+          <div className="modal-card modal-card--call">
             <button
               type="button"
               className="modal-close-btn"
@@ -1639,261 +1639,265 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               &times;
             </button>
 
-            <div className="modal-header">
+            <div className="call-head">
               <span className="micro-tag accent">Direct 1-on-1 Consultation &middot; No Discovery Required</span>
-              <h3 id="directCallModalTitle">Book a Call With Our Team</h3>
+              <h3 id="directCallModalTitle">Book a call with our team</h3>
               <p>
-                Schedule a 1-on-1 call directly with our team to discuss your goals and how we will build a custom course around you.
+                Fifteen minutes, one mentor, no script. Tell us where you are and we will tell you
+                what the first two modules would be.
               </p>
             </div>
 
             {confirmedDirectCall ? (
-              <div
-                style={{
-                  padding: 22,
-                  background: 'var(--success-bg)',
-                  border: '1px solid var(--success-border)',
-                  borderRadius: 14,
-                  color: 'var(--success-text)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <span
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: '50%',
-                      background: '#059669',
-                      color: '#FFF',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 800
-                    }}
-                  >
-                    ✓
-                  </span>
-                  <strong style={{ fontSize: 17 }}>Your 1-on-1 Call Is Confirmed!</strong>
-                </div>
-                <p style={{ fontSize: 14, marginBottom: 14 }}>
-                  Our team has received your booking and will meet with you to design your custom learning path.
+              <div className="call-confirm">
+                <span className="call-confirm-badge" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <h4>Your call is booked</h4>
+                <p>
+                  We have your details. A confirmation with the meeting link goes to your email, and a
+                  mentor reads your notes before the call.
                 </p>
-                <div
-                  style={{
-                    background: '#FFFFFF',
-                    padding: 14,
-                    borderRadius: 10,
-                    border: '1px solid var(--success-border)',
-                    fontSize: 13.5,
-                    color: 'var(--text-main)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                  }}
-                >
-                  <div>
-                    <strong>Name:</strong> {confirmedDirectCall.participantName} ({confirmedDirectCall.participantEmail})
-                  </div>
-                  <div>
-                    <strong>Focus / Background:</strong> {confirmedDirectCall.trackLabel}
-                  </div>
-                  <div>
-                    <strong>Scheduled Date &amp; Time:</strong> {confirmedDirectCall.preferredDate} at {confirmedDirectCall.preferredTimeSlot}
-                  </div>
-                  <div>
-                    <strong>Booking ID:</strong> <code>{confirmedDirectCall.id}</code>
-                  </div>
-                </div>
 
-                <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+                <dl className="call-confirm-list">
+                  <div>
+                    <dt>Name</dt>
+                    <dd>{confirmedDirectCall.participantName}</dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd>{confirmedDirectCall.participantEmail}</dd>
+                  </div>
+                  <div>
+                    <dt>Focus</dt>
+                    <dd>{confirmedDirectCall.trackLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>When</dt>
+                    <dd>
+                      {confirmedDirectCall.preferredDate}, {confirmedDirectCall.preferredTimeSlot}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Booking ID</dt>
+                    <dd>
+                      <code>{confirmedDirectCall.id}</code>
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="call-confirm-actions">
                   <button
                     type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setDirectCallModalOpen(false)}
-                  >
-                    Done
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-secondary"
                     onClick={() => {
                       setDirectCallModalOpen(false);
                       openModalWithTrack(callTrack);
                     }}
                   >
-                    Optional: Answer Discovery Questions Too &rarr;
+                    Answer Discovery as well
+                  </button>
+                  <button type="button" className="btn btn-primary" onClick={() => setDirectCallModalOpen(false)}>
+                    Done
                   </button>
                 </div>
               </div>
             ) : (
-              <form className="modal-form call-form" onSubmit={handleDirectCallSubmit}>
-                {/* Section 1: contact details */}
-                <div className="call-step">
-                  <div className="call-step-head">
-                    <span className="call-step-num">1</span>
-                    <div>
-                      <strong>Your details</strong>
-                      <small>We will confirm your slot on this email and phone.</small>
-                    </div>
-                  </div>
-                  <div className="call-form-grid">
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="directCallName">Full Name *</label>
-                      <input
-                        type="text"
-                        id="directCallName"
-                        className="form-input"
-                        placeholder="Enter your full name"
-                        autoComplete="name"
-                        value={callName}
-                        onChange={(e) => setCallName(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="directCallEmail">Email Address *</label>
-                      <input
-                        type="email"
-                        id="directCallEmail"
-                        className="form-input"
-                        placeholder="name@example.com"
-                        autoComplete="email"
-                        value={callEmail}
-                        onChange={(e) => setCallEmail(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group full">
-                      <label className="form-label" htmlFor="directCallPhone">Phone / WhatsApp Number *</label>
-                      <input
-                        type="tel"
-                        id="directCallPhone"
-                        className="form-input"
-                        placeholder="+91 98765 43210"
-                        autoComplete="tel"
-                        value={callPhone}
-                        onChange={(e) => setCallPhone(e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
+              <form className="call-form" onSubmit={handleDirectCallSubmit}>
+                <div className="call-body">
+                  <section className="call-step">
+                    <header className="call-step-head">
+                      <span className="call-step-num">01</span>
+                      <div>
+                        <strong>Your details</strong>
+                        <small>We confirm your slot on this email and phone.</small>
+                      </div>
+                    </header>
 
-                {/* Section 2: who they are */}
-                <div className="call-step">
-                  <div className="call-step-head">
-                    <span className="call-step-num">2</span>
-                    <div>
-                      <strong>What describes you best?</strong>
-                      <small>Choose the closest match, or pick Other and tell us in your own words.</small>
-                    </div>
-                  </div>
-                  <div className="call-form-grid">
-                    <div className="form-group full">
-                      <label className="form-label" htmlFor="directCallTrack">Your background / focus *</label>
-                      <select
-                        id="directCallTrack"
-                        className="form-select"
-                        value={callTrack}
-                        onChange={(e) => setCallTrack(e.target.value as LearnerOrientationTrack)}
-                        required
-                      >
-                        <option value="student_concepts">Student / Beginner learning market concepts</option>
-                        <option value="strategy_learner">Working on / wanting to understand market strategies</option>
-                        <option value="trader">Active trader (intraday / swing)</option>
-                        <option value="investor">Long-term investor</option>
-                        <option value="both">Exploring concepts, strategies &amp; investing</option>
-                        <option value="other">Other (I&rsquo;ll describe it myself)</option>
-                      </select>
-                    </div>
-
-                    {callTrack === 'other' && (
-                      <div className="form-group full call-custom-reveal">
-                        <label className="form-label" htmlFor="directCallCustomTrack">Tell us in your own words *</label>
+                    <div className="call-grid call-grid--three">
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallName">
+                          Full name <span className="field-req">*</span>
+                        </label>
                         <input
                           type="text"
-                          id="directCallCustomTrack"
+                          id="directCallName"
                           className="form-input"
-                          placeholder="e.g. Business owner wanting to understand market risk for treasury decisions"
-                          value={callCustomTrack}
-                          onChange={(e) => setCallCustomTrack(e.target.value)}
-                          maxLength={160}
+                          placeholder="Your full name"
+                          autoComplete="name"
+                          value={callName}
+                          onChange={(e) => setCallName(e.target.value)}
                           required
                         />
-                        <span className="form-hint">
-                          We use this to match you with the right mentor. There is no wrong answer.
-                        </span>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallEmail">
+                          Email <span className="field-req">*</span>
+                        </label>
+                        <input
+                          type="email"
+                          id="directCallEmail"
+                          className="form-input"
+                          placeholder="name@example.com"
+                          autoComplete="email"
+                          value={callEmail}
+                          onChange={(e) => setCallEmail(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallPhone">
+                          Phone or WhatsApp <span className="field-req">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          id="directCallPhone"
+                          className="form-input"
+                          placeholder="+91 98765 43210"
+                          autoComplete="tel"
+                          inputMode="tel"
+                          value={callPhone}
+                          onChange={(e) => setCallPhone(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="call-step">
+                    <header className="call-step-head">
+                      <span className="call-step-num">02</span>
+                      <div>
+                        <strong>Where you are now</strong>
+                        <small>Pick the closest match. If none fit, choose Other and say it your way.</small>
+                      </div>
+                    </header>
+
+                    <div className="call-grid">
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallTrack">
+                          Background or focus <span className="field-req">*</span>
+                        </label>
+                        <select
+                          id="directCallTrack"
+                          className="form-select"
+                          value={callTrack}
+                          onChange={(e) => setCallTrack(e.target.value as LearnerOrientationTrack)}
+                          required
+                        >
+                          <option value="student_concepts">Student or beginner, learning the basics</option>
+                          <option value="strategy_learner">Working on understanding strategies</option>
+                          <option value="trader">Active trader (intraday or swing)</option>
+                          <option value="investor">Long-term investor</option>
+                          <option value="both">Concepts, strategies and investing</option>
+                          <option value="other">Other, I will describe it myself</option>
+                        </select>
+                      </div>
+
+                      {callTrack === 'other' && (
+                        <div className="field call-custom-reveal">
+                          <label className="field-label" htmlFor="directCallCustomTrack">
+                            In your own words <span className="field-req">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            id="directCallCustomTrack"
+                            className="form-input"
+                            placeholder="e.g. Business owner learning about market risk"
+                            value={callCustomTrack}
+                            onChange={(e) => setCallCustomTrack(e.target.value)}
+                            maxLength={160}
+                            required
+                          />
+                          <span className="field-hint">This only helps us match you with the right mentor.</span>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="call-step">
+                    <header className="call-step-head">
+                      <span className="call-step-num">03</span>
+                      <div>
+                        <strong>When to call</strong>
+                        <small>All times are IST. The confirmation email carries the meeting link.</small>
+                      </div>
+                    </header>
+
+                    <div className="call-grid call-grid--two">
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallDate">
+                          Preferred date <span className="field-req">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          id="directCallDate"
+                          className="form-input"
+                          min={tomorrowIso}
+                          value={callDate}
+                          onChange={(e) => setCallDate(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="field">
+                        <label className="field-label" htmlFor="directCallSlot">
+                          Preferred time <span className="field-req">*</span>
+                        </label>
+                        <select
+                          id="directCallSlot"
+                          className="form-select"
+                          value={callSlot}
+                          onChange={(e) => setCallSlot(e.target.value)}
+                        >
+                          <option value="10:00 AM IST">10:00 AM (morning)</option>
+                          <option value="11:30 AM IST">11:30 AM (late morning)</option>
+                          <option value="02:30 PM IST">02:30 PM (afternoon)</option>
+                          <option value="04:30 PM IST">04:30 PM (post market)</option>
+                          <option value="06:00 PM IST">06:00 PM (evening)</option>
+                        </select>
+                      </div>
+
+                      <div className="field field--full">
+                        <label className="field-label" htmlFor="directCallNotes">
+                          Anything to discuss before the call?
+                          <span className="field-optional">Optional</span>
+                        </label>
+                        <textarea
+                          id="directCallNotes"
+                          className="form-textarea"
+                          rows={2}
+                          placeholder="Your goals, your experience, or the questions you want answered."
+                          value={callNotes}
+                          onChange={(e) => setCallNotes(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  {callError && (
+                    <p className="call-error" role="alert">
+                      {callError}
+                    </p>
+                  )}
                 </div>
 
-                {/* Section 3: timing */}
-                <div className="call-step">
-                  <div className="call-step-head">
-                    <span className="call-step-num">3</span>
-                    <div>
-                      <strong>Preferred time</strong>
-                      <small>All slots are in IST. We will send a confirmation with the meeting link.</small>
-                    </div>
-                  </div>
-                  <div className="call-form-grid">
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="directCallDate">Preferred call date *</label>
-                      <input
-                        type="date"
-                        id="directCallDate"
-                        className="form-input"
-                        min={tomorrowIso}
-                        value={callDate}
-                        onChange={(e) => setCallDate(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label" htmlFor="directCallSlot">Preferred time slot *</label>
-                      <select
-                        id="directCallSlot"
-                        className="form-select"
-                        value={callSlot}
-                        onChange={(e) => setCallSlot(e.target.value)}
-                      >
-                        <option value="10:00 AM IST">10:00 AM IST (Morning)</option>
-                        <option value="11:30 AM IST">11:30 AM IST (Late Morning)</option>
-                        <option value="02:30 PM IST">02:30 PM IST (Afternoon)</option>
-                        <option value="04:30 PM IST">04:30 PM IST (Post-Market)</option>
-                        <option value="06:00 PM IST">06:00 PM IST (Evening)</option>
-                      </select>
-                    </div>
-                    <div className="form-group full">
-                      <label className="form-label" htmlFor="directCallNotes">
-                        What would you like to discuss? <span className="optional-tag">Optional</span>
-                      </label>
-                      <textarea
-                        id="directCallNotes"
-                        className="form-textarea"
-                        rows={3}
-                        placeholder="Share your goals, experience or the questions you want answered on the call."
-                        value={callNotes}
-                        onChange={(e) => setCallNotes(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {callError && (
-                  <div className="call-error" role="alert">{callError}</div>
-                )}
-
-                <div className="call-submit-row">
-                  <div className="call-submit-copy">
-                    <strong>1-on-1 call with our team</strong>
-                    <span>No payment required. No Discovery needed.</span>
+                <footer className="call-foot">
+                  <div className="call-foot-copy">
+                    <strong>Free, no card needed</strong>
+                    <span>A mentor reads this before the call.</span>
                   </div>
                   <button type="submit" className="btn btn-primary btn-lg" disabled={callSubmitting}>
-                    {callSubmitting ? 'Scheduling your call…' : 'Confirm & Book My Call →'}
+                    {callSubmitting ? 'Scheduling your call…' : 'Confirm and book my call'}
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
                   </button>
-                </div>
+                </footer>
               </form>
             )}
           </div>
