@@ -1224,135 +1224,199 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               onStart={() => openModalWithTrack()}
               onCall={() => openDirectCallModal()}
             />
-
-            {/* One syllabus against one written for you. Two columns, hairline
-                between, no card around it. */}
-            <section className="compare-section">
-              <div className="container">
-                <div className="compare-head">
-                  <h2>Same subject. Two very different starting points.</h2>
+            {/* Our principles: the rules behind everything else on the site.
+                Not four boxes. A sticky claim with four numbered rules beside
+                it, so each one gets a full line of attention. */}
+            <section className="principles-section" id="principles">
+              <div className="container principles-grid">
+                <div className="principles-intro" data-reveal>
+                  <span className="micro-tag accent">Our principles</span>
+                  <h2>What makes FRINS different.</h2>
                   <p>
-                    On the left is the course most people buy. On the right is what the same money gets
-                    you here.
+                    No buzzwords. Four rules we actually work by, and you can hold us to any of them
+                    on the first call.
                   </p>
                 </div>
 
-                <div className="compare-columns">
-                  <div className="compare-col muted">
-                    <span className="compare-col-title">Most courses</span>
-                    <ul>
-                      <li>One set of videos for everyone</li>
-                      <li>Same order, same pace</li>
-                      <li>You skip what you already know</li>
-                      <li>No one checks your work</li>
-                    </ul>
-                  </div>
-                  <div className="compare-col">
-                    <span className="compare-col-title">FRINS</span>
-                    <ul>
-                      <li>Modules written for your level</li>
-                      <li>Pace set by what you can show</li>
-                      <li>Gaps found by your guide</li>
-                      <li>Every task read and marked</li>
-                    </ul>
-                  </div>
-                </div>
+                <ol className="principles-list">
+                  <li data-reveal>
+                    <span className="principle-num">01</span>
+                    <div>
+                      <span className="principle-label">Principle 01</span>
+                      <h3>Listen before we prescribe</h3>
+                      <p>
+                        We do not open with a syllabus. We ask where you are, what you have already
+                        tried, and which part of this keeps costing you money. The plan comes after
+                        that, never before.
+                      </p>
+                    </div>
+                  </li>
+
+                  <li data-reveal>
+                    <span className="principle-num">02</span>
+                    <div>
+                      <span className="principle-label">Principle 02</span>
+                      <h3>You are not a template</h3>
+                      <p>
+                        Two people with the same goal can need opposite first modules. A fixed
+                        syllabus fails the moment it meets a real person with a real account.
+                      </p>
+                    </div>
+                  </li>
+
+                  <li data-reveal>
+                    <span className="principle-num">03</span>
+                    <div>
+                      <span className="principle-label">Principle 03</span>
+                      <h3>Patterns need context</h3>
+                      <p>
+                        A chart shows what happened. It cannot say why it matters to you. That takes a
+                        conversation with someone who has watched the same pattern go wrong before.
+                      </p>
+                    </div>
+                  </li>
+
+                  <li data-reveal>
+                    <span className="principle-num">04</span>
+                    <div>
+                      <span className="principle-label">Principle 04</span>
+                      <h3>Build your own judgement</h3>
+                      <p>
+                        The end goal is not a learner who needs us. It is someone who can read a
+                        market, size a position and defend the decision without asking anyone.
+                      </p>
+                    </div>
+                  </li>
+                </ol>
               </div>
             </section>
 
-            <section className="essay-section">
+            {/* The difference, as a table: the same four questions answered
+                two ways. The right column is the one we are arguing for. */}
+            <section className="diff-section">
               <div className="container">
-                <div className="essay-head">
-                  <span className="micro-tag accent">What goes wrong</span>
-                  <h2>Three reasons people stall.</h2>
+                <div className="diff-head" data-reveal>
+                  <span className="micro-tag accent">Same questions, two answers</span>
+                  <h2>What you get here, against the usual course.</h2>
                 </div>
 
-                <div className="essay-rows">
-                  <article className="essay-row">
-                    <span className="essay-num">01</span>
-                    <div>
-                      <h3>One syllabus cannot fit everyone</h3>
-                      <p>
-                        A student needs time on how markets work. A trader needs work on execution under
-                        pressure. Give both the same videos and one gets bored while the other stays
-                        confused.
-                      </p>
-                    </div>
-                  </article>
+                <div className="diff-table" role="table" aria-label="A usual course against FRINS">
+                  <div className="diff-row diff-row--head" role="row">
+                    <span className="diff-key" role="columnheader" />
+                    <span className="diff-col-head" role="columnheader">Most courses</span>
+                    <span className="diff-col-head diff-col-head--ours" role="columnheader">FRINS</span>
+                  </div>
 
-                  <article className="essay-row">
-                    <span className="essay-num">02</span>
-                    <div>
-                      <h3>Copying calls teaches you nothing</h3>
-                      <p>
-                        If you follow a tip or copy a pattern without knowing why it works, you are stuck
-                        the moment conditions change. We teach the reasoning, not the trick.
-                      </p>
-                    </div>
-                  </article>
-
-                  <article className="essay-row">
-                    <span className="essay-num">03</span>
-                    <div>
-                      <h3>Built after we meet you</h3>
-                      <p>
-                        We look at where you are, then write the modules, exercises and calls around that.
-                        Your plan changes as you improve.
-                      </p>
-                    </div>
-                  </article>
-                </div>
-              </div>
-            </section>
-
-            <section className="problem-section section-pad">
-              <div className="container">
-                <div className="section-header split">
-                  <span className="micro-tag">What we will not do</span>
-                  <h2>Clear limits. No grey areas.</h2>
-                  <p>Market education has a trust problem. Here is where we draw the line.</p>
-                </div>
-
-                <div className="not-grid">
                   {[
                     {
-                      title: 'We will not sell you a fixed syllabus',
-                      body: 'No two learners get the same plan. If your goals change, the plan changes.'
+                      key: 'What you get',
+                      other: 'One set of videos, sold to everyone',
+                      ours: 'Modules written for your level'
                     },
                     {
-                      title: 'Not a Tip or Signal Service',
-                      body: 'We never issue buy/sell calls, stock tips, option alerts, or price targets. We teach you how to think and understand.'
+                      key: 'Where it starts',
+                      other: 'Lesson one, whether you need it or not',
+                      ours: 'At the gap we find in the first call'
                     },
                     {
-                      title: 'No Profit Guarantees',
-                      body: 'We never promise returns, fast wealth, or risk-free market outcomes.'
+                      key: 'How fast it moves',
+                      other: 'Whatever the calendar says',
+                      ours: 'As fast as your work proves out'
                     },
                     {
-                      title: 'Not a Passive Video Dump',
-                      body: 'You learn with structured exercises, concept walkthroughs, strategy breakdowns, and human mentor feedback.'
-                    },
-                    {
-                      title: 'No Prerequisite Barrier',
-                      body: 'You do not have to be an active trader already. Students learning market concepts and strategy learners are equally welcome.'
-                    },
-                    {
-                      title: 'No Manufactured Complexity',
-                      body: 'We teach concepts and strategy mechanics in clear, practical language tailored to your pace.'
+                      key: 'Who reads your work',
+                      other: 'Nobody, unless you ask',
+                      ours: 'A mentor, on every task'
                     }
-                  ].map((item) => (
-                    <div className="not-card" key={item.title}>
-                      <span className="not-mark" aria-hidden="true">
-                        &times;
-                      </span>
-                      <div className="not-body">
-                        <h4>{item.title}</h4>
-                        <p>{item.body}</p>
-                      </div>
+                  ].map((row) => (
+                    <div className="diff-row" role="row" key={row.key}>
+                      <span className="diff-key" role="rowheader">{row.key}</span>
+                      <span className="diff-cell" role="cell">{row.other}</span>
+                      <span className="diff-cell diff-cell--ours" role="cell">{row.ours}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </section>
+
+            {/* Where it usually goes wrong. Black band, so the argument lands
+                before the page turns to what we refuse to do. */}
+            <section className="stall-section">
+              <div className="container">
+                <div className="stall-head" data-reveal>
+                  <span className="stall-kicker">Why people stall</span>
+                  <h2>Three reasons a course stops working.</h2>
+                  <p>
+                    None of them are about intelligence. They are about a plan that was never built
+                    for the person following it.
+                  </p>
+                </div>
+
+                <ol className="stall-list">
+                  <li data-reveal>
+                    <span className="stall-num">01</span>
+                    <h3>A fixed syllabus</h3>
+                    <p>
+                      Give a beginner and a full-time trader the same videos and one is bored while
+                      the other stays lost.
+                    </p>
+                  </li>
+                  <li data-reveal>
+                    <span className="stall-num">02</span>
+                    <h3>Copying instead of learning</h3>
+                    <p>
+                      Follow a tip without the reasoning and you are stuck the moment conditions
+                      change.
+                    </p>
+                  </li>
+                  <li data-reveal>
+                    <span className="stall-num">03</span>
+                    <h3>Nobody checks the work</h3>
+                    <p>
+                      A video cannot tell you that your position size is what turned a bad week into a
+                      bad month.
+                    </p>
+                  </li>
+                </ol>
+              </div>
+            </section>
+
+            {/* The boundaries, said as a contrast rather than a list of noes:
+                five refusals, five things we do instead. */}
+            <section className="bounds-section">
+              <div className="container">
+                <div className="bounds-head" data-reveal>
+                  <span className="micro-tag accent">Clear limits</span>
+                  <h2>No grey areas.</h2>
+                  <p>Market education has a trust problem. Here is exactly where we stand.</p>
+                </div>
+
+                <div className="bounds-grid">
+                  <div className="bounds-col bounds-col--no" data-reveal>
+                    <span className="bounds-title">What we will not do</span>
+                    <ul>
+                      <li>Sell you a fixed syllabus</li>
+                      <li>Issue buy or sell calls, tips or price targets</li>
+                      <li>Promise returns, fast wealth or risk-free outcomes</li>
+                      <li>Hand you a video library and call it a course</li>
+                      <li>Set an experience bar before you can start</li>
+                    </ul>
+                  </div>
+
+                  <div className="bounds-col bounds-col--yes" data-reveal>
+                    <span className="bounds-title">What we do instead</span>
+                    <ul>
+                      <li>Write the syllabus after we meet you</li>
+                      <li>Teach the reasoning, so you can decide without us</li>
+                      <li>Keep the plan moving as your work improves</li>
+                      <li>Read and mark every task you send</li>
+                      <li>Explain it in plain language, at your pace</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+
           </>
         )}
         {currentPath === '/how-it-works' && (
