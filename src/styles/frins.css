@@ -10329,3 +10329,73 @@ a.footer-contact-row:hover { color: #D4A017; }
     padding-bottom: 10px;
   }
 }
+
+/* -------------------------------------------------------------------- v11 */
+
+/* The footer is three blocks: the sign-off, how to reach us, and the pages.
+   On a laptop they share one row. On a phone they stack. */
+.public-page-shell .footer-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1.1fr) minmax(0, 0.8fr);
+  gap: clamp(26px, 4vw, 68px);
+  align-items: start;
+}
+
+/* The two link columns are direct children of that row now. */
+.public-page-shell .footer-cols { display: contents; }
+
+.public-page-shell .footer-col { gap: 10px; }
+
+.public-page-shell .footer-ask p { max-width: 34ch; }
+
+.public-page-shell .footer-contact-value { white-space: nowrap; }
+.public-page-shell .footer-contact-value--wrap { white-space: normal; }
+
+.footer-login {
+  padding: 0 0 2px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #3A3A40;
+  font-family: inherit;
+  font-size: 11px;
+  color: #B4B4BC;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.footer-login:hover { color: #FFFFFF; border-color: #D4A017; }
+
+/* A narrow laptop starts to squeeze, so the contact column gets less width
+   before anything is allowed to wrap. */
+@media (min-width: 900px) and (max-width: 1180px) {
+  .public-page-shell .footer-top {
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.05fr) minmax(0, 0.8fr);
+    gap: 26px;
+  }
+  .public-page-shell .footer-ask p { max-width: 30ch; }
+  .public-page-shell .footer-col button,
+  .public-page-shell .footer-contact-row { font-size: 12px; }
+}
+
+/* Tablet and phone: sign-off on top, then the two lists side by side. */
+@media (max-width: 899px) {
+  .public-page-shell .footer-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: clamp(26px, 4vw, 38px);
+  }
+
+  .public-page-shell .footer-cols {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 26px 24px;
+  }
+
+  .public-page-shell .footer-ask p { max-width: 46ch; }
+}
+
+@media (max-width: 480px) {
+  .public-page-shell .footer-cols { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .public-page-shell .footer-ask-actions { gap: 8px; }
+  .public-page-shell .footer-ask-actions .btn { flex: 1 1 auto; justify-content: center; }
+  .public-page-shell .footer-legal { gap: 8px 14px; }
+}

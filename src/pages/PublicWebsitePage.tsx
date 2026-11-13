@@ -492,17 +492,14 @@ export const PublicSiteFooter: React.FC<{
               <button type="button" onClick={() => navigate('/tracks')}>Programs</button>
             </div>
 
-            <div className="footer-col">
-              <span className="footer-col-title">For learners</span>
-              <button type="button" onClick={login}>Student Login</button>
-              <button type="button" onClick={start}>Start Discovery</button>
-              <button type="button" onClick={call}>Book a Call</button>
-            </div>
           </div>
         </div>
 
         <div className="footer-legal">
           <span>&copy; 2026 FRINS. All rights reserved.</span>
+          <button type="button" className="footer-login" onClick={login}>
+            Student Login
+          </button>
           <span>Strictly educational &middot; Custom-built per learner &middot; Non-advisory</span>
         </div>
       </div>
