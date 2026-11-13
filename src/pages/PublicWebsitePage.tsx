@@ -1007,6 +1007,76 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
+            {/* The progression: four stages of the relationship, one of them
+                the conversation. A warm band with four cards, the third dark
+                because that is the step that is actually a person. */}
+            <section className="progression-section" id="progression">
+              <div className="container">
+                <div className="progression-head" data-reveal>
+                  <span className="micro-tag accent">The progression</span>
+                  <h2>Listen. Understand. Discover. Develop.</h2>
+                  <p>
+                    A simple progression, built to join a few questions to a real conversation with
+                    someone who has done this before.
+                  </p>
+                </div>
+
+                <ol className="progression-grid">
+                  <li className="progression-card" data-reveal>
+                    <div className="progression-card-top">
+                      <span className="progression-num">01</span>
+                      <span className="progression-tag">Orientation</span>
+                    </div>
+                    <h3>Listen</h3>
+                    <p>
+                      We start with where you actually are. What you have tried, what you avoid, and
+                      what you want the market to do for you.
+                    </p>
+                    <span className="progression-foot">Your starting point</span>
+                  </li>
+
+                  <li className="progression-card" data-reveal>
+                    <div className="progression-card-top">
+                      <span className="progression-num">02</span>
+                      <span className="progression-tag">Reflection</span>
+                    </div>
+                    <h3>Understand</h3>
+                    <p>
+                      A short set of questions shows how you think about risk and decisions. A mentor
+                      reads your answers before anyone speaks to you.
+                    </p>
+                    <span className="progression-foot">Patterns in how you decide</span>
+                  </li>
+
+                  <li className="progression-card progression-card--human" data-reveal>
+                    <div className="progression-card-top">
+                      <span className="progression-num">03</span>
+                      <span className="progression-tag">Human stage</span>
+                    </div>
+                    <h3>Talk</h3>
+                    <p>
+                      A 1-on-1 conversation with a mentor. Your answers, your context, and what is
+                      worth working on first. No script, no pitch.
+                    </p>
+                    <span className="progression-foot">1-on-1 mentor conversation</span>
+                  </li>
+
+                  <li className="progression-card" data-reveal>
+                    <div className="progression-card-top">
+                      <span className="progression-num">04</span>
+                      <span className="progression-tag">Progression</span>
+                    </div>
+                    <h3>Develop</h3>
+                    <p>
+                      A course written around that conversation. It moves as your work improves,
+                      rather than pushing everyone down the same road.
+                    </p>
+                    <span className="progression-foot">Human-guided development</span>
+                  </li>
+                </ol>
+              </div>
+            </section>
+
             {/* The claim the whole site rests on. What most courses do, set
                 quiet, against what we do, set large. Then what that means. */}
             <section className="statement-section" id="why">

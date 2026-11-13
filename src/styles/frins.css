@@ -10399,3 +10399,152 @@ a.footer-contact-row:hover { color: #D4A017; }
   .public-page-shell .footer-ask-actions .btn { flex: 1 1 auto; justify-content: center; }
   .public-page-shell .footer-legal { gap: 8px 14px; }
 }
+
+/* -------------------------------------------------------------------- v12 */
+
+/* ---------- the progression: four stages, one of them human ------------ */
+
+.public-page-shell .progression-section {
+  padding: clamp(52px, 6.5vw, 96px) 0 clamp(56px, 7vw, 104px);
+  background: #F4F1E9;
+  border-top: 1px solid #E7E1D2;
+  border-bottom: 1px solid #E7E1D2;
+}
+
+.progression-head { max-width: 52em; margin-bottom: clamp(28px, 3.6vw, 46px); }
+
+.progression-head h2 {
+  margin: 16px 0 14px;
+  font-size: clamp(1.9rem, 3.6vw, 3rem);
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+  color: #0A0A0B;
+  max-width: 16em;
+}
+
+.progression-head p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: #5F5F66;
+  max-width: 44em;
+}
+
+.progression-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.progression-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 24px 24px 20px;
+  background: #FFFFFF;
+  border: 1px solid #E6E0D2;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(10, 10, 11, 0.03), 0 18px 40px -34px rgba(10, 10, 11, 0.35);
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.progression-card:hover {
+  transform: translateY(-3px);
+  border-color: #D8CFB8;
+  box-shadow: 0 2px 4px rgba(10, 10, 11, 0.04), 0 26px 54px -34px rgba(10, 10, 11, 0.45);
+}
+
+.progression-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.progression-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: #8A8A92;
+}
+
+.progression-tag {
+  padding: 5px 9px;
+  background: #F1EDE2;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #6F5A22;
+  white-space: nowrap;
+}
+
+.progression-card h3 {
+  margin: 0 0 12px;
+  font-size: clamp(1.35rem, 1.7vw, 1.6rem);
+  line-height: 1.14;
+  letter-spacing: -0.032em;
+  color: #0A0A0B;
+}
+
+.progression-card p {
+  margin: 0 0 26px;
+  font-size: 13.5px;
+  line-height: 1.66;
+  color: #5F5F66;
+}
+
+.progression-foot {
+  display: block;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid #EBE6DA;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #7A7A82;
+}
+
+/* The third card is the person. It carries the black. */
+.progression-card--human {
+  background: #0A0A0B;
+  border-color: #0A0A0B;
+  box-shadow: 0 2px 4px rgba(10, 10, 11, 0.08), 0 30px 60px -34px rgba(10, 10, 11, 0.7);
+}
+
+.progression-card--human:hover { border-color: #2A2A2E; }
+
+.progression-card--human .progression-num { color: #6E6E78; }
+
+.progression-card--human .progression-tag {
+  background: rgba(212, 160, 23, 0.16);
+  color: #E9B62C;
+}
+
+.progression-card--human h3 { color: #FFFFFF; }
+.progression-card--human p { color: #A9A9B2; }
+
+.progression-card--human .progression-foot {
+  border-top-color: #24242A;
+  color: #D4A017;
+  font-weight: 600;
+}
+
+@media (max-width: 1080px) {
+  .progression-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .progression-card { padding: 22px 22px 18px; }
+}
+
+@media (max-width: 620px) {
+  .progression-grid { grid-template-columns: minmax(0, 1fr); }
+  .progression-card { padding: 22px 20px 18px; border-radius: 10px; }
+  .progression-card p { margin-bottom: 20px; }
+  .progression-card-top { margin-bottom: 16px; }
+  /* Nothing depends on hovering a card on a phone. */
+  .progression-card:hover { transform: none; }
+}
