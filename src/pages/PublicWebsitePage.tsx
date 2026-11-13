@@ -1010,27 +1010,59 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
-            {/* One sentence, set large. The page needs somewhere to breathe. */}
+            {/* The claim the whole site rests on. What most courses do, set
+                quiet, against what we do, set large. Then what that means. */}
             <section className="statement-section" id="why">
-              <div className="container statement-grid">
-                <blockquote data-reveal>
-                  Most courses sell one set of videos to everyone. We write the syllabus for the person
-                  sitting in front of us.
-                </blockquote>
+              <div className="container">
+                <div className="statement-grid">
+                  <div className="statement-copy" data-reveal>
+                    <span className="micro-tag accent">The difference</span>
 
-                <div className="statement-side" data-reveal>
-                  <p>
-                    A student needs time on how markets work. A trader needs work on execution under
-                    pressure. Give both the same videos and one gets bored while the other stays confused.
-                  </p>
-                  <p>
-                    So the plan is written after we meet you, and it moves as you improve. Four levels,
-                    and you only move up when your work shows you are ready.
-                  </p>
-                  <div className="statement-stats">
-                    <div><strong>4</strong><span>Programs</span></div>
-                    <div><strong>L1 to L4</strong><span>Levels</span></div>
-                    <div><strong>1-on-1</strong><span>Mentorship</span></div>
+                    <p className="statement-against">
+                      Most courses sell one set of videos to everyone.
+                    </p>
+
+                    <h2 className="statement-claim">
+                      We write the syllabus for the person <em>sitting in front of us.</em>
+                    </h2>
+
+                    <div className="statement-stats">
+                      <div>
+                        <strong>4</strong>
+                        <span>Starting points</span>
+                      </div>
+                      <div>
+                        <strong>L1 to L4</strong>
+                        <span>Levels</span>
+                      </div>
+                      <div>
+                        <strong>1-on-1</strong>
+                        <span>Mentorship</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="statement-side" data-reveal>
+                    <span className="statement-side-label">What that means in practice</span>
+
+                    <ol className="statement-list">
+                      <li>
+                        <strong>The first module changes.</strong> A student starts on how markets
+                        actually work. A trader starts on execution under pressure.
+                      </li>
+                      <li>
+                        <strong>The order changes.</strong> If risk is already second nature, we skip
+                        it and go straight to sizing and review.
+                      </li>
+                      <li>
+                        <strong>The plan moves.</strong> When the work improves, the next module
+                        changes with it instead of waiting for a calendar.
+                      </li>
+                    </ol>
+
+                    <p className="statement-note">
+                      Nothing is written before we meet you. That is the whole point.
+                    </p>
                   </div>
                 </div>
               </div>

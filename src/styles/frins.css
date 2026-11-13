@@ -10044,3 +10044,133 @@ a.footer-contact-row:hover { color: #D4A017; }
 }
 
 .process-steps li:hover .process-step-go span { transform: translateX(4px); }
+
+/* --------------------------------------------------------------------- v9 */
+
+/* ---------- the claim: quiet for everyone else, loud for us ------------- */
+
+.public-page-shell .statement-section {
+  background: #FBFAF6;
+  border-top: 1px solid #EAE6DC;
+  border-bottom: 1px solid #EAE6DC;
+  padding: clamp(52px, 6.5vw, 100px) 0;
+}
+
+.public-page-shell .statement-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.16fr) minmax(0, 0.84fr);
+  gap: clamp(30px, 5vw, 84px);
+  align-items: start;
+}
+
+.statement-copy { min-width: 0; }
+
+.statement-copy .micro-tag { margin-bottom: 26px; }
+
+.statement-against {
+  margin: 0 0 14px;
+  padding-top: 22px;
+  border-top: 1px solid #DED8C9;
+  max-width: 26em;
+  font-size: clamp(0.95rem, 1.15vw, 1.05rem);
+  line-height: 1.6;
+  color: #8A8A92;
+}
+
+.statement-claim {
+  margin: 0 0 30px;
+  max-width: 15em;
+  font-size: clamp(1.85rem, 3.4vw, 3.05rem);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  color: #0A0A0B;
+  text-wrap: balance;
+}
+
+.statement-claim em {
+  font-style: normal;
+  color: #9A6B12;
+  box-shadow: inset 0 -0.14em 0 rgba(212, 160, 23, 0.28);
+}
+
+.public-page-shell .statement-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin: 0;
+  padding-top: 22px;
+  border-top: 1px solid #DED8C9;
+}
+
+.public-page-shell .statement-stats strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 1.8vw, 1.75rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #0A0A0B;
+}
+
+.public-page-shell .statement-stats span {
+  display: block;
+  margin-top: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #8A8A92;
+}
+
+/* Right column: what the claim actually changes. */
+.statement-side { min-width: 0; padding-top: 4px; }
+
+.statement-side-label {
+  display: block;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #DED8C9;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.statement-list { list-style: none; margin: 0; padding: 0; counter-reset: sitem; }
+
+.statement-list li {
+  position: relative;
+  padding: 18px 0 18px 34px;
+  border-bottom: 1px solid #E6E1D4;
+  font-size: 13.5px;
+  line-height: 1.66;
+  color: #5F5F66;
+  counter-increment: sitem;
+}
+
+.statement-list li::before {
+  content: counter(sitem, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: 20px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #B0A88F;
+}
+
+.statement-list strong { display: block; color: #0A0A0B; font-weight: 600; }
+
+.statement-note {
+  margin: 20px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #8A8A92;
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .public-page-shell .statement-grid { grid-template-columns: minmax(0, 1fr); }
+  .statement-claim { max-width: 18em; }
+  .statement-side { margin-top: 6px; }
+}
