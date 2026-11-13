@@ -8893,3 +8893,124 @@ a.footer-contact-row:hover { color: #D4A017; }
   border-color: #E9B62C;
   color: #0A0A0B;
 }
+
+/* --------------------------------------------------------------------- v6 */
+
+/* A gold hairline in front of a label reads as an em dash, especially on a
+   phone. The labels stand on their own from here. */
+.public-page-shell .micro-tag::before,
+.public-page-shell .who-kicker::before,
+.public-page-shell .hero-eyebrow::before,
+.public-page-shell .page-intro-eyebrow::before,
+.public-page-shell .spotlight-kicker::before,
+.public-page-shell .closing-eyebrow::before,
+.public-page-shell .band-cta-kicker::before {
+  display: none;
+}
+
+/* Page tabs never vanish. Under 1080px they drop onto their own row beneath
+   the logo, so switching pages is always one tap away. */
+@media (max-width: 1080px) {
+  .public-page-shell .site-header .header-inner {
+    flex-wrap: wrap;
+    gap: 0 16px;
+    padding-top: 10px;
+    padding-bottom: 0;
+  }
+
+  .public-page-shell .site-header .brand-group { order: 1; }
+  .public-page-shell .site-header .header-cta-group {
+    order: 2;
+    margin-left: auto;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .public-page-shell .site-header .nav-pill-shell {
+    order: 3;
+    display: flex;
+    width: 100%;
+    margin: 2px 0 0;
+    gap: 22px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+    margin-left: 0;
+  }
+
+  .public-page-shell .site-header .nav-pill-shell::-webkit-scrollbar { display: none; }
+
+  .public-page-shell .site-header .nav-pill-link {
+    flex: none;
+    padding: 11px 0 12px;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    border-radius: 0;
+  }
+
+  .public-page-shell .site-header .nav-pill-link:hover { background: none; }
+
+  .public-page-shell .site-header .nav-pill-link.active::after {
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  .public-page-shell section[id],
+  .public-page-shell [id="process"] { scroll-margin-top: 132px; }
+
+  .public-page-shell .process-intro { top: 132px; }
+}
+
+@media (max-width: 480px) {
+  .public-page-shell .site-header .nav-pill-shell { gap: 17px; }
+  .public-page-shell .site-header .nav-pill-link { font-size: 9.5px; letter-spacing: 0.075em; }
+}
+
+/* List markers were short gold lines, which read as dashes too. A small
+   square says "item" and cannot be mistaken for punctuation. */
+.public-page-shell .who-points li::before,
+.public-page-shell .pathway-list li::before,
+.public-page-shell .page-intro-points li::before,
+.public-page-shell .intro-compare-col li::before {
+  width: 5px;
+  height: 5px;
+  top: 9px;
+  border-radius: 0;
+}
+
+.public-page-shell .intro-compare-col:not(.muted) li::before {
+  background: var(--gold);
+  opacity: 1;
+}
+
+/* One primary action, one colour, everywhere: gold. Black fill was reading as
+   heavy on paper and it disagreed with the header. */
+.public-page-shell .btn-primary {
+  background: #D4A017;
+  border-color: #D4A017;
+  color: #0A0A0B;
+  font-weight: 700;
+}
+
+.public-page-shell .btn-primary:hover {
+  background: #E9B62C;
+  border-color: #E9B62C;
+  color: #0A0A0B;
+}
+
+.public-page-shell .btn-primary:disabled,
+.public-page-shell .btn-primary[disabled] {
+  background: #EFE9D8;
+  border-color: #EFE9D8;
+  color: #8A8577;
+  cursor: not-allowed;
+}
+
+/* Two actions side by side need air between them on a narrow screen. */
+@media (max-width: 640px) {
+  .public-page-shell .page-intro-actions,
+  .public-page-shell .who-actions,
+  .public-page-shell .process-intro-actions { gap: 12px; }
+}
