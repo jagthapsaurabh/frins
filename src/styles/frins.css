@@ -11750,3 +11750,314 @@ a.footer-contact-row:hover { color: #D4A017; }
   .human-item { padding: 26px 0 22px; }
   .human-item + .human-item { padding-left: 0; border-left: 0; border-top: 1px solid #E2DCCC; }
 }
+
+/* -------------------------------------------------------------------- v18 */
+
+/* ------------------------------ Why Us: the turn ----------------------- */
+
+.why-quote {
+  padding: clamp(48px, 6vw, 88px) 0;
+  background: #0A0A0B;
+  color: #FFFFFF;
+}
+
+.why-quote-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: center;
+}
+
+.why-quote blockquote {
+  margin: 0;
+  max-width: 22em;
+  font-size: clamp(1.4rem, 2.7vw, 2.15rem);
+  font-weight: 700;
+  line-height: 1.24;
+  letter-spacing: -0.032em;
+  color: #FFFFFF;
+}
+
+.why-quote blockquote em {
+  font-style: normal;
+  color: #E9B62C;
+}
+
+.why-quote-figure { margin: 0; }
+
+.why-quote-figure img {
+  display: block;
+  width: 100%;
+  height: clamp(180px, 22vw, 250px);
+  object-fit: cover;
+  object-position: 40% 40%;
+  filter: grayscale(0.15) contrast(1.02);
+}
+
+.why-quote-figure figcaption {
+  margin-top: 12px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: #7C7C86;
+}
+
+@media (max-width: 860px) {
+  .why-quote-inner { grid-template-columns: minmax(0, 1fr); }
+  .why-quote-figure { order: -1; }
+  .why-quote-figure img { height: 190px; }
+}
+
+/* ------------------------------ WhatsApp, floating --------------------- */
+
+.wa-fab {
+  position: fixed;
+  right: clamp(14px, 2vw, 24px);
+  bottom: clamp(14px, 2vw, 24px);
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  height: 52px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: #1FA855;
+  color: #FFFFFF;
+  text-decoration: none;
+  box-shadow: 0 10px 24px -10px rgba(10, 10, 11, 0.55), 0 2px 6px rgba(10, 10, 11, 0.18);
+  transition: background 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease, gap 0.18s ease;
+}
+
+.wa-fab:hover,
+.wa-fab:focus-visible {
+  background: #178C46;
+  gap: 9px;
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px -12px rgba(10, 10, 11, 0.6);
+  outline: none;
+}
+
+.wa-fab svg { flex: none; }
+
+.wa-fab-label {
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  opacity: 0;
+  transition: max-width 0.22s ease, opacity 0.18s ease;
+}
+
+.wa-fab:hover .wa-fab-label,
+.wa-fab:focus-visible .wa-fab-label { max-width: 120px; opacity: 1; }
+
+/* The floating button must never cover the footer's own actions. */
+@media (max-width: 760px) {
+  .wa-fab { height: 48px; padding: 0 12px; }
+  .wa-fab-label { display: none; }
+}
+
+/* -------------------------------------------------------------------- v19 */
+
+/* The Why Us sections had the same silhouette: claim on the left, content on
+   the right, over and over. Each one gets its own shape from here. */
+
+/* ---------- principles: header across the top, rules in two columns ----- */
+
+.public-page-shell .principles-section { padding-bottom: clamp(52px, 6.5vw, 96px); }
+
+.principles-intro {
+  position: static;
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: clamp(18px, 4vw, 64px);
+  align-items: end;
+  margin-bottom: clamp(30px, 4vw, 48px);
+  padding-bottom: 26px;
+  border-bottom: 1px solid #E4DFD2;
+}
+
+.principles-intro .micro-tag { grid-column: 1 / -1; margin-bottom: 2px; }
+.principles-intro h2 { margin: 0; max-width: 12em; }
+.principles-intro p { margin: 0 0 4px; max-width: 34em; }
+
+.principles-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border-top: 0;
+}
+
+.principles-list li {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 18px;
+  padding: 28px 40px 30px 0;
+  border-bottom: 1px solid #E4DFD2;
+  transition: none;
+}
+
+.principles-list li:hover { padding-left: 0; }
+
+.principles-list li:nth-child(even) {
+  padding-left: 40px;
+  padding-right: 0;
+  border-left: 1px solid #E4DFD2;
+}
+
+.principles-list li:nth-last-child(-n+2) { border-bottom: 1px solid #E4DFD2; }
+
+.principle-num { font-size: clamp(1.6rem, 2.2vw, 2rem); }
+.principles-list li:hover .principle-num { color: #E7DFC9; }
+
+.principles-list h3 { font-size: clamp(1.15rem, 1.6vw, 1.35rem); }
+.principles-list p { font-size: 13.5px; }
+
+@media (max-width: 900px) {
+  .principles-intro { grid-template-columns: minmax(0, 1fr); align-items: start; gap: 12px; }
+  .principles-list { grid-template-columns: minmax(0, 1fr); }
+  .principles-list li,
+  .principles-list li:nth-child(even) {
+    padding: 22px 0 24px;
+    border-left: 0;
+  }
+}
+
+/* ---------- same questions: centred claim, two answers side by side ----- */
+
+.switch-section { background: #FFFFFF; }
+
+.switch-intro {
+  position: static;
+  max-width: 62em;
+  margin: 0 auto clamp(30px, 4vw, 48px);
+  text-align: center;
+  border-bottom: 1px solid #E9E4D8;
+  padding-bottom: 28px;
+}
+
+.switch-intro h2 {
+  max-width: 20em;
+  margin: 16px auto 14px;
+  font-size: clamp(1.8rem, 3.2vw, 2.7rem);
+}
+
+.switch-intro p { max-width: 44em; margin: 0 auto; }
+
+.switch-list { border-top: 0; }
+
+.switch-item {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    'idx q q'
+    'idx them us';
+  column-gap: 24px;
+  row-gap: 12px;
+  align-items: start;
+  padding: 26px 0;
+  border-top: 1px solid #E4DFD2;
+  border-bottom: 0;
+}
+
+.switch-item:last-child { border-bottom: 1px solid #E4DFD2; }
+
+.switch-index { position: static; grid-area: idx; padding-top: 4px; }
+.switch-item h3 { grid-area: q; margin: 0; font-size: clamp(1.1rem, 1.6vw, 1.3rem); }
+
+.switch-them { grid-area: them; margin: 0; }
+.switch-us {
+  grid-area: us;
+  margin: 0;
+  padding-left: 22px;
+  border-left: 1px solid #EDE8DB;
+}
+
+.switch-label { display: block; width: fit-content; margin: 0 0 7px; }
+
+@media (max-width: 820px) {
+  .switch-item {
+    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-areas:
+      'idx q'
+      'idx them'
+      'idx us';
+    row-gap: 10px;
+  }
+  .switch-us { padding-left: 0; border-left: 0; }
+  .switch-them { margin-bottom: 4px; }
+}
+
+/* ---------- what we are not: one column of corrections ------------------ */
+
+/* Each refusal is struck through in grey, with the answer sitting under it.
+   One wide column, a gold edge on each item, so it reads as a correction
+   sheet rather than another two-column table. */
+.limits-table {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  border-top: 0;
+}
+
+.limits-row--head { display: none !important; }
+
+.limits-row {
+  display: block;
+  border-top: 0;
+  border-bottom: 0;
+  padding: 0;
+}
+
+.limits-not,
+.limits-yes {
+  display: flex;
+  align-items: baseline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.limits-row:not(.limits-row--head) {
+  position: relative;
+  padding: 20px 0 22px 22px;
+  border-bottom: 1px solid #E9E4D6;
+}
+
+.limits-row:not(.limits-row--head)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20px;
+  bottom: 22px;
+  width: 2px;
+  background: #E8DFC6;
+}
+
+.limits-not {
+  margin-bottom: 7px;
+  font-size: 13px;
+  color: #93939B;
+  text-decoration: line-through;
+  text-decoration-color: #D9D2C1;
+  text-decoration-thickness: 1px;
+}
+
+.limits-yes { font-size: clamp(1rem, 1.5vw, 1.18rem); color: #0A0A0B; font-weight: 500; line-height: 1.45; }
+
+.limits-mark--not { width: 12px; height: 12px; font-size: 12px; color: #C2BCAC; text-decoration: none; }
+.limits-mark--yes { width: 6px; height: 6px; margin-top: 8px; }
+
+@media (max-width: 760px) {
+  .limits-row:not(.limits-row--head) { padding: 16px 0 18px 16px; }
+  .limits-not { font-size: 12px; }
+  .limits-yes { font-size: 14.5px; }
+}
+
+/* The floating chat button sits just above the closing band on a phone, but
+   must never cover a control. Give the last section a little room. */
+@media (max-width: 760px) {
+  .public-page-shell .closing-section { padding-bottom: calc(clamp(58px, 7vw, 104px) + 12px); }
+}

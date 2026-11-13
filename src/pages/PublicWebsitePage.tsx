@@ -1275,11 +1275,26 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
+            {/* A single line, set large, so the page has a heart as well as a
+                structure. The photograph is the mentor, not another stock desk. */}
+            <section className="why-quote">
+              <div className="container why-quote-inner">
+                <blockquote data-reveal>
+                  The market does not fail people for lack of information. It fails them for
+                  <em> lack of a process that survives a bad day.</em>
+                </blockquote>
+                <figure className="why-quote-figure" data-reveal>
+                  <img src="/img/mentor.jpg" alt="A mentor working through a plan with a learner" loading="lazy" />
+                  <figcaption>A mentor reading the work, not just the charts.</figcaption>
+                </figure>
+              </div>
+            </section>
+
             {/* Our principles: the rules behind everything else on the site.
                 Not four boxes. A sticky claim with four numbered rules beside
                 it, so each one gets a full line of attention. */}
             <section className="principles-section" id="principles">
-              <div className="container principles-grid">
+              <div className="container">
                 <div className="principles-intro" data-reveal>
                   <span className="micro-tag accent">Our principles</span>
                   <h2>What makes FRINS different.</h2>
@@ -1345,7 +1360,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             {/* Same four questions, answered two ways. Each row is a small
                 switch: what they do, then what we do. */}
             <section className="switch-section">
-              <div className="container switch-grid">
+              <div className="container">
                 <div className="switch-intro" data-reveal>
                   <span className="micro-tag accent">Same questions, two answers</span>
                   <h2>Four things every course promises. Only one of us does them.</h2>
@@ -1826,6 +1841,20 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
         onBookCallDirect={() => openDirectCallModal()}
         onOpenSignIn={onOpenSignIn}
       />
+
+      {/* One tap to a person, on every page. */}
+      <a
+        className="wa-fab"
+        href="https://wa.me/918793885079?text=Hi%20FRINS%2C%20I%20have%20a%20question%20about%20your%20courses."
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat with FRINS on WhatsApp"
+      >
+        <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true" fill="currentColor">
+          <path d="M16.03 3C9.4 3 4.03 8.37 4.03 15c0 2.11.55 4.09 1.5 5.81L4 29l8.36-1.5A11.94 11.94 0 0 0 16.03 27C22.66 27 28 21.63 28 15S22.66 3 16.03 3Zm0 21.8c-1.8 0-3.48-.5-4.92-1.38l-.35-.21-4.96.89.9-4.83-.23-.36A9.7 9.7 0 0 1 6.3 15c0-5.37 4.36-9.73 9.73-9.73 5.36 0 9.7 4.36 9.7 9.73 0 5.37-4.34 9.8-9.7 9.8Zm5.36-7.3c-.29-.15-1.74-.86-2.01-.96-.27-.1-.47-.15-.66.15-.2.29-.76.96-.93 1.16-.17.2-.34.22-.63.07-.29-.15-1.23-.45-2.34-1.45-.87-.77-1.45-1.72-1.62-2.01-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.2-.29.29-.49.1-.2.05-.37-.02-.51-.07-.15-.66-1.6-.91-2.19-.24-.57-.49-.49-.66-.5h-.56c-.2 0-.51.07-.78.37-.27.29-1.02 1-1.02 2.44 0 1.44 1.05 2.83 1.19 3.02.15.2 2.06 3.15 5 4.41.7.3 1.24.48 1.67.61.7.22 1.34.19 1.85.12.56-.09 1.74-.71 1.98-1.4.25-.68.25-1.27.17-1.39-.07-.13-.27-.2-.56-.35Z" />
+        </svg>
+        <span className="wa-fab-label">WhatsApp</span>
+      </a>
 
       {/* =====================================================================
           MODAL 1: DIRECT CALL BOOKING MODAL (BOOK A CALL WITHOUT DISCOVERY)
