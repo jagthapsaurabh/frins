@@ -32,7 +32,7 @@ export const SignInPage: React.FC = () => {
     <div className="auth-page">
       <div className="auth-topbar">
         <Link to="/" className="auth-brand">
-          <img className="auth-brand-mark" src="/brand/frins-mark.png" alt="" aria-hidden="true" />
+          <img className="auth-brand-mark" src="/brand/frins-f-mark.png" alt="" aria-hidden="true" />
           <span className="auth-brand-text">
             <strong>FRINS</strong>
             <small>Market Learning</small>

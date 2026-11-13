@@ -207,8 +207,8 @@ export const PublicSiteHeader: React.FC<PublicSiteNavProps> = ({
         >
           <img
             className="site-brand-logo"
-            src="/brand/frins-lockup.png"
-            alt="FRINS — Market Learning, Taught Properly"
+            src="/brand/frins-logo-gold-tight.png"
+            alt="FRINS — Fly on your own wings"
           />
         </div>
 
@@ -355,11 +355,11 @@ export const PublicSiteFooter: React.FC<{
         <div className="footer-grid">
           <div className="footer-brand">
             <div className="footer-lockup">
-              <img className="footer-mark" src="/brand/frins-mark-white.png" alt="" aria-hidden="true" />
-              <div className="footer-wordmark">
-                <strong>FRINS</strong>
-                <span>Market Learning, Taught Properly</span>
-              </div>
+              <img
+                className="footer-brand-logo"
+                src="/brand/frins-logo-white.png"
+                alt="FRINS — Fly on your own wings"
+              />
             </div>
             <p>
               Market education built around you. Concepts, strategy work and 1-on-1 mentorship for
@@ -936,7 +936,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
             {/* Dedicated "Built for Every Learner, Not One Course for All" + Direct Call Booking Section */}
             <section className="problem-section section-pad">
               <div className="container">
-                <div className="section-header center">
+                <div className="section-header">
                   <span className="micro-tag accent">Who this is for</span>
                   <h2>Anyone can learn here. And your course is built for you.</h2>
                   <p>
@@ -1018,50 +1018,21 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                   </div>
                 </div>
 
-                {/* High-Visibility Direct Call Booking Spotlight Banner on Home Page */}
-                <div
-                  className="panel-card"
-                  style={{
-                    marginTop: 40,
-                    marginBottom: 0,
-                    padding: '32px 36px',
-                    background: 'linear-gradient(135deg, #0F172A 0%, #1E3A8A 100%)',
-                    color: '#FFFFFF',
-                    borderRadius: 20,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                    gap: 24
-                  }}
-                >
-                  <div style={{ maxWidth: 640 }}>
-                    <span className="micro-tag dark" style={{ marginBottom: 10, display: 'inline-block' }}>
-                      Skip the questionnaire
-                    </span>
-                    <h3 style={{ color: '#FFFFFF', fontSize: 'clamp(1.4rem, 2.3vw, 1.9rem)', marginBottom: 8 }}>
-                      Want to talk it through before signing up?
-                    </h3>
-                    <p style={{ color: '#CBD5E1', fontSize: 15, lineHeight: 1.6 }}>
-                      Book a 1-on-1 call with our team and skip the Discovery questions. Tell us what you want to learn and we will map out a starting point on the call.
+                {/* One band, black, no card inside a card. */}
+                <div className="band-cta">
+                  <div className="band-cta-copy">
+                    <p className="band-cta-kicker">Skip the questionnaire</p>
+                    <h3>Want to talk it through before signing up?</h3>
+                    <p>
+                      Book a 1-on-1 call with our team and skip the Discovery questions. Tell us what you
+                      want to learn and we will map out a starting point on the call.
                     </p>
                   </div>
-
-                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      className="btn btn-lg"
-                      style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 700 }}
-                      onClick={() => openDirectCallModal()}
-                    >
+                  <div className="band-cta-actions">
+                    <button type="button" className="btn band-btn-solid" onClick={() => openDirectCallModal()}>
                       Book a 1-on-1 Call &rarr;
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-lg"
-                      style={{ background: 'rgba(255,255,255,0.1)', color: '#FFFFFF', borderColor: 'rgba(255,255,255,0.25)' }}
-                      onClick={() => openModalWithTrack()}
-                    >
+                    <button type="button" className="btn band-btn-line" onClick={() => openModalWithTrack()}>
                       Or Take Discovery First
                     </button>
                   </div>
@@ -1318,61 +1289,25 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                   </div>
 
                   <div className="journey-spotlight-card">
-                    <div>
-                      <span className="micro-tag accent" style={{ marginBottom: 16 }}>
-                        Stage {journeySteps[activeStepPreview].num} &middot; {journeySteps[activeStepPreview].tag}
-                      </span>
-                      <h3 style={{ fontSize: 'clamp(1.45rem, 2.2vw, 1.85rem)', marginBottom: 14 }}>
-                        {journeySteps[activeStepPreview].headline}
-                      </h3>
-                      <p style={{ fontSize: 15.5, marginBottom: 24 }}>
-                        {journeySteps[activeStepPreview].body}
-                      </p>
+                    <p className="spotlight-kicker">
+                      Stage {journeySteps[activeStepPreview].num} &middot; {journeySteps[activeStepPreview].tag}
+                    </p>
+                    <h3>{journeySteps[activeStepPreview].headline}</h3>
+                    <p className="spotlight-body">{journeySteps[activeStepPreview].body}</p>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 22, background: 'var(--bg-canvas)', borderRadius: 16, border: '1px solid var(--border-subtle)' }}>
-                        {journeySteps[activeStepPreview].bullets.map((b, i) => (
-                          <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', fontSize: 14.5, color: 'var(--text-main)' }}>
-                            <span
-                              style={{
-                                width: 22,
-                                height: 22,
-                                borderRadius: '50%',
-                                background: 'var(--accent-soft)',
-                                color: 'var(--accent)',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 12,
-                                fontWeight: 800,
-                                flexShrink: 0,
-                                marginTop: 1
-                              }}
-                            >
-                              ✓
-                            </span>
-                            <span>{b}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <ul className="spotlight-list">
+                      {journeySteps[activeStepPreview].bullets.map((b, i) => (
+                        <li key={i}>{b}</li>
+                      ))}
+                    </ul>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-light-muted)' }}>
-                        Book a call or take Discovery first
-                      </span>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => openDirectCallModal()}
-                        >
+                    <div className="spotlight-actions">
+                      <span>Book a call or take Discovery first</span>
+                      <div>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => openDirectCallModal()}>
                           Book a Call Directly
                         </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => openModalWithTrack()}
-                        >
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => openModalWithTrack()}>
                           Start Discovery &rarr;
                         </button>
                       </div>
@@ -1478,7 +1413,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
 
             <section className="problem-section section-pad">
               <div className="container">
-                <div className="section-header center">
+                <div className="section-header">
                   <span className="micro-tag accent">Your progress</span>
                   <h2>Four levels, and you only move up when you can show it</h2>
                   <p>
@@ -1509,33 +1444,12 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                       desc: 'You adapt the plan when conditions change and review your own work honestly.'
                     }
                   ].map((item, idx) => (
-                    <div key={item.lvl} className="panel-card" style={{ marginBottom: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <span
-                        style={{
-                          fontSize: 18,
-                          fontWeight: 800,
-                          color: 'var(--accent)',
-                          background: 'var(--accent-soft)',
-                          padding: '4px 12px',
-                          borderRadius: 8,
-                          width: 'fit-content'
-                        }}
-                      >
-                        Level {item.lvl}
-                      </span>
-                      <h3 style={{ fontSize: 19 }}>{item.name}</h3>
-                      <p style={{ fontSize: 14.5 }}>{item.desc}</p>
-                      <div style={{ marginTop: 'auto', paddingTop: 12 }}>
-                        <div style={{ height: 5, background: 'var(--bg-canvas-subtle)', borderRadius: 999 }}>
-                          <div
-                            style={{
-                              width: `${(idx + 1) * 25}%`,
-                              height: '100%',
-                              background: 'var(--accent)',
-                              borderRadius: 999
-                            }}
-                          />
-                        </div>
+                    <div key={item.lvl} className="level-card">
+                      <span className="level-chip">{item.lvl}</span>
+                      <h3>{item.name}</h3>
+                      <p>{item.desc}</p>
+                      <div className="level-meter" aria-hidden="true">
+                        <span style={{ width: `${(idx + 1) * 25}%` }} />
                       </div>
                     </div>
                   ))}

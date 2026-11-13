@@ -106,7 +106,7 @@ export const StaffSignInPage: React.FC<StaffSignInPageProps> = ({ consoleName, a
     <div className="auth-page staff-auth-page">
       <div className="auth-topbar">
         <Link to="/" className="auth-brand">
-          <img className="auth-brand-mark" src="/brand/frins-mark.png" alt="" aria-hidden="true" />
+          <img className="auth-brand-mark" src="/brand/frins-f-mark.png" alt="" aria-hidden="true" />
           <span className="auth-brand-text">
             <strong>FRINS</strong>
             <small>Staff Access</small>

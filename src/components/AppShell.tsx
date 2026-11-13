@@ -179,7 +179,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
           >
             <img
               className="app-brand-mark"
-              src="/brand/frins-mark-white.png"
+              src="/brand/frins-f-mark-white.png"
               alt=""
               aria-hidden="true"
             />
