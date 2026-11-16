@@ -16,8 +16,10 @@ import {
   evaluateLearnerEvidenceSufficiencyAndAdaptation,
   getActiveDiscoveryQuestions,
   evaluateCandidateDiscoveryResult,
+  buildPersonalReview,
   analyzeStudentTaskSubmissionWithAI
 } from '../server/db.js';
+import { buildDiscoveryFlow, flowProgress } from '../src/pages/discoveryFlow.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
   const out: Record<string, { answerValue: string; answerText?: string }> = {};
@@ -246,5 +248,83 @@ describe('FRINS Clean-Slate Acceptance Test Suite (FRI-PROD-001 to FRI-QA-001)',
     expect(lead.track).toBeTruthy();
     expect(lead.status).toBeTruthy();
     expect(lead.created_at).toBeTruthy();
+  });
+});
+
+/* The flow is tested against the real bank, shaped the way the API serves it. */
+const BANK = CANONICAL_QUESTIONS.map((q) => ({
+  id: q.id,
+  number: q.number,
+  domain: q.domain,
+  domainTitle: q.domainTitle,
+  prompt: q.prompt,
+  inputType: (q.type === 'open_reflection' ? 'text' : 'single_choice') as 'text' | 'single_choice',
+  options: (q.options || []).map((o) => ({ value: o.value, label: o.label }))
+}));
+
+describe('Discovery flow adapts to the person', () => {
+  it('FRI-DISC-FLOW-ROLE: a beginner and a trader get different questions from the same bank', () => {
+    const beginner = buildDiscoveryFlow(BANK, 'student_concepts', {});
+    const trader = buildDiscoveryFlow(BANK, 'trader', {});
+    const investor = buildDiscoveryFlow(BANK, 'investor', {});
+
+    expect(beginner.questions.length).toBeGreaterThanOrEqual(3);
+    expect(trader.questions.length).toBeGreaterThanOrEqual(3);
+
+    // The first question is chosen by role, not by bank order.
+    expect(beginner.questions[0].id).not.toBe(trader.questions[0].id);
+    expect(investor.questions[0].id).toBe('Q28');
+
+    // A trader is asked about sizing and invalidation. A beginner is not.
+    const traderIds = trader.questions.map((q) => q.id);
+    expect(traderIds).toContain('Q10');
+    expect(traderIds).toContain('Q14');
+    const beginnerIds = beginner.questions.map((q) => q.id);
+    expect(beginnerIds).not.toContain('Q14');
+    expect(beginnerIds).toContain('Q23');
+  });
+
+  it('FRI-DISC-FLOW-BRANCH: later questions depend on what was answered before', () => {
+    // A trader whose exits are already clean is asked about fast markets
+    // instead of about the loss limit they do not need.
+    const clean = buildDiscoveryFlow(BANK, 'trader', { Q14: 'execute_exit_cleanly', Q10: 'risk_defined_formula' });
+    const messy = buildDiscoveryFlow(BANK, 'trader', { Q14: 'widen_or_average_down', Q10: 'conviction_feeling' });
+    const cleanIds = clean.questions.map((q) => q.id);
+    const messyIds = messy.questions.map((q) => q.id);
+
+    expect(cleanIds).toContain('Q18');
+    expect(cleanIds).not.toContain('Q16');
+    expect(messyIds).toContain('Q16');
+    expect(messyIds).toContain('Q15');
+    expect(messyIds).not.toContain('Q18');
+  });
+
+  it('FRI-DISC-FLOW-MIN: the flow never runs shorter than the minimum, even on a thin bank', () => {
+    const thin = BANK.slice(0, 2);
+    const flow = buildDiscoveryFlow(thin, 'trader', {});
+    expect(flow.questions.length).toBe(2);
+    // Two real questions is short, so the caller still enforces the floor.
+    expect(flowProgress(0, flow.questions.length).canFinish).toBe(false);
+    expect(flowProgress(3, 9).canFinish).toBe(true);
+  });
+
+  it('FRI-DISC-REVIEW: the written review changes with the answers', () => {
+    const trader = buildPersonalReview(
+      { Q07: 'mental_framework', Q10: 'conviction_feeling', Q03: 'under_1y' },
+      'trader',
+      ''
+    );
+    const investor = buildPersonalReview(
+      { Q07: 'mental_framework', Q10: 'conviction_feeling', Q03: 'under_1y' },
+      'investor',
+      ''
+    );
+
+    expect(trader).toBeTruthy();
+    expect(trader!.personalRead).not.toBe(investor!.personalRead);
+    expect(trader!.personalRead).toContain('trade actively');
+    expect(investor!.personalRead).toContain('invest for the long term');
+    expect(trader!.focusAreas).toContain('A process kept in your head');
+    expect(trader!.nextSteps.length).toBe(3);
   });
 });

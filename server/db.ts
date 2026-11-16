@@ -393,7 +393,390 @@ export function evaluateCandidateDiscoveryResult(
     strengths,
     focusAreasForTeam,
     answerHighlights,
-    nextStepRecommendation
+    nextStepRecommendation,
+    personalReview: buildPersonalReview(
+      answersMap,
+      track,
+      customTrack,
+      pillars.filter((p) => p.status === 'PRIORITY_FOCUS').map((p) => p.title)
+    )
+  };
+}
+
+/* ---------------------------------------------------------------------------
+   The written review.
+
+   Two people with the same score can need opposite things, so the paragraphs
+   below are assembled from the answers themselves, not from the number. A
+   trader who waits for a bounce and an investor who doubts a thesis both end up
+   in "focus needed", but they are told different things.
+   --------------------------------------------------------------------------- */
+
+type InsightTone = 'strength' | 'developing' | 'focus';
+
+interface ReviewInsight {
+  title: string;
+  body: string;
+  tone: InsightTone;
+}
+
+const ANSWER_INSIGHTS: Record<string, ReviewInsight> = {
+  'Q07:written_and_followed': {
+    title: 'Your process is already on paper',
+    body: 'You decide from written criteria and follow them. Most people never get this far, so we would spend the first sessions testing where the criteria bend.',
+    tone: 'strength'
+  },
+  'Q07:written_loosely_followed': {
+    title: 'Written, then bent under pressure',
+    body: 'The rules exist, but live conditions still override them. That gap between the page and the order is the first thing we would work on.',
+    tone: 'developing'
+  },
+  'Q07:mental_framework': {
+    title: 'A process kept in your head',
+    body: 'You have principles, not written criteria. In the moment, a rule you cannot point to is a rule you can talk yourself out of.',
+    tone: 'focus'
+  },
+  'Q07:no_fixed_process': {
+    title: 'No fixed process yet',
+    body: 'You adapt to recent results. That is a normal place to be, and it is fixable: one page of rules, used for a month, will tell us more than any course video.',
+    tone: 'focus'
+  },
+  'Q08:always_pre_recorded': {
+    title: 'You write the reason before the entry',
+    body: 'Thesis and invalidation point recorded in advance. This is the habit that makes every later review possible.',
+    tone: 'strength'
+  },
+  'Q08:sometimes_recorded': {
+    title: 'Recorded on the big ones only',
+    body: 'Larger positions get a written reason, smaller or faster ones do not. The smaller ones are usually where the habits slip.',
+    tone: 'developing'
+  },
+  'Q08:mental_note_only': {
+    title: 'The reasons stay in your head',
+    body: 'You know why you entered, but it is not written down. Weeks later, memory quietly rewrites the reason.',
+    tone: 'focus'
+  },
+  'Q08:rarely_defined': {
+    title: 'You start from the upside',
+    body: 'The opportunity gets your attention first, the risk second. We would reverse that order in the very first module.',
+    tone: 'focus'
+  },
+  'Q10:risk_defined_formula': {
+    title: 'Size comes from risk, not from mood',
+    body: 'You size from a defined risk per decision. That single habit protects more capital than any entry technique.',
+    tone: 'strength'
+  },
+  'Q10:fixed_equal_amounts': {
+    title: 'Equal size, not risk size',
+    body: 'Every position gets a similar amount, whatever its distance from invalidation. Two trades can then carry very different risk.',
+    tone: 'developing'
+  },
+  'Q10:conviction_feeling': {
+    title: 'Size follows how confident you feel',
+    body: 'Confidence is highest right before the trades that hurt most. We would replace the feeling with a formula.',
+    tone: 'focus'
+  },
+  'Q10:inconsistent_sizing': {
+    title: 'Size drifts with the last result',
+    body: 'Bigger after wins, smaller after losses. That pattern is the market teaching your account instead of your process.',
+    tone: 'focus'
+  },
+  'Q14:execute_exit_cleanly': {
+    title: 'You take the loss when it is due',
+    body: 'At invalidation you act. That one behaviour puts you ahead of most people who describe themselves as disciplined.',
+    tone: 'strength'
+  },
+  'Q14:hesitate_wait_bounce': {
+    title: 'You wait for the bounce',
+    body: 'At the invalidation point you pause, hoping for a pullback. It is the single most expensive pause in trading.',
+    tone: 'focus'
+  },
+  'Q14:widen_or_average_down': {
+    title: 'The stop moves away from you',
+    body: 'A widened stop or an average down does not remove the loss, it only resizes it. This is where we would start.',
+    tone: 'focus'
+  },
+  'Q14:freeze_and_hold': {
+    title: 'You stop watching instead of exiting',
+    body: 'Freezing is a decision too, and it hands control to the position. We would rehearse the exit before you need it.',
+    tone: 'focus'
+  },
+  'Q15:strict_non_negotiable': {
+    title: 'Your loss limit is a real limit',
+    body: 'You do not cross it. Most people say this and most people are wrong about themselves.',
+    tone: 'strength'
+  },
+  'Q15:often_stretched': {
+    title: 'The limit stretches when you feel strongly',
+    body: 'The limit is fixed until conviction arrives. A limit with exceptions is not a limit.',
+    tone: 'focus'
+  },
+  'Q15:no_defined_limit': {
+    title: 'No numeric cap yet',
+    body: 'Without a number there is nothing to respect. This is one of the first things we would set together.',
+    tone: 'focus'
+  },
+  'Q16:process_unchanged': {
+    title: 'A bad run does not change your rules',
+    body: 'You either hold steady or step back on purpose. That composure is rare and worth protecting.',
+    tone: 'strength'
+  },
+  'Q16:urge_to_recover_fast': {
+    title: 'After losses you try to win it back',
+    body: 'Recovery trading usually doubles the original loss. We would put a cooling rule between a loss and the next order.',
+    tone: 'focus'
+  },
+  'Q16:excessive_hesitation': {
+    title: 'One bad run makes you skip good setups',
+    body: 'The rules still work, but you stop trusting them. We would rebuild confidence through evidence, not through a new method.',
+    tone: 'developing'
+  },
+  'Q16:abandon_current_rules': {
+    title: 'A drawdown sends you looking for a new method',
+    body: 'That search restarts the learning curve each time. We would keep the framework and review the execution instead.',
+    tone: 'focus'
+  },
+  'Q18:impulsive_chasing': {
+    title: 'Fast markets pull you in late',
+    body: 'The fear of missing a move is a bigger risk to you than the move itself. Pre-planned levels fix most of it.',
+    tone: 'focus'
+  },
+  'Q18:panic_exit': {
+    title: 'Volatility exits you too early',
+    body: 'Sound positions get closed by the noise, not by the thesis. We would separate the two before the next spike.',
+    tone: 'developing'
+  },
+  'Q18:overwhelmed_freeze': {
+    title: 'Fast markets overwhelm you',
+    body: 'Conflicting signals are paralysing, so the decision gets made by time instead of by you.',
+    tone: 'focus'
+  },
+  'Q13:scheduled_deep_review': {
+    title: 'You review on a schedule',
+    body: 'Execution gets compared against the plan on a fixed rhythm. That is what turns experience into improvement.',
+    tone: 'strength'
+  },
+  'Q13:occasional_review': {
+    title: 'You review when something big happens',
+    body: 'Big wins and big losses get a look, ordinary weeks do not. The ordinary weeks are where the habits form.',
+    tone: 'developing'
+  },
+  'Q13:pnl_check_only': {
+    title: 'You check P&L, not reasoning',
+    body: 'The number tells you what happened, never why. A short written review would change what you learn from each month.',
+    tone: 'focus'
+  },
+  'Q13:avoid_looking_back': {
+    title: 'You avoid reviewing after a drawdown',
+    body: 'Understandable, and costly. The answers you need most are sitting in the decisions you least want to reopen.',
+    tone: 'focus'
+  },
+  'Q28:build_personal_process': {
+    title: 'You want a process of your own',
+    body: 'Not more content, a repeatable way of deciding. That is exactly what the course is built around.',
+    tone: 'strength'
+  },
+  'Q28:bridge_execution_gap': {
+    title: 'You know more than you execute',
+    body: 'The gap between theory and a live order is the whole problem. We would work on execution, not on more concepts.',
+    tone: 'strength'
+  },
+  'Q28:structured_review_guidance': {
+    title: 'You want your work reviewed',
+    body: 'An outside read on your evidence. That is the core of what a mentor does here.',
+    tone: 'strength'
+  },
+  'Q28:seeking_stock_tips_signals': {
+    title: 'You asked for calls and signals',
+    body: 'We do not give buy or sell calls, and we will not pretend otherwise. If you want to understand why a decision makes sense, we can help. If you want tips, we are the wrong place.',
+    tone: 'focus'
+  },
+  'Q31:clear_friction_present': {
+    title: 'You can name the friction',
+    body: 'Knowing where it hurts is an advantage. It means the first call does not have to start from zero.',
+    tone: 'strength'
+  },
+  'Q31:uncertain_where_gap_is': {
+    title: 'Something is off, but not obvious',
+    body: 'Inconsistent results without a clear cause is the most common reason people come here. Finding the cause is what Discovery is for.',
+    tone: 'developing'
+  },
+  'Q31:no_major_concern_sound_process': {
+    title: 'Your basics are steady',
+    body: 'So the work becomes refinement and accountability rather than repair.',
+    tone: 'strength'
+  },
+  'Q30:under_2_hours': {
+    title: 'Your week allows about two hours',
+    body: 'That decides the shape of the plan: short preparation, one weekly review, and no modules you cannot finish.',
+    tone: 'developing'
+  },
+  'Q30:3_to_5_hours': {
+    title: 'Your week allows three to five hours',
+    body: 'Enough for a daily routine and a proper weekend review. We would build the plan around that rhythm.',
+    tone: 'strength'
+  },
+  'Q30:6_to_10_hours': {
+    title: 'Your week allows serious study time',
+    body: 'That supports written work, marked tasks and a full review cycle.',
+    tone: 'strength'
+  },
+  'Q30:over_10_hours': {
+    title: 'You can treat this almost full time',
+    body: 'We can move quickly without skipping the review that makes it stick.',
+    tone: 'strength'
+  },
+  'Q23:rarely_considered': {
+    title: 'You watch the chart, not your state',
+    body: 'Fatigue and frustration show up in the order book before they show up in the chart.',
+    tone: 'focus'
+  },
+  'Q23:unsure_how_to_track': {
+    title: 'You know your state matters, but not how to track it',
+    body: 'A two line entry before each session is usually enough to start.',
+    tone: 'developing'
+  },
+  'Q22:no_records_kept': {
+    title: 'There is nothing to look back at',
+    body: 'Without records, every review is a memory test. We would start with the simplest possible log.',
+    tone: 'focus'
+  },
+  'Q22:comprehensive_journal': {
+    title: 'You already keep a proper journal',
+    body: 'Written decisions, risk and state, all in one place. That gives the review something to work with from day one.',
+    tone: 'strength'
+  },
+  'Q27:cannot_articulate_yet': {
+    title: 'The approach is not yet in words',
+    body: 'That is fine at the start. By the fourth module you should be able to say it in three sentences without notes.',
+    tone: 'developing'
+  },
+  'Q27:still_borrowing_others': {
+    title: 'The approach is still borrowed',
+    body: 'A blend of other people’s ideas is a starting point, not an edge. We would test which parts are actually yours.',
+    tone: 'developing'
+  }
+};
+
+const ROLE_TRACK_LABEL: Record<string, string> = {
+  student_concepts: 'Markets from the ground up',
+  strategy_learner: 'How strategies actually work',
+  trader: 'Trading with a written process',
+  investor: 'Investing with a written thesis',
+  both: 'Two books, one process',
+  other: 'Your own path'
+};
+
+export function buildPersonalReview(
+  answersMap: Record<string, string>,
+  track: string,
+  customTrack: string,
+  failedDomains: string[] = []
+) {
+  const answeredIds = Object.keys(answersMap).filter((k) => String(answersMap[k] || '').trim());
+  if (answeredIds.length === 0) return null;
+
+  const found: ReviewInsight[] = [];
+  const seenTitles = new Set<string>();
+  for (const qid of answeredIds) {
+    const key = `${qid}:${answersMap[qid]}`;
+    const insight = ANSWER_INSIGHTS[key];
+    if (!insight || seenTitles.has(insight.title)) continue;
+    seenTitles.add(insight.title);
+    found.push(insight);
+  }
+
+  const focus = found.filter((i) => i.tone === 'focus').slice(0, 3);
+  const strengths = found.filter((i) => i.tone === 'strength').slice(0, 2);
+  const developing = found.filter((i) => i.tone === 'developing').slice(0, 1);
+
+  const insights = [...focus, ...developing, ...strengths].slice(0, 5);
+
+  /* The open paragraph. It names the role and quotes back what they said,
+     so two people reading their result never read the same page. */
+  const experienceCopy: Record<string, string> = {
+    under_1y: 'You are in your first year',
+    '1_to_3y': 'You have one to three years behind you',
+    '3_to_7y': 'You have three to seven years behind you',
+    over_7y: 'You have more than seven years behind you'
+  };
+  const experience = experienceCopy[String(answersMap.Q03 || '')] || '';
+
+  const roleOpen: Record<string, string> = {
+    student_concepts: 'You are starting from the basics, so the course begins with how the market works rather than with setups.',
+    strategy_learner: 'You are working on a strategy, so the course begins with how rules are written, tested and invalidated.',
+    trader: 'You trade actively, so the course begins with the decisions you make under pressure, not with more chart patterns.',
+    investor: 'You invest for the long term, so the course begins with the written thesis behind each position.',
+    both: 'You keep a trading book and a long-term book, so the course begins with keeping the two separate and honest.',
+    other: customTrack
+      ? `You described yourself as ${customTrack}, so the course begins there.`
+      : 'You described a path of your own, so the first call is where we name it.'
+  };
+
+  const firstFocus = focus[0];
+  const openingLine = firstFocus
+    ? `The first thing we would work on: ${firstFocus.title}.`
+    : strengths[0]
+      ? 'There is no obvious break in your process, so the work starts with refinement.'
+      : 'Your answers give us enough to start, and the first call fills in the rest.';
+
+  const experienceLine = experience ? `${experience}.` : '';
+
+  const personalRead = [roleOpen[track] || roleOpen.other, experienceLine, openingLine]
+    .filter(Boolean)
+    .join(' ');
+
+  const nextStepsByRole: Record<string, string[]> = {
+    student_concepts: [
+      'How markets and orders actually work, in plain language.',
+      'A two line decision note you fill before any paper trade.',
+      'Risk first: what you can lose before you think about what you can make.'
+    ],
+    strategy_learner: [
+      'Write one setup as rules, with entry, exit and invalidation.',
+      'Test it on recent data and write down what would prove it wrong.',
+      'Review the trades that followed the rules and the ones that did not.'
+    ],
+    trader: [
+      'A written pre session checklist and a fixed risk per trade.',
+      'The invalidation drill: acting at the level, without the pause.',
+      'A weekly review that judges the process, not the P&L.'
+    ],
+    investor: [
+      'A one page thesis per position: why you own it, what would change your mind.',
+      'A rule for the noise: what counts as a fact and what is commentary.',
+      'A quarterly review cadence, written down before the next quarter starts.'
+    ],
+    both: [
+      'Two separate books, two separate rule sets, one review.',
+      'Position sizing that accounts for total exposure, not each book alone.',
+      'A rule that stops a losing trade becoming an accidental investment.'
+    ],
+    other: [
+      'A first call to name the problem in your own words.',
+      'One written rule to test for a month.',
+      'A review of what that month showed.'
+    ]
+  };
+
+  const rhythmMap: Record<string, string> = {
+    under_2_hours: 'about two hours a week',
+    '3_to_5_hours': 'three to five hours a week',
+    '6_to_10_hours': 'six to ten hours a week',
+    over_10_hours: 'more than ten hours a week'
+  };
+
+  return {
+    roleLabel: ROLE_TRACK_LABEL[track] || ROLE_TRACK_LABEL.other,
+    personalRead,
+    firstFocus: firstFocus ? firstFocus.title : '',
+    insights,
+    strengths: strengths.map((i) => i.title),
+    focusAreas: focus.map((i) => i.title),
+    nextSteps: nextStepsByRole[track] || nextStepsByRole.other,
+    weeklyRhythm: rhythmMap[String(answersMap.Q30 || '')] || '',
+    answeredCount: answeredIds.length,
+    failedDomains
   };
 }
 
@@ -949,7 +1332,9 @@ export function initDatabaseAndSeed() {
     }
   }
 
-  // Ensure dynamic Admin-configurable discovery_questions are seeded (default N = 7 active questions)
+  // Ensure dynamic Admin-configurable discovery_questions are seeded. The whole
+  // bank starts active: the role-based flow decides what a person is asked, so
+  // there is no need to hide questions here. Admin can still retire any of them.
   const dqCount = (db.prepare('SELECT COUNT(*) as c FROM discovery_questions').get() as any).c;
   if (dqCount === 0) {
     const insertDQ = db.prepare(`
@@ -958,7 +1343,7 @@ export function initDatabaseAndSeed() {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const defaultActiveSet = new Set(['Q01', 'Q06', 'Q07', 'Q11', 'Q14', 'Q16', 'Q22']);
+    const defaultActiveSet = new Set(CANONICAL_QUESTIONS.map((q) => q.id));
     CANONICAL_QUESTIONS.forEach((q, idx) => {
       insertDQ.run(
         q.id,

@@ -2,6 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { PublicSiteHeader, PublicSiteFooter } from './PublicWebsitePage';
+import {
+  buildDiscoveryFlow,
+  roleFromTrack,
+  roleLabel,
+  flowProgress,
+  MINIMUM_ANSWERS
+} from './discoveryFlow';
 
 /* ------------------------------------------------------------------ types */
 
@@ -27,7 +34,27 @@ interface CandidateResultPillar {
   status: 'STRONG' | 'DEVELOPING' | 'PRIORITY_FOCUS';
 }
 
+interface PersonalInsight {
+  title: string;
+  body: string;
+  tone: 'strength' | 'developing' | 'focus';
+}
+
+interface PersonalReview {
+  roleLabel: string;
+  personalRead: string;
+  firstFocus: string;
+  insights: PersonalInsight[];
+  strengths: string[];
+  focusAreas: string[];
+  nextSteps: string[];
+  weeklyRhythm: string;
+  answeredCount: number;
+  failedDomains: string[];
+}
+
 interface CandidateDiscoveryResult {
+  personalReview?: PersonalReview | null;
   answeredCount: number;
   totalConfiguredQuestions: number;
   readinessScore: number;
@@ -45,13 +72,43 @@ interface CandidateDiscoveryResult {
 type Track = 'student_concepts' | 'strategy_learner' | 'trader' | 'investor' | 'both' | 'other';
 type View = 'details' | 'questions' | 'review' | 'result';
 
-const TRACK_OPTIONS: Array<{ value: Track; label: string }> = [
-  { value: 'student_concepts', label: 'Student or beginner, learning the basics' },
-  { value: 'strategy_learner', label: 'Learning how market strategies work' },
-  { value: 'trader', label: 'Active trader (intraday or swing)' },
-  { value: 'investor', label: 'Long-term investor' },
-  { value: 'both', label: 'A bit of both, trading and investing' },
-  { value: 'other', label: 'Something else, I will describe it' }
+const TRACK_OPTIONS: Array<{ value: Track; label: string; short: string; blurb: string }> = [
+  {
+    value: 'student_concepts',
+    label: 'Student or beginner, learning the basics',
+    short: 'Starting out',
+    blurb: 'You are learning how markets work, from the ground up.'
+  },
+  {
+    value: 'strategy_learner',
+    label: 'Learning how market strategies work',
+    short: 'Building a strategy',
+    blurb: 'You are working out what makes a setup hold up.'
+  },
+  {
+    value: 'trader',
+    label: 'Active trader (intraday or swing)',
+    short: 'Trading actively',
+    blurb: 'You take positions during the week and manage them live.'
+  },
+  {
+    value: 'investor',
+    label: 'Long-term investor',
+    short: 'Investing long term',
+    blurb: 'You hold for quarters or years and think in theses.'
+  },
+  {
+    value: 'both',
+    label: 'A bit of both, trading and investing',
+    short: 'Both books',
+    blurb: 'You keep an active book and a long-term portfolio.'
+  },
+  {
+    value: 'other',
+    label: 'Something else, I will describe it',
+    short: 'Something else',
+    blurb: 'A path that none of the above quite covers.'
+  }
 ];
 
 const EXPERIENCE_OPTIONS = [
@@ -128,6 +185,12 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
   const [bookingCall, setBookingCall] = useState(false);
   const [bookedCallInfo, setBookedCallInfo] = useState<any | null>(null);
   const [resuming, setResuming] = useState(false);
+
+  /* The bank is the catalogue. The flow is what this person is actually
+     asked, chosen by their role and reshaped by their earlier answers. */
+  const role = roleFromTrack(track);
+
+  const flow = useMemo(() => buildDiscoveryFlow(questions, track, answers), [questions, track, answers]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -327,25 +390,29 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
       persistAnswer(question.id, value);
     }
 
-    if (advance && currentIndex < questions.length - 1) {
+    if (advance && currentIndex < flow.questions.length - 1) {
       if (advanceTimer.current) clearTimeout(advanceTimer.current);
       advanceTimer.current = setTimeout(() => {
-        setCurrentIndex((i) => Math.min(questions.length - 1, i + 1));
+        setCurrentIndex((i) => Math.min(flow.questions.length - 1, i + 1));
       }, 260);
     }
   };
 
   const goTo = (index: number) => {
-    setCurrentIndex(Math.max(0, Math.min(questions.length - 1, index)));
+    setCurrentIndex(Math.max(0, Math.min(flow.questions.length - 1, index)));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const flowQuestions = flow.questions;
   const answeredCount = useMemo(
-    () => questions.filter((q) => String(answers[q.id] || '').trim() !== '').length,
-    [questions, answers]
+    () => flowQuestions.filter((q) => String(answers[q.id] || '').trim() !== '').length,
+    [flowQuestions, answers]
   );
-  const progressPct = questions.length ? Math.round((answeredCount / questions.length) * 100) : 0;
-  const firstUnanswered = questions.findIndex((q) => !String(answers[q.id] || '').trim());
+  const progressPct = flowQuestions.length
+    ? Math.round((answeredCount / flowQuestions.length) * 100)
+    : 0;
+  const firstUnanswered = flowQuestions.findIndex((q) => !String(answers[q.id] || '').trim());
+  const progress = flowProgress(answeredCount, flowQuestions.length);
 
   /* ------------------------------------------------------ step 2b: review */
 
@@ -371,6 +438,10 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
   const runSynthesis = async () => {
     if (!sessionId) return;
     flushPendingAnswer();
+    if (answeredCount < MINIMUM_ANSWERS) {
+      setErrorMsg(`Answer at least ${MINIMUM_ANSWERS} questions and we can build your result.`);
+      return;
+    }
     setSynthesizing(true);
     setErrorMsg(null);
     try {
@@ -504,8 +575,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
               <span className="micro-tag accent">Step 1 of 3</span>
               <h1 className="discovery-title">Start with a few details about you</h1>
               <p className="discovery-lede">
-                This takes about {Math.max(2, Math.ceil((questions.length || 6) / 3))} minutes. You get your
-                result right away, and you can book a call with our team if you want to talk it through.
+                Three questions unlock your result, and the rest follow from your answers. It takes about
+                four minutes, and you can book a call with our team if you want to talk it through.
               </p>
 
               <form onSubmit={handleDetailsSubmit} className="discovery-form" noValidate>
@@ -543,24 +614,34 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label" htmlFor="discTrack">
-                    What describes you best?
-                  </label>
-                  <select
-                    id="discTrack"
-                    className="form-select"
-                    value={track}
-                    onChange={(e) => setTrack(e.target.value as Track)}
-                  >
-                    {TRACK_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="form-hint">This decides which questions you get and which course we suggest.</p>
-                </div>
+                <fieldset className="disc-role-fieldset">
+                  <legend className="form-label">What describes you best?</legend>
+                  <p className="form-hint disc-role-hint">
+                    This decides which questions you get. Change it and the questions change with it.
+                  </p>
+
+                  <div className="disc-roles" role="radiogroup" aria-label="What describes you best?">
+                    {TRACK_OPTIONS.map((option) => {
+                      const selected = track === option.value;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          className={`disc-role ${selected ? 'selected' : ''}`}
+                          onClick={() => setTrack(option.value)}
+                        >
+                          <span className="disc-role-top">
+                            <span className="disc-role-name">{option.short}</span>
+                            <span className="disc-role-dot" aria-hidden="true" />
+                          </span>
+                          <span className="disc-role-blurb">{option.blurb}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
 
                 {track === 'other' && (
                   <div className="form-group discovery-reveal">
@@ -580,21 +661,21 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                 )}
 
                 <div className="form-group">
-                  <label className="form-label" htmlFor="discExp">
-                    How long have you been in the markets?
-                  </label>
-                  <select
-                    id="discExp"
-                    className="form-select"
-                    value={experienceYears}
-                    onChange={(e) => setExperienceYears(e.target.value)}
-                  >
+                  <span className="form-label">How long have you been in the markets?</span>
+                  <div className="disc-segmented" role="radiogroup" aria-label="How long have you been in the markets?">
                     {EXPERIENCE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={experienceYears === option.value}
+                        className={`disc-segment ${experienceYears === option.value ? 'selected' : ''}`}
+                        onClick={() => setExperienceYears(option.value)}
+                      >
                         {option.label}
-                      </option>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -632,7 +713,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   <li>
                     <span className="discovery-timeline-num">1</span>
                     <div>
-                      <strong>{questions.length || 'A few'} short questions</strong>
+                      <strong>A short set, chosen for you</strong>
                       <p>How you prepare, size your risk, handle a live position and review it afterwards.</p>
                     </div>
                   </li>
@@ -664,7 +745,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
         {/* ----------------------------------------------------- STEP 2 */}
         {view === 'questions' && (
           <>
-            {questions.length === 0 ? (
+            {flowQuestions.length === 0 ? (
               <div className="discovery-card">
                 <h2 className="discovery-title">Discovery is not open yet</h2>
                 <p className="discovery-lede">
@@ -677,11 +758,22 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
               </div>
             ) : (
               <>
+                <div className="disc-path-bar">
+                  <span className="disc-path-role">{roleLabel(role)}</span>
+                  <span className="disc-path-note">
+                    {progress.canFinish
+                      ? progress.note
+                      : answeredCount === 0
+                        ? `Answer ${MINIMUM_ANSWERS} to unlock your result`
+                        : progress.note}
+                  </span>
+                </div>
+
                 <div className="discovery-progress-card">
                   <div className="discovery-progress-top">
                     <div>
                       <strong>
-                        Question {currentIndex + 1} of {questions.length}
+                        Question {currentIndex + 1} of {flowQuestions.length}
                       </strong>
                       <span className="discovery-muted">
                         {answeredCount} answered
@@ -706,7 +798,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   </div>
 
                   <div className="discovery-dots" aria-hidden="true">
-                    {questions.map((q, idx) => {
+                    {flowQuestions.map((q, idx) => {
                       const answered = Boolean(answers[q.id]);
                       return (
                         <button
@@ -716,9 +808,9 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                             idx === currentIndex ? 'current' : ''
                           }`}
                           onClick={() => goTo(idx)}
-                          title={`Question ${q.number}${answered ? ', answered' : ', not answered yet'}`}
+                          title={`Question ${idx + 1}${answered ? ', answered' : ', not answered yet'}`}
                         >
-                          {q.number}
+                          {idx + 1}
                         </button>
                       );
                     })}
@@ -727,17 +819,18 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
 
                 <div className="discovery-question-layout">
                   <section className="discovery-card discovery-question-card">
-                    <span className="discovery-domain-tag">{questions[currentIndex].domainTitle}</span>
-                    <h2 className="discovery-question-text">{questions[currentIndex].prompt}</h2>
+                    <span className="discovery-domain-tag">{flowQuestions[currentIndex].domainTitle}</span>
+                    <h2 className="discovery-question-text">{flowQuestions[currentIndex].prompt}</h2>
+                    <p className="discovery-question-why">{flowQuestions[currentIndex].why}</p>
 
-                    {questions[currentIndex].inputType === 'single_choice' && questions[currentIndex].options ? (
+                    {flowQuestions[currentIndex].inputType === 'single_choice' && flowQuestions[currentIndex].options ? (
                       <div
                         className="discovery-options"
                         role="radiogroup"
-                        aria-label={questions[currentIndex].prompt}
+                        aria-label={flowQuestions[currentIndex].prompt}
                       >
-                        {questions[currentIndex].options!.map((option) => {
-                          const selected = answers[questions[currentIndex].id] === option.value;
+                        {flowQuestions[currentIndex].options!.map((option) => {
+                          const selected = answers[flowQuestions[currentIndex].id] === option.value;
                           return (
                             <button
                               key={option.value}
@@ -745,7 +838,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                               role="radio"
                               aria-checked={selected}
                               className={`discovery-option ${selected ? 'selected' : ''}`}
-                              onClick={() => handleAnswer(questions[currentIndex], option.value, true)}
+                              onClick={() => handleAnswer(flowQuestions[currentIndex], option.value, true)}
                             >
                               <span className="discovery-option-mark" aria-hidden="true" />
                               <span className="discovery-option-label">{option.label}</span>
@@ -763,8 +856,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                           className="form-textarea"
                           rows={5}
                           placeholder="A few sentences is enough. Write it the way you would say it."
-                          value={answers[questions[currentIndex].id] || ''}
-                          onChange={(e) => handleAnswer(questions[currentIndex], e.target.value, false)}
+                          value={answers[flowQuestions[currentIndex].id] || ''}
+                          onChange={(e) => handleAnswer(flowQuestions[currentIndex], e.target.value, false)}
                         />
                         <p className="form-hint">Saved automatically as you type.</p>
                       </div>
@@ -780,21 +873,41 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                         Back
                       </button>
 
-                      {currentIndex < questions.length - 1 ? (
-                        <button
-                          type="button"
-                          className="btn btn-primary"
-                          onClick={() => goTo(currentIndex + 1)}
-                          disabled={!answers[questions[currentIndex].id]}
-                        >
-                          Next question
-                        </button>
-                      ) : (
-                        <button type="button" className="btn btn-primary" onClick={openReview}>
-                          Review my answers
-                        </button>
-                      )}
+                      <div className="disc-question-next">
+                        {progress.canFinish && currentIndex < flowQuestions.length - 1 && (
+                          <button type="button" className="btn btn-ghost" onClick={openReview}>
+                            See my result now
+                          </button>
+                        )}
+
+                        {currentIndex < flowQuestions.length - 1 ? (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => goTo(currentIndex + 1)}
+                            disabled={!answers[flowQuestions[currentIndex].id]}
+                          >
+                            Next question
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={openReview}
+                            disabled={answeredCount < MINIMUM_ANSWERS}
+                          >
+                            Review my answers
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {!progress.canFinish && (
+                      <p className="disc-floor-note">
+                        Three answers is the minimum. Your result is built from them, and the questions
+                        after that only sharpen it.
+                      </p>
+                    )}
                   </section>
 
                   <aside className="discovery-side">
@@ -825,8 +938,15 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                       <p>Every answer saves on its own. You can stop and pick up where you left off.</p>
                     </div>
 
-                    <button type="button" className="btn btn-secondary" onClick={openReview}>
-                      Skip to the end
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={openReview}
+                      disabled={answeredCount < MINIMUM_ANSWERS}
+                    >
+                      {answeredCount < MINIMUM_ANSWERS
+                        ? `Answer ${MINIMUM_ANSWERS - answeredCount} more to unlock your result`
+                        : 'Skip to the end'}
                     </button>
                   </aside>
                 </div>
@@ -842,12 +962,12 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
               <span className="micro-tag accent">Almost there</span>
               <h2 className="discovery-title">Check your answers</h2>
               <p className="discovery-lede">
-                {answeredCount} of {questions.length} answered. You can change any of them before you
+                {answeredCount} of {flowQuestions.length} answered. You can change any of them before you
                 continue.
               </p>
 
               <ol className="discovery-review-list">
-                {questions.map((q, idx) => {
+                {flowQuestions.map((q, idx) => {
                   const value = String(answers[q.id] || '').trim();
                   return (
                     <li key={q.id} className={value ? '' : 'missing'}>
@@ -881,13 +1001,17 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   type="button"
                   className="btn btn-primary btn-lg"
                   onClick={runSynthesis}
-                  disabled={synthesizing || answeredCount === 0}
+                  disabled={synthesizing || answeredCount < MINIMUM_ANSWERS}
                 >
                   {synthesizing ? 'Building your result...' : 'Get my result'}
                 </button>
               </div>
-              {answeredCount === 0 && (
-                <p className="form-hint">Answer at least one question and your result will build.</p>
+              {answeredCount < MINIMUM_ANSWERS && (
+                <p className="form-hint">
+                  {MINIMUM_ANSWERS - answeredCount} more answer
+                  {MINIMUM_ANSWERS - answeredCount === 1 ? '' : 's'} and your result will build. Three is
+                  the minimum, because a score from less would be a guess.
+                </p>
               )}
             </section>
 
@@ -936,7 +1060,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   <span className="discovery-chip">
                     Answers used
                     <strong>
-                      {displayResult.answeredCount} of {displayResult.totalConfiguredQuestions}
+                      {displayResult.answeredCount}{' '}
+                      {displayResult.answeredCount === 1 ? 'answer' : 'answers'}
                     </strong>
                   </span>
                 </div>
@@ -963,6 +1088,46 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                 <p className="discovery-score-label">{displayResult.readinessLabel}</p>
               </div>
             </section>
+
+            {displayResult.personalReview && (
+              <section className="disc-review">
+                <div className="disc-review-head">
+                  <span className="disc-review-label">What your answers say</span>
+                  <p className="disc-review-read">{displayResult.personalReview.personalRead}</p>
+                  {displayResult.personalReview.weeklyRhythm && (
+                    <p className="disc-review-rhythm">
+                      Your week allows <strong>{displayResult.personalReview.weeklyRhythm}</strong>. The plan
+                      is sized to that, not to an ideal week.
+                    </p>
+                  )}
+                </div>
+
+                <div className="disc-insights">
+                  {displayResult.personalReview.insights.map((insight: any) => (
+                    <article className={`disc-insight disc-insight--${insight.tone}`} key={insight.title}>
+                      <span className="disc-insight-tone">
+                        {insight.tone === 'strength'
+                          ? 'Already working'
+                          : insight.tone === 'developing'
+                            ? 'Half formed'
+                            : 'Where we start'}
+                      </span>
+                      <h4>{insight.title}</h4>
+                      <p>{insight.body}</p>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="disc-next">
+                  <h4>What the first weeks would cover</h4>
+                  <ol>
+                    {displayResult.personalReview.nextSteps.map((step: string) => (
+                      <li key={step}>{step}</li>
+                    ))}
+                  </ol>
+                </div>
+              </section>
+            )}
 
             <div className="discovery-result-grid">
               <div className="discovery-result-left">

@@ -1662,6 +1662,62 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
               </div>
             </section>
 
+            {/* THE BEGINNER PATH ----------------------------------------------
+                Same four steps, started smaller. A beginner does not need an
+                account, a strategy or prior reading to begin here. */}
+            <section className="beginner-section" id="beginners">
+              <div className="container beginner-inner">
+                <div className="beginner-intro" data-reveal>
+                  <span className="beginner-kicker">Process for beginners</span>
+                  <h2>Never traded before? The same four steps, starting smaller.</h2>
+                  <p>
+                    You do not need a demat account, a strategy or months of reading to begin. The first
+                    steps are about understanding how the market works, then practising decisions before
+                    any money is at stake.
+                  </p>
+                  <p className="beginner-note">
+                    Most people who start here spend their first weeks on paper, and that is the point.
+                  </p>
+                </div>
+
+                <ol className="beginner-steps">
+                  {[
+                    {
+                      n: '01',
+                      head: 'A conversation, not a test',
+                      body: 'You tell us what you want to understand and what has confused you so far. No entrance test and nothing to prepare.'
+                    },
+                    {
+                      n: '02',
+                      head: 'The basics, in plain language',
+                      body: 'How orders work, what moves a price, why position size matters before profit does. Written for someone starting from zero.'
+                    },
+                    {
+                      n: '03',
+                      head: 'Paper first, money later',
+                      body: 'You make decisions on paper and write down the reason. Your mentor marks the reasoning, not the outcome.'
+                    },
+                    {
+                      n: '04',
+                      head: 'Your first real decision, sized small',
+                      body: 'When your written notes look steady, you take a small live position with a risk limit agreed in advance.'
+                    }
+                  ].map((item) => (
+                    <li key={item.n} data-reveal>
+                      <span className="beginner-num">{item.n}</span>
+                      <h3>{item.head}</h3>
+                      <p>{item.body}</p>
+                    </li>
+                  ))}
+                </ol>
+
+                <p className="beginner-foot" data-reveal>
+                  The same four steps apply. The only difference is where the first module starts, and
+                  that is decided by your answers, not by a syllabus.
+                </p>
+              </div>
+            </section>
+
             {/* WHAT YOU HOLD AT THE END --------------------------------------
                 The result of the four steps, stated plainly on a dark band. */}
             <section className="deliver-section">

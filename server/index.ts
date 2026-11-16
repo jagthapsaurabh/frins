@@ -1270,6 +1270,16 @@ async function handleRunThreeAgentPipeline(req: Request, res: Response) {
     flatAnswers[r.question_id] = r.answer_value || r.answer_text || '';
   }
 
+  /* Three answers is the floor for a result. Below that there is nothing to
+     build a course around, and a score would be invented rather than earned. */
+  const answeredIds = Object.keys(flatAnswers).filter((k) => String(flatAnswers[k] || '').trim());
+  if (answeredIds.length < 3) {
+    return res.status(400).json({
+      success: false,
+      error: 'Answer at least three questions and we can build your result.'
+    });
+  }
+
   const evaluation = evaluateDiscoverySessionDeterministically(responsesMap);
   const candidateResult = evaluateCandidateDiscoveryResult(flatAnswers, session.track, session.custom_track || '');
 

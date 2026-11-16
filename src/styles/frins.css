@@ -12559,3 +12559,405 @@ a.footer-contact-row:hover { color: #D4A017; }
   .deliver-grid li + li { border-top: 1px solid #E2DCCC; }
   .deliver-grid h3 { margin-top: 10px; }
 }
+
+/* -------------------------------------------------------------------- v21 */
+
+/* Discovery: the details step now asks for a role with cards, the questions
+   arrive as a path, and the result opens with a review written from the
+   answers rather than a generic paragraph. */
+
+.disc-role-fieldset { border: 0; margin: 0 0 22px; padding: 0; }
+.disc-role-fieldset .form-label { display: block; margin-bottom: 4px; }
+.disc-role-hint { margin: 0 0 14px; }
+
+.disc-roles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.disc-role {
+  display: block;
+  width: 100%;
+  padding: 14px 15px 16px;
+  border: 1px solid var(--border-subtle, #E4DFD2);
+  border-radius: 10px;
+  background: #FFFFFF;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.disc-role:hover { border-color: #CFC6AE; background: #FCFBF7; }
+
+.disc-role.selected {
+  border-color: #B08A2A;
+  background: #FDF9EE;
+  box-shadow: inset 0 0 0 1px #B08A2A;
+}
+
+.disc-role-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+.disc-role-name {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #0A0A0B;
+}
+
+.disc-role-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1px solid #C9C1AC;
+  background: #FFFFFF;
+  flex: none;
+}
+
+.disc-role.selected .disc-role-dot {
+  border-color: #B08A2A;
+  background: #B08A2A;
+  box-shadow: inset 0 0 0 3px #FDF9EE;
+}
+
+.disc-role-blurb {
+  display: block;
+  margin-top: 6px;
+  font-size: 12.2px;
+  line-height: 1.5;
+  color: #6E6E76;
+}
+
+.disc-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.disc-segment {
+  padding: 9px 14px;
+  border: 1px solid var(--border-subtle, #E4DFD2);
+  border-radius: 999px;
+  background: #FFFFFF;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #5A5A62;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.disc-segment:hover { border-color: #CFC6AE; }
+
+.disc-segment.selected {
+  border-color: #0A0A0B;
+  background: #0A0A0B;
+  color: #FFFFFF;
+}
+
+/* ---------- the path bar ---------------------------------------------- */
+
+.disc-path-bar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 14px;
+  padding: 0 2px;
+}
+
+.disc-path-role {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.disc-path-note { font-size: 12.5px; color: #8A8A92; }
+
+.discovery-question-why {
+  margin: -12px 0 22px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #8A8A92;
+  max-width: 54ch;
+}
+
+.disc-question-next { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.disc-floor-note {
+  margin: 16px 0 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #8A8A92;
+}
+
+/* ---------- the written review ---------------------------------------- */
+
+.disc-review {
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle, #E4DFD2);
+  border-radius: var(--radius-lg, 16px);
+  padding: clamp(22px, 3vw, 36px);
+  margin: 0 0 22px;
+}
+
+.disc-review-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.disc-review-read {
+  margin: 12px 0 0;
+  max-width: 62ch;
+  font-size: clamp(1rem, 1.5vw, 1.12rem);
+  line-height: 1.7;
+  color: #2A2A2E;
+}
+
+.disc-review-rhythm {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #6E6E76;
+}
+
+.disc-insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 26px 0 0;
+  border-top: 1px solid #E7E4DC;
+}
+
+.disc-insight {
+  padding: 20px 24px 4px 0;
+  border-right: 1px solid #EDE8DB;
+}
+
+.disc-insight:not(:first-child) { padding-left: 24px; }
+.disc-insight:last-child { border-right: 0; padding-right: 0; }
+
+.disc-insight-tone {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.disc-insight--focus .disc-insight-tone { color: #B0472A; }
+.disc-insight--developing .disc-insight-tone { color: #9A6B12; }
+.disc-insight--strength .disc-insight-tone { color: #1F7A4D; }
+
+.disc-insight h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: #0A0A0B;
+}
+
+.disc-insight p { margin: 0; font-size: 13px; line-height: 1.65; color: #5F5F66; }
+
+.disc-next {
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid #E7E4DC;
+}
+
+.disc-next h4 {
+  margin: 0 0 14px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8A8A92;
+}
+
+.disc-next ol {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: disc-step;
+}
+
+.disc-next li {
+  counter-increment: disc-step;
+  padding-right: 24px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #2A2A2E;
+}
+
+.disc-next li::before {
+  content: '0' counter(disc-step);
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: #B08A2A;
+}
+
+@media (max-width: 860px) {
+  .disc-roles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .disc-insights { grid-template-columns: minmax(0, 1fr); }
+  .disc-insight,
+  .disc-insight:not(:first-child) {
+    padding: 18px 0;
+    border-right: 0;
+    border-bottom: 1px solid #EDE8DB;
+  }
+  .disc-insight:last-child { border-bottom: 0; }
+  .disc-next ol { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .disc-next li { padding-right: 0; display: grid; grid-template-columns: 28px minmax(0, 1fr); }
+  .disc-next li::before { margin: 2px 0 0; }
+}
+
+@media (max-width: 520px) {
+  .disc-roles { grid-template-columns: minmax(0, 1fr); }
+  .disc-path-bar { flex-direction: column; gap: 6px; }
+  .disc-question-next { width: 100%; }
+  .disc-question-next .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+/* ---------- process for beginners -------------------------------------- */
+
+.beginner-section {
+  background: #0A0A0B;
+  color: #FFFFFF;
+  padding: clamp(52px, 6.5vw, 92px) 0;
+}
+
+.beginner-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.86fr) minmax(0, 1.14fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: start;
+}
+
+.beginner-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #E9B62C;
+  margin-bottom: 14px;
+}
+
+.beginner-intro h2 {
+  margin: 0 0 16px;
+  font-size: clamp(1.7rem, 2.9vw, 2.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.036em;
+  color: #FFFFFF;
+  text-wrap: balance;
+}
+
+.beginner-intro p {
+  margin: 0;
+  max-width: 36em;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #A6A6AE;
+}
+
+/* The note sits under the paragraph rather than across the whole band. */
+.beginner-intro .beginner-note {
+  margin: 16px 0 0;
+  padding-top: 16px;
+  max-width: 36em;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: #7C7C86;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+.beginner-steps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.beginner-steps li {
+  padding: 22px 26px 24px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.beginner-steps li:nth-child(even) {
+  padding-left: 26px;
+  padding-right: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.beginner-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #E9B62C;
+}
+
+.beginner-steps h3 {
+  margin: 12px 0 8px;
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #FFFFFF;
+}
+
+.beginner-steps p { margin: 0; font-size: 12.8px; line-height: 1.68; color: #9A9AA2; }
+
+.beginner-foot {
+  grid-column: 1 / -1;
+  margin: clamp(26px, 3vw, 38px) 0 0;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  max-width: 62em;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #8A8A92;
+}
+
+@media (max-width: 980px) {
+  .beginner-inner { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 560px) {
+  .beginner-steps { grid-template-columns: minmax(0, 1fr); }
+  .beginner-steps li,
+  .beginner-steps li:nth-child(even) {
+    padding: 20px 0 22px;
+    border-left: 0;
+  }
+}
+
+/* The step buttons are secondary until the floor is met, but a disabled
+   button still has to read as a control rather than as loose text. */
+.disc-question-next .btn-ghost {
+  border: 1px solid #DCD5C4;
+  color: #6E6E76;
+  background: transparent;
+  white-space: nowrap;
+}
+
+.disc-question-next .btn-ghost:hover {
+  border-color: #B08A2A;
+  color: #8A6508;
+  background: #FDF9EE;
+}
+
+.discovery-question-nav { align-items: center; }
