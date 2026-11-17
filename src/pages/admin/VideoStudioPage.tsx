@@ -1,13 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
+  ArrowUpRight,
   Check,
   Copy,
   Download,
   FileText,
   Film,
   Link2,
+  ListVideo,
   Loader2,
+  RefreshCw,
   Sparkles,
   Trash2,
   Wand2
@@ -15,6 +18,25 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead } from '../../components/console/ConsoleUI';
+
+interface SummarySection {
+  startSeconds: number;
+  timestamp: string;
+  title: string;
+  points: string[];
+}
+
+interface VideoSummary {
+  overview: string;
+  sections: SummarySection[];
+  takeaways: string[];
+  basis: 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION';
+  generatedBy: 'LIVE_LLM' | 'DETERMINISTIC';
+  modelName: string;
+  durationSeconds: number | null;
+  readingMinutes: number;
+  fallbackReason?: string;
+}
 
 interface VideoRow {
   id: string;
@@ -27,11 +49,17 @@ interface VideoRow {
   word_count: number;
   transcript_chars: number;
   description_chars?: number;
-  transcript_source: 'YOUTUBE' | 'PASTED';
+  transcript_source: 'YOUTUBE' | 'PASTED' | 'NONE';
   course_id: string | null;
   created_by_name: string | null;
   created_at: string;
   description?: string | null;
+  duration_seconds?: number | null;
+  chapters?: Array<{ startSeconds: number; title: string }>;
+  summary?: VideoSummary | null;
+  summary_text?: string | null;
+  has_summary?: number;
+  has_chapters?: number;
 }
 
 interface DraftModule {
@@ -101,6 +129,56 @@ const formatDate = (iso: string) => {
 const basisLabel = (basis?: string) =>
   basis === 'TOPIC' ? 'From the topic' : basis === 'DESCRIPTION' ? 'From the description' : 'From the transcript';
 
+/** 1 hr 12 min, or 18 min. */
+const fmtDuration = (seconds?: number | null) => {
+  const total = Math.round(Number(seconds) || 0);
+  if (total < 60) return '';
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.round((total % 3600) / 60);
+  if (hours > 0) return `${hours} hr ${minutes} min`;
+  return `${minutes} min`;
+};
+
+const summaryBasisLabel = (basis?: string) =>
+  basis === 'TRANSCRIPT'
+    ? 'From the captions'
+    : basis === 'CHAPTERS'
+      ? "From the creator's chapters"
+      : 'From the description only';
+
+/** A long video gets the two minute promise. A short one does not need it. */
+const readEstimate = (seconds?: number | null) =>
+  Number(seconds) >= 45 * 60 ? 'about 2 minutes to read' : 'a short read';
+
+/** Clicking a time opens the video at that minute. */
+const jumpUrl = (videoId: string, startSeconds: number) =>
+  `https://youtu.be/${videoId}?t=${Math.max(0, Math.round(Number(startSeconds) || 0))}`;
+
+/** The summary as a markdown file, for a note or a message. */
+const summaryMarkdown = (summary: VideoSummary, title: string, videoId: string) => {
+  const lines: string[] = [
+    `# ${title}`,
+    '',
+    `https://www.youtube.com/watch?v=${videoId}`,
+    '',
+    `_${summaryBasisLabel(summary.basis)} · ${summary.readingMinutes} min read_`,
+    '',
+    summary.overview
+  ];
+  if (summary.sections.length) {
+    lines.push('', '## Sections');
+    for (const section of summary.sections) {
+      lines.push('', `### [${section.timestamp}](${jumpUrl(videoId, section.startSeconds)}) ${section.title}`);
+      for (const point of section.points) lines.push(`- ${point}`);
+    }
+  }
+  if (summary.takeaways.length) {
+    lines.push('', '## Takeaways');
+    for (const takeaway of summary.takeaways) lines.push(`- ${takeaway}`);
+  }
+  return lines.join('\n');
+};
+
 /**
  * Admin: bring a video in, or describe a topic, and turn either into a course
  * with lessons and tasks. Nothing is saved until the admin says so.
@@ -119,9 +197,12 @@ export const VideoStudioPage: React.FC = () => {
   const [pasted, setPasted] = useState('');
   const [needsTranscript, setNeedsTranscript] = useState(false);
   const [canUseDescription, setCanUseDescription] = useState(false);
+  const [canSummarise, setCanSummarise] = useState(false);
+  const [probe, setProbe] = useState<{ durationSeconds: number | null; chapterCount: number } | null>(null);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
+  const [summaryCopied, setSummaryCopied] = useState(false);
 
-  const [busy, setBusy] = useState<'fetch' | 'draft' | 'save' | 'plan' | null>(null);
+  const [busy, setBusy] = useState<'fetch' | 'draft' | 'save' | 'plan' | 'summary' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -185,7 +266,7 @@ export const VideoStudioPage: React.FC = () => {
 
   /* ------------------------------------------------------------- video flow */
 
-  const addVideo = async (withTranscript: boolean, acceptDescription = false) => {
+  const addVideo = async (withTranscript: boolean, acceptDescription = false, summaryOnly = false) => {
     setError(null);
     setBanner(null);
     if (!link.trim()) {
@@ -193,6 +274,7 @@ export const VideoStudioPage: React.FC = () => {
       return;
     }
     setBusy('fetch');
+    let summariseAfter: string | null = null;
     try {
       const res = await authFetch('/api/admin/videos', {
         method: 'POST',
@@ -200,7 +282,8 @@ export const VideoStudioPage: React.FC = () => {
         body: JSON.stringify({
           url: link.trim(),
           transcript: withTranscript ? pasted : '',
-          acceptDescription
+          acceptDescription,
+          summaryOnly
         })
       });
       const json = await res.json();
@@ -209,6 +292,12 @@ export const VideoStudioPage: React.FC = () => {
         setError(json.error || 'Could not read that video.');
         if (json.needsTranscript) setNeedsTranscript(true);
         setCanUseDescription(Boolean(json.canUseDescription));
+        setCanSummarise(Boolean(json.canSummarise));
+        setProbe(
+          json.canSummarise
+            ? { durationSeconds: json.durationSeconds ?? null, chapterCount: Number(json.chapterCount) || 0 }
+            : null
+        );
         return;
       }
 
@@ -216,13 +305,17 @@ export const VideoStudioPage: React.FC = () => {
       setTranscript(json.video.transcript || '');
       setNeedsTranscript(false);
       setCanUseDescription(false);
+      setCanSummarise(false);
+      setProbe(null);
       setFetchNote(json.note || null);
       setBanner(
         json.video.transcript_source === 'YOUTUBE'
           ? 'Transcript pulled from YouTube.'
           : json.video.transcript
             ? 'Transcript saved. Everything else works the same.'
-            : 'Saved. The course will be written from the video description.'
+            : summaryOnly
+              ? 'Saved. Reading the video now.'
+              : 'Saved. The course will be written from the video description.'
       );
       setDraft(null);
       setDraftOrigin('video');
@@ -231,11 +324,13 @@ export const VideoStudioPage: React.FC = () => {
       setPasted('');
       setPasteOpen(false);
       loadVideos();
+      if (summaryOnly) summariseAfter = json.video.id;
     } catch {
       setError('Could not reach the server.');
     } finally {
       setBusy(null);
     }
+    if (summariseAfter) generateSummary(summariseAfter);
   };
 
   const reopenVideo = async (row: VideoRow) => {
@@ -255,6 +350,8 @@ export const VideoStudioPage: React.FC = () => {
       setFetchNote(null);
       setNeedsTranscript(false);
       setCanUseDescription(false);
+      setCanSummarise(false);
+      setProbe(null);
       setDraft(null);
       setDraftOrigin('video');
       setSavedCourseId(json.video.course_id || null);
@@ -455,6 +552,69 @@ export const VideoStudioPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  /* --------------------------------------------------------- the summary */
+
+  /**
+   * A two hour video becomes a short read with the time each part starts. The
+   * server decides what it can trust: captions, the creator's chapters, or the
+   * description. It never makes a timestamp up.
+   */
+  const generateSummary = async (videoId?: string, refresh = false) => {
+    const id = videoId || active?.id;
+    if (!id) return;
+    setError(null);
+    setBanner(null);
+    setSummaryCopied(false);
+    setBusy('summary');
+    try {
+      const res = await authFetch(`/api/admin/videos/${id}/summary`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Could not summarise that video.');
+        return;
+      }
+      if (json.video) setActive(json.video);
+      const made: VideoSummary = json.summary;
+      setBanner(
+        made.sections.length > 0
+          ? `Summary ready. ${made.sections.length} jump points${made.durationSeconds ? ` across ${fmtDuration(made.durationSeconds)}` : ''}, about ${made.readingMinutes} min to read.`
+          : 'Summary ready. It is short because the video gave us only its description.'
+      );
+      loadVideos();
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copySummary = async () => {
+    if (!active?.summary_text) return;
+    try {
+      await navigator.clipboard.writeText(active.summary_text);
+      setSummaryCopied(true);
+      setTimeout(() => setSummaryCopied(false), 1600);
+    } catch {
+      setSummaryCopied(false);
+    }
+  };
+
+  const downloadSummary = () => {
+    if (!active?.summary) return;
+    const markdown = summaryMarkdown(active.summary, active.title, active.video_id);
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${active.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-summary.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const totalMinutes = useMemo(
     () => (draft?.modules || []).reduce((sum, m) => sum + (Number(m.task?.estimatedMinutes) || 0), 0),
     [draft]
@@ -467,6 +627,7 @@ export const VideoStudioPage: React.FC = () => {
     : 'No model connected. Drafts come from the built-in writer.';
 
   const learnerName = learners.find((l) => l.id === learnerId)?.name;
+  const activeSummary = active?.summary || null;
 
   return (
     <div className="vs-page">
@@ -547,10 +708,42 @@ export const VideoStudioPage: React.FC = () => {
                 <div className="vs-needs">
                   <strong>YouTube held the captions back</strong>
                   <p>
-                    It happens on age restricted and members only videos. Two ways forward: paste the
-                    transcript from the video page, or let the model write the course from the
-                    video description.
+                    It happens on age restricted and members only videos.{' '}
+                    {canSummarise
+                      ? 'You do not need the words to get the shape of it. Ask for a summary and jump to the part you need, paste the transcript, or build the course from the description.'
+                      : 'Paste the transcript from the video page, or let the model write the course from the video description.'}
                   </p>
+
+                  {canSummarise && probe && (
+                    <p className="vs-needs-fact">
+                      {[fmtDuration(probe.durationSeconds), probe.chapterCount > 0 ? `${probe.chapterCount} chapters` : '']
+                        .filter(Boolean)
+                        .join(' · ') || 'Enough here to summarise'}
+                      {probe.durationSeconds ? ` · ${readEstimate(probe.durationSeconds)}` : ''}
+                    </p>
+                  )}
+
+                  <div className="vs-actions vs-actions-top">
+                    {canSummarise && (
+                      <button
+                        type="button"
+                        className={`btn ${pasted.trim() ? 'btn-secondary' : 'btn-primary'}`}
+                        onClick={() => addVideo(false, false, true)}
+                        disabled={busy !== null}
+                      >
+                        {busy === 'fetch' ? (
+                          <>
+                            <Loader2 size={14} className="vs-spin" /> Reading the video
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={13} /> Summarise it instead
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
                   <textarea
                     className="form-textarea"
                     rows={6}
@@ -562,7 +755,7 @@ export const VideoStudioPage: React.FC = () => {
                   <div className="vs-actions">
                     <button
                       type="button"
-                      className="btn btn-secondary"
+                      className={`btn ${pasted.trim() ? 'btn-primary' : 'btn-secondary'}`}
                       onClick={() => addVideo(true)}
                       disabled={busy !== null || !pasted.trim()}
                     >
@@ -575,7 +768,7 @@ export const VideoStudioPage: React.FC = () => {
                         onClick={() => addVideo(false, true)}
                         disabled={busy !== null}
                       >
-                        <Sparkles size={13} /> Use the description instead
+                        Use the description instead
                       </button>
                     )}
                   </div>
@@ -673,7 +866,9 @@ export const VideoStudioPage: React.FC = () => {
                     ? active.transcript_source === 'YOUTUBE'
                       ? 'From YouTube'
                       : 'Pasted'
-                    : 'Description only'}
+                    : active.transcript_source === 'NONE'
+                      ? 'Summary only'
+                      : 'Description only'}
                 </span>
               </div>
 
@@ -688,7 +883,9 @@ export const VideoStudioPage: React.FC = () => {
                   <span>
                     {transcript
                       ? `${active.word_count.toLocaleString('en-IN')} words`
-                      : 'No captions. A course can still be written from the description.'}
+                      : active.transcript_source === 'NONE'
+                        ? 'No captions. The summary is built from what the creator published.'
+                        : 'No captions. A course can still be written from the description.'}
                   </span>
                 </div>
               </div>
@@ -754,8 +951,170 @@ export const VideoStudioPage: React.FC = () => {
           )}
         </section>
 
-        {/* ------------------------------------------------------- draft */}
+        {/* ----------------------------------------------------- summary */}
         <section className="vs-col">
+          {mode === 'video' && active && (
+            <div className="panel-card vs-summary-card">
+              <div className="panel-head">
+                <h2>
+                  <ListVideo size={14} /> Summary
+                </h2>
+                {activeSummary && (
+                  <span className={`vs-badge ${activeSummary.basis === 'TRANSCRIPT' ? 'ok' : 'plain'}`}>
+                    {summaryBasisLabel(activeSummary.basis)}
+                  </span>
+                )}
+              </div>
+
+              {!activeSummary ? (
+                <div className="vs-summary-pitch">
+                  <strong>
+                    {active.duration_seconds
+                      ? `${fmtDuration(active.duration_seconds)} of video, ${readEstimate(active.duration_seconds)}.`
+                      : 'The whole video, in a short read.'}
+                  </strong>
+                  <p>
+                    No need to sit through all of it. You get what the video covers, the time each
+                    part starts, and the few points worth keeping. Click a time to open the video at
+                    that minute.
+                  </p>
+                  {active.chapters && active.chapters.length > 0 && (
+                    <p className="vs-summary-fact">
+                      {active.chapters.length} chapters found on the video, so the jump points will be
+                      real.
+                    </p>
+                  )}
+                  <div className="vs-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => generateSummary()}
+                      disabled={busy !== null}
+                    >
+                      {busy === 'summary' ? (
+                        <>
+                          <Loader2 size={14} className="vs-spin" /> Reading the video
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={13} /> Summarise this video
+                        </>
+                      )}
+                    </button>
+                    {busy === 'summary' && (
+                      <span className="vs-summary-fact">Watching it so you do not have to. Up to a minute.</span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {activeSummary.fallbackReason && (
+                    <div className="vs-alert vs-alert-warn" role="status">
+                      The model did not answer, so this is the built-in summary. {activeSummary.fallbackReason}
+                    </div>
+                  )}
+
+                  <div className="vs-summary-meta">
+                    <span>{activeSummary.readingMinutes} min read</span>
+                    {active.duration_seconds ? <span>{fmtDuration(active.duration_seconds)} video</span> : null}
+                    {activeSummary.sections.length > 0 ? (
+                      <span>{activeSummary.sections.length} jump points</span>
+                    ) : null}
+                    {activeSummary.generatedBy === 'LIVE_LLM' ? (
+                      <span className="vs-summary-model">{activeSummary.modelName}</span>
+                    ) : null}
+                  </div>
+
+                  <p className="vs-summary-overview">{activeSummary.overview}</p>
+
+                  {activeSummary.sections.length > 0 && (
+                    <>
+                      <div className="vs-summary-label">Jump to</div>
+                      <ol className="vs-jumps">
+                        {activeSummary.sections.map((section) => (
+                          <li className="vs-jump" key={`${section.startSeconds}-${section.title}`}>
+                            <a
+                              className="vs-jump-time"
+                              href={jumpUrl(active.video_id, section.startSeconds)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`Open the video at ${section.timestamp}`}
+                            >
+                              {section.timestamp}
+                              <ArrowUpRight size={9} />
+                            </a>
+                            <div className="vs-jump-body">
+                              <span className="vs-jump-title">{section.title}</span>
+                              {section.points.length > 0 && (
+                                <ul className="vs-jump-points">
+                                  {section.points.map((point, index) => (
+                                    <li key={index}>{point}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </>
+                  )}
+
+                  {activeSummary.takeaways.length > 0 && (
+                    <>
+                      <div className="vs-summary-label">Keep these</div>
+                      <ul className="vs-takeaways">
+                        {activeSummary.takeaways.map((takeaway, index) => (
+                          <li key={index}>{takeaway}</li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+
+                  {activeSummary.basis === 'DESCRIPTION' && (
+                    <p className="vs-summary-fine">
+                      Built from the description only. YouTube gave no captions and the creator wrote
+                      no chapters, so there are no times to point at. Paste the transcript and rewrite
+                      it for real jump points.
+                    </p>
+                  )}
+
+                  {activeSummary.basis === 'CHAPTERS' && (
+                    <p className="vs-summary-fine">
+                      Built from the creator's chapter list and the description. The times are the
+                      creator's own, so each one lands where they meant it to.
+                    </p>
+                  )}
+
+                  <div className="vs-actions">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={copySummary}>
+                      {summaryCopied ? <Check size={13} /> : <Copy size={13} />}{' '}
+                      {summaryCopied ? 'Copied' : 'Copy'}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={downloadSummary}>
+                      <Download size={13} /> Download .md
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => generateSummary(undefined, true)}
+                      disabled={busy !== null}
+                    >
+                      {busy === 'summary' ? (
+                        <>
+                          <Loader2 size={13} className="vs-spin" /> Rewriting
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={13} /> Rewrite
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="panel-card">
             <div className="panel-head">
               <h2>
@@ -995,20 +1354,26 @@ export const VideoStudioPage: React.FC = () => {
         ) : videos.length === 0 ? (
           <div className="empty-state">
             <strong>No videos yet</strong>
-            The first transcript you add stays here, so you can build another course from it later.
+            The first video you add stays here, with its summary, so you can come back to it later.
           </div>
         ) : (
           <div className="vs-list">
             {videos.map((row) => (
               <div className="vs-list-row" key={row.id}>
                 <div className="vs-list-main">
-                  <strong>{row.title}</strong>
+                  <strong>
+                    {row.title}
+                    {row.has_summary ? <span className="vs-badge ok vs-list-badge">Summary</span> : null}
+                  </strong>
                   <span>
                     {row.channel || 'YouTube'} ·{' '}
                     {row.word_count > 0
                       ? `${row.word_count.toLocaleString('en-IN')} words`
-                      : 'description only'}{' '}
-                    · {formatDate(row.created_at)}
+                      : row.has_summary
+                        ? 'summary only'
+                        : 'description only'}
+                    {row.duration_seconds ? ` · ${fmtDuration(row.duration_seconds)}` : ''} ·{' '}
+                    {formatDate(row.created_at)}
                     {row.transcript_source === 'PASTED' && row.word_count > 0 ? ' · pasted transcript' : ''}
                   </span>
                 </div>

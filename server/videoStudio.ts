@@ -32,6 +32,19 @@ export interface TranscriptResult {
   reason?: string;
 }
 
+/** One spoken stretch of a video, with where it starts. */
+export interface TimedSegment {
+  startSeconds: number;
+  text: string;
+}
+
+export interface VideoExtras {
+  description: string;
+  durationSeconds: number | null;
+  /** The creator's own chapter list, when the video has one. */
+  chapters: Array<{ startSeconds: number; title: string }>;
+}
+
 export interface CourseDraftModule {
   position: number;
   title: string;
@@ -314,6 +327,123 @@ async function readCaptionTrack(
   return null;
 }
 
+/** Parses json3 or XML captions into timed segments. */
+export function parseCaptionSegments(body: string): TimedSegment[] {
+  const trimmed = body.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith('{')) {
+    try {
+      const json = JSON.parse(trimmed) as any;
+      const events = Array.isArray(json?.events) ? json.events : [];
+      const segments: TimedSegment[] = [];
+      for (const event of events) {
+        const segs = Array.isArray(event?.segs) ? event.segs : null;
+        if (!segs) continue;
+        const text = segs
+          .map((s: any) => String(s?.utf8 || ''))
+          .join('')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (!text) continue;
+        segments.push({ startSeconds: Math.max(0, Math.round(Number(event?.tStartMs || 0) / 1000)), text });
+      }
+      return mergeTinySegments(segments);
+    } catch {
+      return [];
+    }
+  }
+
+  if (/<timedtext|<body|<p\s/i.test(trimmed)) {
+    const segments: TimedSegment[] = [];
+    const paragraphRe = /<p[^>]*\bt="(\d+)"[^>]*>([\s\S]*?)<\/p>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = paragraphRe.exec(trimmed))) {
+      const text = match[2]
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!text) continue;
+      segments.push({ startSeconds: Math.max(0, Math.round(Number(match[1]) / 1000)), text });
+    }
+    return mergeTinySegments(segments);
+  }
+
+  return [];
+}
+
+/** Captions arrive in two word scraps. Glue them into sentences. */
+function mergeTinySegments(segments: TimedSegment[]): TimedSegment[] {
+  const merged: TimedSegment[] = [];
+  for (const segment of segments) {
+    const last = merged[merged.length - 1];
+    if (last && segment.startSeconds - last.startSeconds < 6 && last.text.length < 220) {
+      last.text = `${last.text} ${segment.text}`.replace(/\s+/g, ' ').trim();
+    } else {
+      merged.push({ ...segment });
+    }
+  }
+  return merged;
+}
+
+/** The captions with their times, which is what a summary with pointers needs. */
+export async function fetchTimedTranscript(videoId: string): Promise<TimedSegment[]> {
+  const client = {
+    clientName: 'ANDROID_VR',
+    clientVersion: '1.61.48',
+    androidSdkVersion: 32,
+    hl: 'en',
+    gl: 'US'
+  };
+
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/player', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US)',
+        'X-Youtube-Client-Name': '28',
+        'X-Youtube-Client-Version': '1.61.48'
+      },
+      body: JSON.stringify({ videoId, context: { client }, contentCheckOk: true, racyCheckOk: true }),
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as any;
+    const tracks: CaptionTrack[] = json?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    const preferred = pickTrack(tracks.filter(Boolean));
+    if (!preferred?.baseUrl) return [];
+
+    const base = preferred.baseUrl.replace(/\\u0026/g, '&');
+    for (const suffix of ['&fmt=json3', '']) {
+      try {
+        const track = await fetch(`${base}${suffix}`, {
+          headers: {
+            'User-Agent': 'com.google.android.apps.youtube.vr.oculus/1.61.48 (Linux; U; Android 12; en_US)'
+          },
+          signal: AbortSignal.timeout(15000)
+        });
+        if (!track.ok) continue;
+        const segments = parseCaptionSegments(await track.text());
+        if (segments.length) return segments;
+      } catch {
+        /* try the next format */
+      }
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 /** The mobile player API. Faster than the watch page and kinder to servers. */
 async function fetchTranscriptViaInnerTube(
   videoId: string
@@ -421,11 +551,12 @@ function parseCaptionPayload(body: string): string {
 }
 
 /**
- * The description under the video. When YouTube refuses to hand captions to a
- * server, this is still readable, and it is enough for a model to write a
- * course around the video's actual subject.
+ * What the watch page still tells us when the captions are withheld: the
+ * description, how long the video runs, and the creator's own chapter list.
+ * Those chapters are real pointers, at real times, without a single caption.
  */
-export async function fetchVideoDescription(videoId: string): Promise<string> {
+export async function fetchVideoExtras(videoId: string): Promise<VideoExtras> {
+  const empty: VideoExtras = { description: '', durationSeconds: null, chapters: [] };
   try {
     const res = await fetch(`${canonicalWatchUrl(videoId)}&hl=en`, {
       headers: {
@@ -433,22 +564,79 @@ export async function fetchVideoDescription(videoId: string): Promise<string> {
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      signal: AbortSignal.timeout(12000)
+      signal: AbortSignal.timeout(15000)
     });
-    if (!res.ok) return '';
+    if (!res.ok) return empty;
     const html = await res.text();
 
     const raw =
       html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1] ||
       html.match(/"attributedDescription":\{"content":"((?:[^"\\]|\\.)*)"/)?.[1] ||
       '';
+    const description = raw ? decodeJsonString(raw).trim() : '';
 
-    if (!raw) return '';
-    return decodeJsonString(raw).trim();
+    const lengthMatch = html.match(/"lengthSeconds":"(\d+)"/);
+    const durationSeconds = lengthMatch ? Number(lengthMatch[1]) || null : null;
+
+    // The player bar chapter list, when the creator set one.
+    const chapters: Array<{ startSeconds: number; title: string }> = [];
+    const chapterRe =
+      /"chapterRenderer":\{"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\},"timeRangeStartMillis":(\d+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = chapterRe.exec(html))) {
+      const title = decodeJsonString(match[1]).trim();
+      if (!title) continue;
+      chapters.push({ startSeconds: Math.max(0, Math.round(Number(match[2]) / 1000)), title });
+    }
+
+    // Otherwise, timestamps written in the description itself.
+    const fromDescription = parseTimestampedLines(description);
+    const finalChapters = chapters.length ? chapters : fromDescription;
+
+    return {
+      description,
+      durationSeconds,
+      chapters: dedupeChapters(finalChapters)
+    };
   } catch {
-    return '';
+    return empty;
   }
 }
+
+/** Kept for callers that only want the description. */
+export async function fetchVideoDescription(videoId: string): Promise<string> {
+  return (await fetchVideoExtras(videoId)).description;
+}
+
+/**
+ * Lines like "12:40 Position sizing" or "1:02:03 - The review". This is how most
+ * long videos lay out their chapters, captions or not.
+ */
+export function parseTimestampedLines(text: string): Array<{ startSeconds: number; title: string }> {
+  const out: Array<{ startSeconds: number; title: string }> = [];
+  for (const line of String(text || '').split(/\r?\n/)) {
+    const match = line.match(/^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–—:.)]?\s*(.+?)\s*$/);
+    if (!match) continue;
+    const parts = match[1].split(':').map(Number);
+    const seconds = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+    const title = match[2].replace(/\s+/g, ' ').trim();
+    if (!title || title.length > 120) continue;
+    out.push({ startSeconds: seconds, title });
+  }
+  return out;
+}
+
+const dedupeChapters = (chapters: Array<{ startSeconds: number; title: string }>) => {
+  const seen = new Set<number>();
+  return chapters
+    .filter((chapter) => {
+      if (seen.has(chapter.startSeconds)) return false;
+      seen.add(chapter.startSeconds);
+      return true;
+    })
+    .sort((a, b) => a.startSeconds - b.startSeconds)
+    .slice(0, 60);
+};
 
 /** YouTube stores the description as a JSON string inside the page. */
 function decodeJsonString(value: string): string {

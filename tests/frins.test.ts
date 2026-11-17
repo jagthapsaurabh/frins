@@ -30,6 +30,7 @@ import {
 } from '../server/videoStudio.js';
 import { buildTopicOutline } from '../server/courseStudio.js';
 import { resolveAiRuntime, parseJsonLoose } from '../server/aiClient.js';
+import { extractSections, formatTimestamp, summaryToText, type VideoSummary } from '../server/videoSummary.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
   const out: Record<string, { answerValue: string; answerText?: string }> = {};
@@ -607,5 +608,86 @@ describe('A course from a topic, without a key', () => {
       { lesson: true, task: true },
       { lesson: true, task: true }
     ]);
+  });
+});
+
+describe('A long video becomes a short read', () => {
+  /** Ten minutes of talk, one stretch per topic, so sections have real starts. */
+  const segments = [
+    { startSeconds: 0, text: 'Today we look at position sizing and why it decides whether a trader survives a bad week.' },
+    { startSeconds: 620, text: 'Risk per trade is the first number to fix. A stop is a distance, not a feeling about the market.' },
+    { startSeconds: 1380, text: 'Now the psychology of a drawdown. Most people quit in the third week, right before the plan starts working.' },
+    { startSeconds: 2410, text: 'Finally, a trading plan you can actually keep. Three rules, written down, reviewed every month.' },
+    { startSeconds: 3305, text: 'To close, a few questions from the room about lot size and how to journal a losing trade.' }
+  ];
+
+  it('FRI-SUMMARY-TIME: writes times the way a video player does', () => {
+    expect(formatTimestamp(0)).toBe('0:00');
+    expect(formatTimestamp(59)).toBe('0:59');
+    expect(formatTimestamp(1120)).toBe('18:40');
+    expect(formatTimestamp(3723)).toBe('1:02:03');
+    expect(formatTimestamp(-40)).toBe('0:00');
+  });
+
+  it('FRI-SUMMARY-POINTERS: every jump point starts where a real segment starts', () => {
+    const sections = extractSections(segments, 6);
+    expect(sections.length).toBeGreaterThan(1);
+    const starts = new Set(segments.map((s) => s.startSeconds));
+    for (const section of sections) {
+      expect(starts.has(section.startSeconds)).toBe(true);
+      expect(section.title.length).toBeGreaterThan(0);
+      expect(section.points.length).toBeGreaterThan(0);
+      expect(section.points.length).toBeLessThanOrEqual(3);
+    }
+    // in order, never backwards
+    const times = sections.map((s) => s.startSeconds);
+    expect([...times].sort((a, b) => a - b)).toEqual(times);
+  });
+
+  it('FRI-SUMMARY-NOINVENT: a summary carries no time that was not in the video', () => {
+    const sections = extractSections(segments, 6);
+    const summary: VideoSummary = {
+      overview: 'A conversation about sizing, risk and drawdowns.',
+      sections: sections.map((section) => ({
+        startSeconds: section.startSeconds,
+        timestamp: formatTimestamp(section.startSeconds),
+        title: section.title,
+        points: section.points
+      })),
+      takeaways: ['Risk per trade is a number, not a mood.'],
+      basis: 'TRANSCRIPT',
+      generatedBy: 'DETERMINISTIC',
+      modelName: 'rules',
+      durationSeconds: 3600,
+      readingMinutes: 2
+    };
+
+    const text = summaryToText(summary, 'A long conversation', 'https://youtu.be/abcdefghijk');
+    const stamped = text.match(/^\d{1,2}:\d{2}(?::\d{2})?\s/gm) || [];
+    expect(stamped.length).toBe(summary.sections.length);
+    for (const line of stamped) {
+      const seconds = line.trim().split(':').map(Number).reduce((total, part) => total * 60 + part, 0);
+      expect(segments.some((s) => s.startSeconds === seconds)).toBe(true);
+    }
+    expect(text).toContain('Takeaways');
+    expect(text).toContain('- Risk per trade is a number, not a mood.');
+  });
+
+  it('FRI-SUMMARY-COPY: the page never shows a dash where a comma belongs', () => {
+    const text = summaryToText(
+      {
+        overview: 'One line about the video.',
+        sections: [],
+        takeaways: ['Fixed lot sizes fail when volatility changes.'],
+        basis: 'DESCRIPTION',
+        generatedBy: 'DETERMINISTIC',
+        modelName: 'rules',
+        durationSeconds: null,
+        readingMinutes: 1
+      },
+      'A title',
+      'https://youtu.be/abcdefghijk'
+    );
+    expect(/[\u2010\u2011\u2013\u2014\u2015]/.test(text)).toBe(false);
   });
 });

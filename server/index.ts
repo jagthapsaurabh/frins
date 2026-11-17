@@ -20,13 +20,15 @@ import { buildTopicDraft } from './courseStudio.js';
 import {
   buildCourseDraft,
   canonicalWatchUrl,
-  fetchVideoDescription,
+  fetchTimedTranscript,
+  fetchVideoExtras,
   countWords,
   extractYouTubeId,
   fetchVideoMeta,
   fetchYouTubeTranscript,
   stripTranscriptMarkup
 } from './videoStudio.js';
+import { buildVideoSummary, summaryToText, type VideoSummary } from './videoSummary.js';
 import { registerSummaryRoutes } from './summaries.js';
 import {
   analyzeStudentTaskSubmissionWithAI,
@@ -5480,17 +5482,49 @@ function insertCourseFromDraft(input: {
   return { courseId, stepCount: position - 1, moduleCount: modules.length };
 }
 
-/** Does this video have enough description to build from? Asked once, cheaply. */
-const peekHasDescription = async (videoId: string) =>
-  (await fetchVideoDescription(videoId)).split(/\s+/).filter(Boolean).length >= 40;
+const readJson = <T,>(value: unknown, fallback: T): T => {
+  if (typeof value !== 'string' || !value.trim()) return fallback;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+type VideoChapter = { startSeconds: number; title: string };
+
+/** Chapters as the creator wrote them. Times are seconds, never guessed. */
+const chaptersOf = (row: any): VideoChapter[] =>
+  readJson<VideoChapter[]>(row?.chapters_json, []).filter(
+    (chapter) => Number.isFinite(chapter?.startSeconds) && Boolean(chapter?.title)
+  );
+
+const summaryOf = (row: any): VideoSummary | null => readJson<VideoSummary | null>(row?.summary_json, null);
+
+/** The row as the page needs it: JSON columns parsed, raw strings dropped. */
+const videoForClient = (row: any) => {
+  if (!row) return null;
+  const { chapters_json, summary_json, ...rest } = row;
+  const summary = summaryOf(row);
+  return {
+    ...rest,
+    duration_seconds: row.duration_seconds ?? null,
+    chapters: chaptersOf(row),
+    summary,
+    summary_text: summary ? summaryToText(summary, row.title, canonicalWatchUrl(row.video_id)) : null
+  };
+};
 
 app.get('/api/admin/videos', requireRole([...VIDEO_ROLES]), (_req, res) => {
   const rows = db
     .prepare(
       `SELECT id, video_id, url, title, channel, thumbnail, language, word_count,
               transcript_source, course_id, created_by_name, created_at, updated_at,
+              duration_seconds,
               LENGTH(COALESCE(transcript, '')) AS transcript_chars,
-              LENGTH(COALESCE(description, '')) AS description_chars
+              LENGTH(COALESCE(description, '')) AS description_chars,
+              CASE WHEN COALESCE(summary_json, '') = '' THEN 0 ELSE 1 END AS has_summary,
+              CASE WHEN COALESCE(chapters_json, '') = '' THEN 0 ELSE 1 END AS has_chapters
          FROM video_sources
         ORDER BY created_at DESC`
     )
@@ -5502,12 +5536,13 @@ app.get('/api/admin/videos', requireRole([...VIDEO_ROLES]), (_req, res) => {
 app.get('/api/admin/videos/:videoSourceId', requireRole([...VIDEO_ROLES]), (req, res) => {
   const row = videoRowForAdmin(req.params.videoSourceId);
   if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
-  res.json({ success: true, video: row });
+  res.json({ success: true, video: videoForClient(row) });
 });
 
 /**
- * Paste a link. We try YouTube first. If captions are withheld, the response
- * carries the reason and the page asks for a pasted transcript instead.
+ * Paste a link. We try YouTube first. If captions are withheld, the video can
+ * still be summarised from its chapters or description, and the admin can paste
+ * the transcript later.
  */
 app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES]), async (req, res) => {
   const actor = resolveAuthUser(req);
@@ -5515,6 +5550,9 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
   const pastedRaw = String(req.body?.transcript || '');
   const pasted = stripTranscriptMarkup(pastedRaw);
   const acceptDescription = req.body?.acceptDescription === true;
+  /* Summary only: the admin does not want a course, they want the two minute
+     version of a long video. No transcript needed. */
+  const summaryOnly = req.body?.summaryOnly === true;
 
   const videoId = extractYouTubeId(link);
   if (!videoId) {
@@ -5527,11 +5565,10 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
   const meta = await fetchVideoMeta(videoId);
 
   let transcript = pasted;
-  let source: 'YOUTUBE' | 'PASTED' = 'PASTED';
+  let source: 'YOUTUBE' | 'PASTED' | 'NONE' = 'PASTED';
   let language = '';
   let note: string | undefined;
   let fetchReason: string | undefined;
-  let description = '';
 
   if (!transcript) {
     const fetched = await fetchYouTubeTranscript(videoId);
@@ -5544,30 +5581,53 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     }
   }
 
-  /* YouTube will not always hand captions to a server. The description is still
-     public, and a model can write a real course around it, so the admin is not
-     left at a dead end. The transcript stays one paste away. */
-  if (!transcript && acceptDescription) {
-    description = await fetchVideoDescription(videoId);
-    if (countWords(description) < 40) {
-      return res.status(422).json({
-        success: false,
-        error:
-          'This video has no captions and almost no description, so there is nothing to build from. Paste the transcript and try again.',
-        video: { ...meta, videoId },
-        needsTranscript: true
-      });
-    }
-  }
+  /* The description and the creator's chapter list come off the same watch
+     page. Chapters carry real start times, which is what makes a two hour
+     video skimmable, so we keep them next to the video. */
+  const extras = await fetchVideoExtras(videoId);
+  const description = extras.description || '';
+  const chapters = extras.chapters || [];
+  const durationSeconds = extras.durationSeconds ?? null;
+  const descriptionWords = countWords(description);
+  const canSummarise = descriptionWords >= 40 || chapters.length >= 2;
 
-  if (!transcript && !description) {
+  if (!transcript && !acceptDescription && !summaryOnly) {
     return res.status(422).json({
       success: false,
-      error: fetchReason || 'No transcript was found for this video. Paste the transcript and try again.',
+      error: canSummarise
+        ? 'YouTube held the captions back. You can still get a summary with real jump points, paste the transcript, or build the course from the description.'
+        : fetchReason || 'No transcript was found for this video. Paste the transcript and try again.',
       video: { ...meta, videoId },
       needsTranscript: true,
-      // The page can offer this instead of stopping at the paste box.
-      canUseDescription: Boolean(await peekHasDescription(videoId))
+      canUseDescription: descriptionWords >= 40,
+      // The page can offer a summary instead of stopping at the paste box.
+      canSummarise,
+      durationSeconds,
+      chapterCount: chapters.length
+    });
+  }
+
+  /* YouTube will not always hand captions to a server. The description is still
+     public, and a model can write a real course around it, so the admin is not
+     left at a dead end. */
+  if (!transcript && acceptDescription && descriptionWords < 40) {
+    return res.status(422).json({
+      success: false,
+      error:
+        'A course needs words to work from. This video has no captions and only a thin description, so paste the transcript. A summary of it is still possible.',
+      video: { ...meta, videoId },
+      needsTranscript: true,
+      canSummarise
+    });
+  }
+
+  if (!transcript && summaryOnly && !canSummarise) {
+    return res.status(422).json({
+      success: false,
+      error:
+        'This video has no captions, no chapter list and almost no description, so there is nothing to summarise. Paste the transcript and try again.',
+      video: { ...meta, videoId },
+      needsTranscript: true
     });
   }
 
@@ -5579,17 +5639,24 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     });
   }
 
+  if (!transcript) source = 'NONE';
+
   const now = new Date().toISOString();
   const id = `vid_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   const existing = db
     .prepare('SELECT id, course_id FROM video_sources WHERE video_id = ? AND created_by_id IS ? ORDER BY created_at DESC LIMIT 1')
     .get(videoId, actor?.id || null) as any;
 
+  const chaptersJson = chapters.length ? JSON.stringify(chapters) : null;
+
   if (existing) {
     db.prepare(
       `UPDATE video_sources
           SET transcript = ?, word_count = ?, transcript_source = ?, language = ?,
-              title = ?, channel = ?, thumbnail = ?, description = COALESCE(NULLIF(?, ''), description),
+              title = ?, channel = ?, thumbnail = ?,
+              description = COALESCE(NULLIF(?, ''), description),
+              duration_seconds = COALESCE(?, duration_seconds),
+              chapters_json = COALESCE(?, chapters_json),
               updated_at = ?
         WHERE id = ?`
     ).run(
@@ -5601,18 +5668,21 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
       meta.channel || null,
       meta.thumbnail,
       description,
+      durationSeconds,
+      chaptersJson,
       now,
       existing.id
     );
     note = 'This video was already in the studio, so its material was refreshed.';
-    return res.json({ success: true, video: videoRowForAdmin(existing.id), note });
+    return res.json({ success: true, video: videoForClient(videoRowForAdmin(existing.id)), note });
   }
 
   db.prepare(
     `INSERT INTO video_sources (
        id, video_id, url, title, channel, thumbnail, language, transcript, word_count,
-       transcript_source, created_by_id, created_by_name, course_id, description, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+       transcript_source, created_by_id, created_by_name, course_id, description,
+       duration_seconds, chapters_json, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
   ).run(
     id,
     videoId,
@@ -5627,6 +5697,8 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     actor?.id || null,
     actor?.name || 'Admin',
     description || null,
+    durationSeconds,
+    chaptersJson,
     now,
     now
   );
@@ -5639,18 +5711,120 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     entityId: id,
     details: {
       videoId,
-      transcriptSource: transcript ? source : 'DESCRIPTION_ONLY',
-      wordCount: countWords(transcript)
+      transcriptSource: transcript ? source : summaryOnly ? 'SUMMARY_ONLY' : 'DESCRIPTION_ONLY',
+      wordCount: countWords(transcript),
+      chapterCount: chapters.length,
+      durationSeconds
     }
   });
 
   if (!transcript) {
-    note =
-      'YouTube did not send the captions, so the course will be written from the video description. Paste the transcript any time to sharpen it.';
+    note = summaryOnly
+      ? 'Saved so the summary has a home. Ask for the summary and it appears on the right.'
+      : 'YouTube did not send the captions, so the course will be written from the video description. Paste the transcript any time to sharpen it.';
   }
 
-  res.status(201).json({ success: true, video: videoRowForAdmin(id), note, needsTranscript: false });
+  res.status(201).json({ success: true, video: videoForClient(videoRowForAdmin(id)), note, needsTranscript: false });
 });
+
+/**
+ * Summarise a video. The order is deliberate: spoken words if we can get them,
+ * otherwise the creator's chapters, otherwise the description. Every start time
+ * comes from the video itself, never from the model.
+ */
+app.post(
+  '/api/admin/videos/:videoSourceId/summary',
+  rateLimit(20, 60_000),
+  requireRole([...VIDEO_ROLES]),
+  async (req, res) => {
+    const actor = resolveAuthUser(req);
+    const row = videoRowForAdmin(req.params.videoSourceId);
+    if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+
+    const cached = summaryOf(row);
+    if (cached && req.body?.refresh !== true) {
+      return res.json({
+        success: true,
+        summary: cached,
+        summary_text: summaryToText(cached, row.title, canonicalWatchUrl(row.video_id)),
+        video: videoForClient(row),
+        cached: true
+      });
+    }
+
+    const segments = await fetchTimedTranscript(row.video_id);
+
+    /* Chapters or the duration may be missing on older rows. One watch page
+       read fills both, and the description too. */
+    let description = String(row.description || '');
+    let durationSeconds = row.duration_seconds ?? null;
+    let chapters = chaptersOf(row);
+    if (!durationSeconds || chapters.length < 2 || !description.trim()) {
+      const extras = await fetchVideoExtras(row.video_id);
+      description = description || extras.description || '';
+      durationSeconds = durationSeconds ?? (extras.durationSeconds ?? null);
+      if (chapters.length < 2) chapters = extras.chapters || [];
+      db.prepare(
+        `UPDATE video_sources
+            SET description = COALESCE(NULLIF(?, ''), description),
+                duration_seconds = COALESCE(?, duration_seconds),
+                chapters_json = COALESCE(?, chapters_json)
+          WHERE id = ?`
+      ).run(
+        extras.description || '',
+        extras.durationSeconds ?? null,
+        extras.chapters?.length ? JSON.stringify(extras.chapters) : null,
+        row.id
+      );
+    }
+
+    if (!segments.length && !chapters.length && !description.trim()) {
+      return res.status(422).json({
+        success: false,
+        error:
+          'This video has no captions, no chapters and no description to work from. Paste the transcript and the summary will be built from the words.'
+      });
+    }
+
+    const summary = await buildVideoSummary({
+      title: row.title,
+      channel: row.channel || '',
+      description,
+      durationSeconds,
+      segments,
+      chapters
+    });
+
+    const now = new Date().toISOString();
+    db.prepare(
+      `UPDATE video_sources SET summary_json = ?, duration_seconds = COALESCE(?, duration_seconds), updated_at = ? WHERE id = ?`
+    ).run(JSON.stringify(summary), durationSeconds, now, row.id);
+
+    writeAuditEvent({
+      actorUserId: actor?.id || null,
+      actorRole: actor?.role || 'ADMIN',
+      action: 'VIDEO_SUMMARISED',
+      entityType: 'VIDEO_SOURCE',
+      entityId: row.id,
+      details: {
+        videoId: row.video_id,
+        basis: summary.basis,
+        generatedBy: summary.generatedBy,
+        sections: summary.sections.length,
+        readingMinutes: summary.readingMinutes,
+        durationSeconds
+      }
+    });
+
+    res.json({
+      success: true,
+      summary,
+      summary_text: summaryToText(summary, row.title, canonicalWatchUrl(row.video_id)),
+      video: videoForClient(videoRowForAdmin(row.id)),
+      cached: false
+    });
+  }
+);
 
 app.post('/api/admin/videos/:videoSourceId/transcript', requireRole([...VIDEO_ROLES]), (req, res) => {
   const row = videoRowForAdmin(req.params.videoSourceId);
@@ -5665,7 +5839,7 @@ app.post('/api/admin/videos/:videoSourceId/transcript', requireRole([...VIDEO_RO
     `UPDATE video_sources SET transcript = ?, word_count = ?, transcript_source = 'PASTED', updated_at = ? WHERE id = ?`
   ).run(cleaned, countWords(cleaned), new Date().toISOString(), row.id);
 
-  res.json({ success: true, video: videoRowForAdmin(row.id) });
+  res.json({ success: true, video: videoForClient(videoRowForAdmin(row.id)) });
 });
 
 /** Draft only. Nothing is written until the admin saves it. */

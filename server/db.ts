@@ -1638,6 +1638,9 @@ export function initDatabaseAndSeed() {
       created_by_id TEXT,
       created_by_name TEXT,
       course_id TEXT,
+      duration_seconds INTEGER,
+      chapters_json TEXT,
+      summary_json TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -1786,6 +1789,10 @@ export function initDatabaseAndSeed() {
     // description and let the model draft from it.
     'ALTER TABLE video_sources ADD COLUMN description TEXT',
     'ALTER TABLE video_sources ADD COLUMN draft_basis TEXT',
+    // A long video gets a summary with real start times, kept next to the video.
+    'ALTER TABLE video_sources ADD COLUMN duration_seconds INTEGER',
+    'ALTER TABLE video_sources ADD COLUMN chapters_json TEXT',
+    'ALTER TABLE video_sources ADD COLUMN summary_json TEXT',
     "ALTER TABLE discovery_questions ADD COLUMN audience_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE discovery_questions ADD COLUMN experience_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE discovery_questions ADD COLUMN show_if_json TEXT NOT NULL DEFAULT '[]'",
