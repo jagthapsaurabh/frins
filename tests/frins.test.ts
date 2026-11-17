@@ -15,11 +15,13 @@ import {
   initDatabaseAndSeed,
   evaluateLearnerEvidenceSufficiencyAndAdaptation,
   getActiveDiscoveryQuestions,
+  getDiscoverySettings,
   evaluateCandidateDiscoveryResult,
   buildPersonalReview,
   analyzeStudentTaskSubmissionWithAI
 } from '../server/db.js';
-import { buildDiscoveryFlow, flowProgress } from '../src/pages/discoveryFlow.js';
+import { buildDiscoveryFlow } from '../src/pages/discoveryFlow.js';
+import { flowProgress } from '../src/shared/discoveryFlow.js';
 import { extractYouTubeId, stripTranscriptMarkup, buildDeterministicDraft } from '../server/videoStudio.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
@@ -168,7 +170,10 @@ describe('FRINS Clean-Slate Acceptance Test Suite (FRI-PROD-001 to FRI-QA-001)',
     expect(result.pillarScores.length).toBeGreaterThan(0);
     expect(result.focusAreasForTeam.length).toBeGreaterThan(0);
     expect(result.strengths.length).toBeGreaterThan(0);
-    expect(result.nextStepRecommendation).toContain('call');
+    // The result invites a conversation. It never reads as a course being sold.
+    expect(result.nextStepRecommendation).toContain('conversation');
+    expect(result.headline).not.toContain('course');
+    expect(result.summary).not.toContain('course');
   });
 
   it('FRI-ADMIN-TASK-AI: Analyzes student uploaded Heikin-Ashi task result for Admin & Team only before Admin review', () => {
@@ -252,29 +257,44 @@ describe('FRINS Clean-Slate Acceptance Test Suite (FRI-PROD-001 to FRI-QA-001)',
   });
 });
 
-/* The flow is tested against the real bank, shaped the way the API serves it. */
-const BANK = CANONICAL_QUESTIONS.map((q) => ({
-  id: q.id,
-  number: q.number,
-  domain: q.domain,
-  domainTitle: q.domainTitle,
-  prompt: q.prompt,
-  inputType: (q.type === 'open_reflection' ? 'text' : 'single_choice') as 'text' | 'single_choice',
-  options: (q.options || []).map((o) => ({ value: o.value, label: o.label }))
-}));
+/* The flow is tested against the real seeded bank, exactly as the API serves it:
+   every question carries the admin-set order, audience and branching rules. */
+const bankFor = () =>
+  getActiveDiscoveryQuestions().map((q: any) => ({
+    id: q.id,
+    number: q.number,
+    order: q.order,
+    domain: q.domain,
+    domainTitle: q.domainTitle,
+    prompt: q.prompt,
+    inputType: q.inputType,
+    options: q.options || [],
+    audience: q.audience || [],
+    experience: q.experience || [],
+    showIf: q.showIf || [],
+    askInFlow: q.askInFlow !== false,
+    isActive: true
+  }));
+
+const FLOW_SETTINGS = { minAnswers: 3, maxQuestions: 9 };
+
+const flowFor = (role: string, answers: Record<string, string> = {}, experience = 'under_1y') =>
+  buildDiscoveryFlow(bankFor(), FLOW_SETTINGS, role, experience, answers);
 
 describe('Discovery flow adapts to the person', () => {
-  it('FRI-DISC-FLOW-ROLE: a beginner and a trader get different questions from the same bank', () => {
-    const beginner = buildDiscoveryFlow(BANK, 'student_concepts', {});
-    const trader = buildDiscoveryFlow(BANK, 'trader', {});
-    const investor = buildDiscoveryFlow(BANK, 'investor', {});
+  it('FRI-DISC-FLOW-ROLE: role decides the path, not the order of the bank', () => {
+    const beginner = flowFor('student_concepts');
+    const trader = flowFor('trader');
+    const investor = flowFor('investor');
 
     expect(beginner.questions.length).toBeGreaterThanOrEqual(3);
     expect(trader.questions.length).toBeGreaterThanOrEqual(3);
 
-    // The first question is chosen by role, not by bank order.
-    expect(beginner.questions[0].id).not.toBe(trader.questions[0].id);
+    // Everyone opens with the same orientation question, then the paths split.
+    expect(beginner.questions[0].id).toBe('Q28');
+    expect(trader.questions[0].id).toBe('Q28');
     expect(investor.questions[0].id).toBe('Q28');
+    expect(beginner.questions[1].id).not.toBe(trader.questions[1].id);
 
     // A trader is asked about sizing and invalidation. A beginner is not.
     const traderIds = trader.questions.map((q) => q.id);
@@ -283,30 +303,122 @@ describe('Discovery flow adapts to the person', () => {
     const beginnerIds = beginner.questions.map((q) => q.id);
     expect(beginnerIds).not.toContain('Q14');
     expect(beginnerIds).toContain('Q23');
+
+    // A question that is switched off never appears for anyone.
+    for (const q of [...beginner.questions, ...trader.questions, ...investor.questions]) {
+      expect(['Q01', 'Q03', 'Q34']).not.toContain(q.id);
+    }
   });
 
-  it('FRI-DISC-FLOW-BRANCH: later questions depend on what was answered before', () => {
-    // A trader whose exits are already clean is asked about fast markets
-    // instead of about the loss limit they do not need.
-    const clean = buildDiscoveryFlow(BANK, 'trader', { Q14: 'execute_exit_cleanly', Q10: 'risk_defined_formula' });
-    const messy = buildDiscoveryFlow(BANK, 'trader', { Q14: 'widen_or_average_down', Q10: 'conviction_feeling' });
+  it('FRI-DISC-FLOW-BRANCH: later questions follow from the answers already given', () => {
+    // A clean exit unlocks the question about position habits. A messy exit
+    // unlocks the one about loss limits instead.
+    const clean = flowFor('trader', { Q14: 'execute_exit_cleanly', Q10: 'risk_defined_formula' });
+    const messy = flowFor('trader', { Q14: 'widen_or_average_down', Q10: 'conviction_feeling' });
     const cleanIds = clean.questions.map((q) => q.id);
     const messyIds = messy.questions.map((q) => q.id);
 
     expect(cleanIds).toContain('Q18');
-    expect(cleanIds).not.toContain('Q16');
-    expect(messyIds).toContain('Q16');
+    expect(cleanIds).not.toContain('Q15');
     expect(messyIds).toContain('Q15');
     expect(messyIds).not.toContain('Q18');
   });
 
-  it('FRI-DISC-FLOW-MIN: the flow never runs shorter than the minimum, even on a thin bank', () => {
-    const thin = BANK.slice(0, 2);
-    const flow = buildDiscoveryFlow(thin, 'trader', {});
-    expect(flow.questions.length).toBe(2);
-    // Two real questions is short, so the caller still enforces the floor.
-    expect(flowProgress(0, flow.questions.length).canFinish).toBe(false);
-    expect(flowProgress(3, 9).canFinish).toBe(true);
+  it('FRI-DISC-FLOW-COUNT: the admin sets how many questions appear', () => {
+    expect(flowFor('trader').questions.length).toBe(9);
+
+    const short = buildDiscoveryFlow(bankFor(), { minAnswers: 3, maxQuestions: 5 }, 'trader', 'under_1y', {});
+    expect(short.questions.length).toBe(5);
+
+    const long = buildDiscoveryFlow(bankFor(), { minAnswers: 3, maxQuestions: 14 }, 'trader', 'under_1y', {});
+    expect(long.questions.length).toBe(14);
+  });
+
+  it('FRI-DISC-FLOW-EXPERIENCE: a band with no questions falls back to the full path', () => {
+    const flow = flowFor('trader', {}, 'over_7y');
+    expect(flow.questions.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('FRI-DISC-FLOW-MIN: the flow never runs shorter than the minimum when the bank can help', () => {
+    const make = (id: string, order: number, audience: string[]) => ({
+      id,
+      number: order,
+      order,
+      domain: 'X',
+      domainTitle: 'X',
+      prompt: id,
+      inputType: 'single_choice' as const,
+      options: [{ value: 'a', label: 'A' }],
+      audience,
+      experience: [],
+      showIf: [],
+      askInFlow: true,
+      active: true
+    });
+
+    const thin = [make('A', 1, []), make('B', 2, ['trader']), make('C', 3, ['student_concepts']), make('D', 4, ['student_concepts'])];
+
+    // A trader matches two questions, so the bank pads the path to the floor.
+    const trader = buildDiscoveryFlow(thin, FLOW_SETTINGS, 'trader', 'under_1y', {});
+    expect(trader.questions.length).toBe(3);
+
+    // A beginner matches three already, so nothing is padded.
+    const beginner = buildDiscoveryFlow(thin, FLOW_SETTINGS, 'student_concepts', 'under_1y', {});
+    expect(beginner.questions.length).toBe(3);
+
+    expect(flowProgress(0, 3, FLOW_SETTINGS).canFinish).toBe(false);
+    expect(flowProgress(3, 9, FLOW_SETTINGS).canFinish).toBe(true);
+    expect(flowProgress(3, 9, { minAnswers: 5, maxQuestions: 9 }).canFinish).toBe(false);
+  });
+
+  it('FRI-DISC-FLOW-RULES: an admin edit to a question changes everyone it applies to', () => {
+    const answers = { Q28: 'x' } as Record<string, string>;
+    const before = buildDiscoveryFlow(bankFor(), FLOW_SETTINGS, 'investor', '1_to_3y', answers);
+    expect(before.questions.map((q) => q.id)).toContain('Q25');
+
+    // Take the question out of the investor path with the same rule fields the
+    // admin form writes, and it disappears for that role only.
+    const edited = bankFor().map((q) => (q.id === 'Q25' ? { ...q, audience: ['trader'] } : q));
+    const after = buildDiscoveryFlow(edited, FLOW_SETTINGS, 'investor', '1_to_3y', answers);
+    expect(after.questions.map((q) => q.id)).not.toContain('Q25');
+
+    const trader = buildDiscoveryFlow(
+      edited,
+      { minAnswers: 3, maxQuestions: 30 },
+      'trader',
+      '1_to_3y',
+      answers
+    );
+    expect(trader.questions.map((q) => q.id)).toContain('Q25');
+  });
+
+  it('FRI-DISC-COPY: copy an admin writes on an option reaches the result', () => {
+    const bank = bankFor().map((q) =>
+      q.id === 'Q10'
+        ? {
+            ...q,
+            options: q.options.map((option: any) =>
+              option.value === 'conviction_feeling'
+                ? {
+                    ...option,
+                    outcome: {
+                      title: 'Your size follows your mood',
+                      body: 'That is the one habit we would change first.',
+                      tone: 'focus'
+                    }
+                  }
+                : option
+            )
+          }
+        : q
+    );
+
+    const review = buildPersonalReview({ Q10: 'conviction_feeling' }, 'trader', '', [], bank);
+    expect(review).toBeTruthy();
+    const insight = review!.insights.find((row: any) => row.title === 'Your size follows your mood');
+    expect(insight).toBeTruthy();
+    expect(insight!.body).toBe('That is the one habit we would change first.');
+    expect(insight!.tone).toBe('focus');
   });
 
   it('FRI-DISC-REVIEW: the written review changes with the answers', () => {

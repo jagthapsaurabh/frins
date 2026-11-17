@@ -54,12 +54,16 @@ const ROLE_LABEL: Record<string, string> = {
  * same way the page groups them. There is no second menu inside the page and no
  * "public website" entry, because the top bar already has a way back to the site.
  */
-const navForRole = (role: string | undefined): NavItem[] => {
+const navForRole = (role: string | undefined, permissions?: string[] | null): NavItem[] => {
   const isAdmin = role === 'ADMIN' || role === 'CURRICULUM_OWNER';
+
+  // A staff account can be limited to a few sections. Null keeps the full role view.
+  const allowed = permissions && permissions.length ? permissions : null;
+  const canSee = (key: string) => !allowed || allowed.includes(key) || allowed.includes('*');
 
   if (isAdmin) {
     return [
-      ...ADMIN_SECTIONS.map((section) => ({
+      ...ADMIN_SECTIONS.filter((section) => canSee(section.key)).map((section) => ({
         path: section.path,
         label: section.label,
         icon: section.icon,
@@ -75,12 +79,29 @@ const navForRole = (role: string | undefined): NavItem[] => {
   }
 
   if (role === 'GUIDE') {
-    return [
+    const guideItems: NavItem[] = [
       { path: '/guide/reviews', label: 'Task reviews', icon: <ClipboardList size={17} />, group: 'Workspace' },
       { path: '/guide', label: 'Learner reviews', icon: <Users size={17} />, group: 'Workspace', exact: true },
       { path: '/guide/messages', label: 'Messages', icon: <MessageSquare size={17} />, group: 'Workspace' },
       { path: '/guide/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Workspace' }
     ];
+
+    // An admin can hand a guide a section or two of the console. Those appear
+    // above their usual work, and nothing else does.
+    if (allowed) {
+      return [
+        ...guideItems,
+        ...ADMIN_SECTIONS.filter((section) => canSee(section.key)).map((section) => ({
+          path: section.path,
+          label: section.label,
+          icon: section.icon,
+          group: 'Console',
+          exact: section.key === 'overview'
+        }))
+      ];
+    }
+
+    return guideItems;
   }
 
   return [
@@ -155,7 +176,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
     }
   }, [rail]);
 
-  const nav = navForRole(user?.role);
+  const nav = navForRole(user?.role, user?.permissions);
   const isActivePath = (item: NavItem) => {
     if (item.path === '/dashboard' && (location.pathname === '/prototype' || location.pathname === '/learner')) {
       return true;

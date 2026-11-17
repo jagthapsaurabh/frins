@@ -61,7 +61,14 @@ const RequireStaff: React.FC<{ roles: string[]; loginPath: string; children: Rea
 }) => {
   const { user, loading } = useAuth();
   if (loading) return <RouteLoader />;
-  if (decideDashboardAccess(user, roles) !== 'ALLOW') return <Navigate to={loginPath} replace />;
+  const decision = decideDashboardAccess(user, roles);
+  // A guide who has been handed part of the admin console is let in here; the
+  // console itself decides which sections they see.
+  const scopedGuide =
+    user?.role === 'GUIDE' && Array.isArray(user.permissions) && user.permissions.length > 0;
+  if (decision !== 'ALLOW' && !(scopedGuide && loginPath === '/admin/login')) {
+    return <Navigate to={loginPath} replace />;
+  }
   return <>{children}</>;
 };
 

@@ -172,23 +172,40 @@ export function evaluateLearnerEvidenceSufficiencyAndAdaptation(learnerId: strin
   };
 }
 
+const parseJsonArray = (value: unknown): any[] => {
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const mapQuestionRow = (r: any, idx: number) => ({
+  id: r.id,
+  number: idx + 1,
+  order: Number(r.sort_order) || idx + 1,
+  sortOrder: r.sort_order,
+  domain: r.domain,
+  domainTitle: r.domain_title,
+  prompt: r.prompt,
+  inputType: r.input_type as 'single_choice' | 'text',
+  options: parseJsonArray(r.options_json),
+  audience: parseJsonArray(r.audience_json).map(String),
+  experience: parseJsonArray(r.experience_json).map(String),
+  showIf: parseJsonArray(r.show_if_json),
+  askInFlow: r.ask_in_flow === undefined ? true : Boolean(r.ask_in_flow),
+  resultNote: r.result_note || '',
+  required: true,
+  isActive: Boolean(r.is_active)
+});
+
 export function getActiveDiscoveryQuestions() {
   const rows = db
     .prepare('SELECT * FROM discovery_questions WHERE is_active = 1 ORDER BY sort_order ASC, id ASC')
     .all() as any[];
 
-  return rows.map((r, idx) => ({
-    id: r.id,
-    number: idx + 1,
-    sortOrder: r.sort_order,
-    domain: r.domain,
-    domainTitle: r.domain_title,
-    prompt: r.prompt,
-    inputType: r.input_type as 'single_choice' | 'text',
-    options: JSON.parse(r.options_json || '[]'),
-    required: true,
-    isActive: Boolean(r.is_active)
-  }));
+  return rows.map(mapQuestionRow);
 }
 
 export function getAllDiscoveryQuestions() {
@@ -196,18 +213,129 @@ export function getAllDiscoveryQuestions() {
     .prepare('SELECT * FROM discovery_questions ORDER BY sort_order ASC, id ASC')
     .all() as any[];
 
-  return rows.map((r, idx) => ({
-    id: r.id,
-    number: idx + 1,
-    sortOrder: r.sort_order,
-    domain: r.domain,
-    domainTitle: r.domain_title,
-    prompt: r.prompt,
-    inputType: r.input_type as 'single_choice' | 'text',
-    options: JSON.parse(r.options_json || '[]'),
-    required: true,
-    isActive: Boolean(r.is_active)
-  }));
+  return rows.map(mapQuestionRow);
+}
+
+/* ------------------------------------------------------- flow settings */
+
+export function getDiscoverySettings() {
+  const row = db.prepare("SELECT * FROM discovery_settings WHERE id = 'default'").get() as any;
+  return {
+    minAnswers: Math.max(1, Number(row?.min_answers) || 3),
+    maxQuestions: Math.max(1, Number(row?.max_questions) || 9)
+  };
+}
+
+export function saveDiscoverySettings(input: { minAnswers?: number; maxQuestions?: number }, actorName = '') {
+  const current = getDiscoverySettings();
+  const minAnswers = Math.min(20, Math.max(1, Number(input.minAnswers) || current.minAnswers));
+  const maxQuestions = Math.min(40, Math.max(minAnswers, Number(input.maxQuestions) || current.maxQuestions));
+
+  db.prepare(
+    `INSERT INTO discovery_settings (id, min_answers, max_questions, updated_at, updated_by)
+     VALUES ('default', ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET min_answers = excluded.min_answers,
+                                   max_questions = excluded.max_questions,
+                                   updated_at = excluded.updated_at,
+                                   updated_by = excluded.updated_by`
+  ).run(minAnswers, maxQuestions, new Date().toISOString(), actorName || null);
+
+  return { minAnswers, maxQuestions };
+}
+
+/* ------------------------------------------------------------ seed rules */
+
+/**
+ * The role paths that used to live in the frontend code, written into the
+ * question rows once, so an admin can then change anything about them.
+ */
+const SEEDED_RULES: Record<
+  string,
+  { order: number; audience?: string[]; experience?: string[]; showIf?: any[]; ask?: boolean }
+> = {
+  Q28: { order: 1 },
+  Q07: { order: 2, audience: ['strategy_learner', 'trader', 'both', 'other'] },
+  Q31: { order: 3, audience: ['student_concepts', 'other'] },
+  Q02: { order: 4, audience: ['student_concepts', 'other'] },
+  Q05: { order: 5, audience: ['both'] },
+  Q12: { order: 6, audience: ['strategy_learner'] },
+  Q08: { order: 7, audience: ['strategy_learner', 'investor'] },
+  Q10: { order: 8, audience: ['trader', 'investor', 'both'] },
+  Q14: { order: 9, audience: ['trader', 'both'] },
+  Q11: {
+    order: 10,
+    audience: ['strategy_learner'],
+    showIf: [{ questionId: 'Q08', values: ['sometimes_recorded', 'mental_note_only', 'rarely_defined'], roles: [] }]
+  },
+  Q09: {
+    order: 11,
+    audience: ['investor'],
+    showIf: [{ questionId: 'Q08', values: ['sometimes_recorded', 'mental_note_only', 'rarely_defined'], roles: [] }]
+  },
+  Q15: {
+    order: 12,
+    audience: ['trader'],
+    showIf: [{ questionId: 'Q10', values: ['conviction_feeling', 'inconsistent_sizing', 'fixed_equal_amounts'], roles: [] }]
+  },
+  Q16: { order: 13, audience: ['trader', 'investor', 'both'] },
+  Q18: {
+    order: 14,
+    audience: ['trader'],
+    showIf: [{ questionId: 'Q14', values: ['execute_exit_cleanly'], roles: [] }]
+  },
+  Q22: { order: 15, audience: ['student_concepts', 'investor'] },
+  Q27: {
+    order: 16,
+    audience: ['student_concepts', 'strategy_learner', 'investor'],
+    showIf: [
+      { questionId: 'Q07', values: ['mental_framework', 'no_fixed_process'], roles: ['strategy_learner'] },
+      { questionId: 'Q08', values: ['mental_note_only', 'rarely_defined'], roles: ['investor'] }
+    ]
+  },
+  Q23: { order: 17, audience: ['student_concepts'] },
+  Q13: { order: 18, audience: ['strategy_learner', 'trader', 'investor', 'both', 'other'] },
+  Q30: { order: 19 },
+  Q29: { order: 20 },
+  Q20: { order: 21, audience: ['trader', 'strategy_learner'] },
+  Q21: { order: 22, audience: ['strategy_learner', 'trader'] },
+  Q24: { order: 23, audience: ['strategy_learner', 'trader', 'both', 'other'] },
+  Q25: { order: 24, audience: ['investor', 'both'] },
+  Q26: { order: 25, audience: ['trader', 'both'] },
+  Q17: { order: 26, audience: ['trader'] },
+  Q19: { order: 27, audience: ['trader'] },
+  Q04: { order: 28, audience: ['student_concepts', 'investor'] },
+  Q06: { order: 29, audience: ['trader'] },
+  Q32: { order: 30, audience: ['trader', 'investor', 'both'] },
+  Q33: { order: 31, audience: ['student_concepts'] },
+  Q34: { order: 32, ask: false },
+  Q01: { order: 33, ask: false },
+  Q03: { order: 34, ask: false }
+};
+
+export function seedDiscoveryFlowRules() {
+  const done = db.prepare("SELECT value FROM app_meta WHERE key = 'discovery_flow_rules_v1'").get() as any;
+  if (done) return;
+
+  const update = db.prepare(
+    `UPDATE discovery_questions
+        SET sort_order = ?, audience_json = ?, experience_json = ?, show_if_json = ?, ask_in_flow = ?
+      WHERE id = ?`
+  );
+
+  for (const [id, rules] of Object.entries(SEEDED_RULES)) {
+    update.run(
+      rules.order,
+      JSON.stringify(rules.audience || []),
+      JSON.stringify(rules.experience || []),
+      JSON.stringify(rules.showIf || []),
+      rules.ask === false ? 0 : 1,
+      id
+    );
+  }
+
+  db.prepare("INSERT OR REPLACE INTO app_meta (key, value, updated_at) VALUES ('discovery_flow_rules_v1', '1', ?)").run(
+    new Date().toISOString()
+  );
 }
 
 /**
@@ -363,17 +491,20 @@ export function evaluateCandidateDiscoveryResult(
         ? 'Developing Market & Strategy Structure'
         : 'Foundational & Custom Course Focus';
 
+  /* The result page is about the person, not a product. These three lines are
+     the first thing they read, so they say what we noticed and what happens
+     next, and nothing about a course being built for them. */
   const headline =
     overallScore >= 76
-      ? 'Your answers show a strong baseline. Our team will build an advanced course around your goals.'
+      ? 'You already think in process. That is rarer than it sounds.'
       : overallScore >= 56
-        ? 'You have a good foundation. Our team will build a course around your strategy and the gaps we find.'
-        : 'Your answers give our team a clear blueprint to build your custom step-by-step course from the ground up.';
+        ? 'The foundation is there. The next step is making it repeatable.'
+        : 'You are at the start, and that is a good place to be.';
 
-  const summary = `Based on your ${answeredCount} Discovery responses, our team has mapped what you already understand and the exact concepts, strategy modules, and habits we will custom-build into your personal course.`;
+  const summary = `You gave us ${answeredCount} ${answeredCount === 1 ? 'answer' : 'answers'}. From them we can see what you already do well and where a mentor would put their attention first.`;
 
   const nextStepRecommendation =
-    'Book a 1-on-1 call with our team below so we can review your result together and design your custom learning curriculum (never a generic one-size-fits-all course).';
+    'The next step is a conversation. Fifteen minutes with a mentor is enough to see whether we are the right people to work with you.';
 
   return {
     totalConfiguredQuestions: totalActive,
@@ -398,7 +529,8 @@ export function evaluateCandidateDiscoveryResult(
       answersMap,
       track,
       customTrack,
-      pillars.filter((p) => p.status === 'PRIORITY_FOCUS').map((p) => p.title)
+      pillars.filter((p) => p.status === 'PRIORITY_FOCUS').map((p) => p.title),
+      activeQuestions
     )
   };
 }
@@ -573,7 +705,7 @@ const ANSWER_INSIGHTS: Record<string, ReviewInsight> = {
   },
   'Q28:build_personal_process': {
     title: 'You want a process of your own',
-    body: 'Not more content, a repeatable way of deciding. That is exactly what the course is built around.',
+    body: 'Not more content, a repeatable way of deciding. That is what we would build with you first.',
     tone: 'strength'
   },
   'Q28:bridge_execution_gap': {
@@ -671,16 +803,48 @@ export function buildPersonalReview(
   answersMap: Record<string, string>,
   track: string,
   customTrack: string,
-  failedDomains: string[] = []
+  failedDomains: string[] = [],
+  bank: any[] = []
 ) {
   const answeredIds = Object.keys(answersMap).filter((k) => String(answersMap[k] || '').trim());
   if (answeredIds.length === 0) return null;
 
+  /* Admin-written copy wins. Each option can carry its own title, body and
+     tone, so the review can be changed without touching code. */
+  const writtenOutcomes = new Map<string, ReviewInsight>();
+  const optionLabels = new Map<string, string>();
+  for (const question of bank) {
+    for (const option of question.options || []) {
+      const value = typeof option === 'string' ? option : option.value;
+      const label = typeof option === 'string' ? option : option.label;
+      optionLabels.set(`${question.id}:${value}`, label);
+      if (typeof option === 'object' && option.outcome && option.outcome.title) {
+        writtenOutcomes.set(`${question.id}:${value}`, {
+          title: String(option.outcome.title),
+          body: String(option.outcome.body || ''),
+          tone: (['strength', 'developing', 'focus'].includes(option.outcome.tone)
+            ? option.outcome.tone
+            : 'developing') as InsightTone
+        });
+      }
+    }
+  }
+
   const found: ReviewInsight[] = [];
   const seenTitles = new Set<string>();
   for (const qid of answeredIds) {
-    const key = `${qid}:${answersMap[qid]}`;
-    const insight = ANSWER_INSIGHTS[key];
+    const value = String(answersMap[qid] || '').trim();
+    const key = `${qid}:${value}`;
+    const insight =
+      writtenOutcomes.get(key) ||
+      ANSWER_INSIGHTS[key] ||
+      (optionLabels.has(key)
+        ? {
+            title: optionLabels.get(key) as string,
+            body: 'You picked this yourself, so we start from it rather than from a template.',
+            tone: 'developing' as InsightTone
+          }
+        : undefined);
     if (!insight || seenTitles.has(insight.title)) continue;
     seenTitles.add(insight.title);
     found.push(insight);
@@ -703,13 +867,13 @@ export function buildPersonalReview(
   const experience = experienceCopy[String(answersMap.Q03 || '')] || '';
 
   const roleOpen: Record<string, string> = {
-    student_concepts: 'You are starting from the basics, so the course begins with how the market works rather than with setups.',
-    strategy_learner: 'You are working on a strategy, so the course begins with how rules are written, tested and invalidated.',
-    trader: 'You trade actively, so the course begins with the decisions you make under pressure, not with more chart patterns.',
-    investor: 'You invest for the long term, so the course begins with the written thesis behind each position.',
-    both: 'You keep a trading book and a long-term book, so the course begins with keeping the two separate and honest.',
+    student_concepts: 'You are starting from the basics, so we begin with how the market works rather than with setups.',
+    strategy_learner: 'You are working on a strategy, so we begin with how rules are written, tested and invalidated.',
+    trader: 'You trade actively, so we begin with the decisions you make under pressure, not with more chart patterns.',
+    investor: 'You invest for the long term, so we begin with the written thesis behind each position.',
+    both: 'You keep a trading book and a long-term book, so we begin by keeping the two separate and honest.',
     other: customTrack
-      ? `You described yourself as ${customTrack}, so the course begins there.`
+      ? `You described yourself as ${customTrack}, so that is where we begin.`
       : 'You described a path of your own, so the first call is where we name it.'
   };
 
@@ -1060,6 +1224,22 @@ export function initDatabaseAndSeed() {
       options_json TEXT NOT NULL DEFAULT '[]',
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    /* How the public Discovery flow behaves. One row, id = 'default'. */
+    CREATE TABLE IF NOT EXISTS discovery_settings (
+      id TEXT PRIMARY KEY,
+      min_answers INTEGER NOT NULL DEFAULT 3,
+      max_questions INTEGER NOT NULL DEFAULT 9,
+      updated_at TEXT,
+      updated_by TEXT
+    );
+
+    /* Small key/value store for one time data fixes. */
+    CREATE TABLE IF NOT EXISTS app_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
 
@@ -1600,6 +1780,34 @@ export function initDatabaseAndSeed() {
       UNIQUE(learner_id, step_id)
     );
   `);
+
+  const flowColumns = [
+    "ALTER TABLE discovery_questions ADD COLUMN audience_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE discovery_questions ADD COLUMN experience_json TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE discovery_questions ADD COLUMN show_if_json TEXT NOT NULL DEFAULT '[]'",
+    'ALTER TABLE discovery_questions ADD COLUMN ask_in_flow INTEGER NOT NULL DEFAULT 1',
+    'ALTER TABLE discovery_questions ADD COLUMN result_note TEXT',
+    'ALTER TABLE users ADD COLUMN permissions_json TEXT',
+    'ALTER TABLE notifications ADD COLUMN event_key TEXT'
+  ];
+  for (const statement of flowColumns) {
+    try {
+      db.exec(statement);
+    } catch {
+      /* the column already exists */
+    }
+  }
+
+  // Settings row for the public Discovery flow. This has to come after the
+  // column additions above, because the seed writes into those columns.
+  db.prepare(
+    `INSERT OR IGNORE INTO discovery_settings (id, min_answers, max_questions, updated_at, updated_by)
+     VALUES ('default', 3, 9, ?, NULL)`
+  ).run(now);
+
+  // The role rules that used to be hardcoded in the frontend, written once into
+  // the question rows so an admin can edit them from then on.
+  seedDiscoveryFlowRules();
 
   const extraTaskColumns = [
     'ALTER TABLE learning_tasks ADD COLUMN course_id TEXT',

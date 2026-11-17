@@ -12961,3 +12961,312 @@ a.footer-contact-row:hover { color: #D4A017; }
 }
 
 .discovery-question-nav { align-items: center; }
+
+/* -------------------------------------------------------------------- v22
+   Discovery result page. It is built to make someone feel seen and then hand
+   them one clear thing to do: a conversation. No course is being sold here.
+   ------------------------------------------------------------------------- */
+
+.public-page-shell .disc-result-page {
+  display: grid;
+  gap: clamp(26px, 3.4vw, 44px);
+  padding: clamp(30px, 4vw, 52px) 0 clamp(48px, 6vw, 84px);
+}
+
+.disc-result-open {
+  max-width: 900px;
+}
+
+.disc-result-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #9A6B12;
+  margin-bottom: 14px;
+}
+
+.public-page-shell .disc-result-headline {
+  margin: 0;
+  font-size: clamp(2rem, 4.4vw, 3.3rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  color: #0A0A0B;
+  max-width: 24ch;
+}
+
+.public-page-shell .disc-result-lede {
+  margin: 20px 0 0;
+  max-width: 64ch;
+  font-size: clamp(1rem, 1.5vw, 1.16rem);
+  line-height: 1.72;
+  color: #3A3A40;
+}
+
+.disc-result-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 30px 0 0;
+  padding: 20px 0 0;
+  list-style: none;
+  border-top: 1px solid #E7E4DC;
+}
+
+.disc-result-facts li {
+  padding-right: clamp(24px, 4vw, 56px);
+  margin-right: clamp(24px, 4vw, 56px);
+  border-right: 1px solid #E7E4DC;
+}
+
+.disc-result-facts li:last-child {
+  border-right: 0;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.disc-result-facts span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8A8A92;
+  margin-bottom: 7px;
+}
+
+.disc-result-facts strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #14141A;
+  line-height: 1.4;
+}
+
+.public-page-shell .disc-result-turn {
+  margin: 26px 0 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #6E6E76;
+  max-width: 58ch;
+}
+
+/* ---------- what stood out ------------------------------------------- */
+
+.disc-read {
+  border-top: 1px solid #E7E4DC;
+  padding-top: clamp(26px, 3vw, 38px);
+}
+
+.disc-block-head h3 {
+  margin: 0;
+  font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+  letter-spacing: -0.03em;
+  color: #0A0A0B;
+}
+
+.public-page-shell .disc-read .disc-insights {
+  margin-top: 30px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* ---------- first three weeks ---------------------------------------- */
+
+.disc-first-weeks {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+  gap: clamp(26px, 5vw, 72px);
+  align-items: start;
+  background: #F6F5F1;
+  margin: 0 calc(-1 * clamp(16px, 4vw, 48px));
+  padding: clamp(30px, 4vw, 52px) clamp(16px, 4vw, 48px);
+  border-radius: var(--radius-lg, 16px);
+}
+
+.disc-first-weeks-head h3 {
+  margin: 0;
+  font-size: clamp(1.4rem, 2.5vw, 2rem);
+  letter-spacing: -0.03em;
+  line-height: 1.18;
+  color: #0A0A0B;
+}
+
+.public-page-shell .disc-first-weeks-head p {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #5F5F66;
+  max-width: 40ch;
+}
+
+.disc-first-weeks-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: disc-week;
+  display: grid;
+  gap: 18px;
+}
+
+.disc-first-weeks-list li {
+  counter-increment: disc-week;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 14px;
+  font-size: 14.5px;
+  line-height: 1.62;
+  color: #22222A;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #E4DFD2;
+}
+
+.disc-first-weeks-list li:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.disc-first-weeks-list li::before {
+  content: '0' counter(disc-week);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #B08A2A;
+  padding-top: 3px;
+}
+
+/* ---------- the call -------------------------------------------------- */
+
+.disc-call {
+  scroll-margin-top: 96px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
+  gap: clamp(26px, 4.5vw, 64px);
+  background: #0A0A0B;
+  color: #FFFFFF;
+  padding: clamp(30px, 4.2vw, 56px);
+  border-radius: var(--radius-lg, 16px);
+}
+
+.disc-call-kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #E9B62C;
+  margin-bottom: 14px;
+}
+
+.disc-call-copy h3 {
+  margin: 0;
+  font-size: clamp(1.6rem, 3vw, 2.35rem);
+  line-height: 1.14;
+  letter-spacing: -0.03em;
+  color: #FFFFFF;
+  max-width: 18ch;
+}
+
+.disc-call-copy p {
+  margin: 16px 0 0;
+  font-size: 14px;
+  line-height: 1.72;
+  color: #C9C9CF;
+  max-width: 40ch;
+}
+
+.disc-call-points {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 11px;
+}
+
+.disc-call-points li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #E6E6EA;
+}
+
+.disc-call-points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 7px;
+  height: 7px;
+  background: #D4A017;
+}
+
+.disc-call-form {
+  background: #FFFFFF;
+  color: #0A0A0B;
+  border-radius: var(--radius-md, 12px);
+  padding: clamp(20px, 2.6vw, 30px);
+  align-self: start;
+}
+
+.disc-call-form-title {
+  margin: 0 0 18px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: #0A0A0B;
+}
+
+.disc-call-form .form-label {
+  color: #3A3A40;
+}
+
+.disc-call-form .discovery-submit {
+  width: 100%;
+  justify-content: center;
+}
+
+.disc-call-form .discovery-booked {
+  margin: 0;
+}
+
+.disc-result-restart {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 8px;
+}
+
+.public-page-shell .disc-result-restart p {
+  margin: 0;
+  font-size: 13px;
+  color: #8A8A92;
+}
+
+@media (max-width: 900px) {
+  .disc-first-weeks,
+  .disc-call {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .public-page-shell .disc-read .disc-insights {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .disc-result-facts {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .disc-result-facts li {
+    border-right: 0;
+    margin-right: 0;
+    padding-right: 0;
+  }
+
+  .disc-result-restart {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

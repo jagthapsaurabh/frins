@@ -23,6 +23,7 @@ import {
   TableShell,
   Toolbar
 } from '../../components/console/ConsoleUI';
+import { ADMIN_SECTIONS } from '../adminSections';
 
 const ROLE_LABEL: Record<string, string> = {
   LEARNER: 'Student',
@@ -313,6 +314,9 @@ export const StaffAccountPage: React.FC = () => {
   const [role, setRole] = useState('');
   const [confirm, setConfirm] = useState<'role' | 'status' | 'password' | null>(null);
   const [busy, setBusy] = useState(false);
+  // The tabs this staff account may open. Empty means the full role view.
+  const [permissions, setPermissions] = useState<string[]>([]);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -329,6 +333,13 @@ export const StaffAccountPage: React.FC = () => {
       setLatestDiscovery(json.latestDiscovery || null);
       setActivity(json.activity || []);
       setLastActiveAt(json.lastActiveAt || null);
+      try {
+        const stored = json.account?.permissions_json ? JSON.parse(json.account.permissions_json) : [];
+        setPermissions(Array.isArray(stored) ? stored : []);
+      } catch {
+        setPermissions([]);
+      }
+      setPermissionsLoaded(true);
       setError(null);
     }
     setLoading(false);
@@ -376,6 +387,32 @@ export const StaffAccountPage: React.FC = () => {
     } finally {
       setBusy(false);
       setConfirm(null);
+    }
+  };
+
+  const savePermissions = async () => {
+    if (!account) return;
+    setBusy(true);
+    setBanner(null);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/admin/users/${account.id}/permissions`, {
+        method: 'PATCH',
+        body: JSON.stringify({ permissions })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json.error || 'Could not save the access list.');
+      setPermissions(json.permissions || []);
+      setBanner(
+        (json.permissions || []).length
+          ? `Access saved. ${json.permissions.length} section${json.permissions.length === 1 ? '' : 's'} open.`
+          : 'Access saved. This account now sees every section its role allows.'
+      );
+      load();
+    } catch (err: any) {
+      setError(err?.message || 'That action failed.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -549,6 +586,71 @@ export const StaffAccountPage: React.FC = () => {
                 <li key={line}>{line}</li>
               ))}
             </ul>
+
+            {(account.role === 'GUIDE' || account.role === 'CURRICULUM_OWNER') && !isSelf && (
+              <div className="access-matrix">
+                <div className="access-matrix-head">
+                  <div>
+                    <span className="access-matrix-label">Tabs and flows this account can open</span>
+                    <p className="section-note">
+                      Tick only what they need. Nothing ticked means they keep the full view for their role.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setPermissions(permissions.length ? [] : ['*'])}
+                    disabled={busy || !permissionsLoaded}
+                  >
+                    {permissions.length ? 'Reset to full access' : 'Restrict everything'}
+                  </button>
+                </div>
+
+                <div className="access-matrix-grid">
+                  {ADMIN_SECTIONS.map((section) => {
+                    const on = permissions.includes('*') || permissions.includes(section.key);
+                    return (
+                      <label key={section.key} className={`access-tile ${on ? 'on' : ''}`}>
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={() =>
+                            setPermissions((list) =>
+                              list.includes(section.key)
+                                ? list.filter((key) => key !== section.key)
+                                : [...list.filter((key) => key !== '*'), section.key]
+                            )
+                          }
+                        />
+                        <span className="access-tile-icon">{section.icon}</span>
+                        <span className="access-tile-text">
+                          <strong>{section.label}</strong>
+                          <span>{section.hint}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                <div className="access-matrix-actions">
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={savePermissions}
+                    disabled={busy || !permissionsLoaded}
+                  >
+                    <ShieldCheck size={13} /> Save access
+                  </button>
+                  <span className="section-note">
+                    {permissions.includes('*')
+                      ? 'Everything, including sections added later.'
+                      : permissions.length
+                        ? `${permissions.length} section${permissions.length === 1 ? '' : 's'} open.`
+                        : 'Full access for the role.'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             <div className="form-group" style={{ marginTop: 14 }}>
               <label className="form-label" htmlFor="account-role">Role</label>

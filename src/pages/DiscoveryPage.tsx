@@ -7,7 +7,8 @@ import {
   roleFromTrack,
   roleLabel,
   flowProgress,
-  MINIMUM_ANSWERS
+  type DiscoverySettings,
+  type ShowIfRule
 } from './discoveryFlow';
 
 /* ------------------------------------------------------------------ types */
@@ -20,11 +21,22 @@ interface DiscoveryOption {
 interface DiscoveryQuestion {
   id: string;
   number: number;
+  /** Admin-set position in the flow. */
+  order?: number;
   domain: string;
   domainTitle: string;
   prompt: string;
   inputType: 'single_choice' | 'text';
   options?: DiscoveryOption[];
+  /** Empty or missing means every role sees it. */
+  audience?: string[];
+  /** Empty or missing means every experience band sees it. */
+  experience?: string[];
+  /** Only ask when earlier answers match. */
+  showIf?: ShowIfRule[];
+  askInFlow?: boolean;
+  resultNote?: string;
+  isActive?: boolean;
 }
 
 interface CandidateResultPillar {
@@ -151,6 +163,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
   const [searchParams] = useSearchParams();
 
   const [questions, setQuestions] = useState<DiscoveryQuestion[]>([]);
+  // Min answers and question count come from the admin console.
+  const [settings, setSettings] = useState<DiscoverySettings | null>(null);
   const [sessionId, setSessionId] = useState('');
   const [view, setView] = useState<View>('details');
 
@@ -190,7 +204,10 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
      asked, chosen by their role and reshaped by their earlier answers. */
   const role = roleFromTrack(track);
 
-  const flow = useMemo(() => buildDiscoveryFlow(questions, track, answers), [questions, track, answers]);
+  const flow = useMemo(
+    () => buildDiscoveryFlow(questions, settings, track, experienceYears, answers),
+    [questions, settings, track, experienceYears, answers]
+  );
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -205,6 +222,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Could not load the questions.');
       setQuestions(data.questions || []);
+      if (data.settings) setSettings(data.settings);
     } catch (err: any) {
       setLoadError(err.message || 'Could not load the questions.');
     }
@@ -412,7 +430,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
     ? Math.round((answeredCount / flowQuestions.length) * 100)
     : 0;
   const firstUnanswered = flowQuestions.findIndex((q) => !String(answers[q.id] || '').trim());
-  const progress = flowProgress(answeredCount, flowQuestions.length);
+  const effectiveSettings = flow.settings;
+  const progress = flowProgress(answeredCount, flowQuestions.length, effectiveSettings);
 
   /* ------------------------------------------------------ step 2b: review */
 
@@ -438,8 +457,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
   const runSynthesis = async () => {
     if (!sessionId) return;
     flushPendingAnswer();
-    if (answeredCount < MINIMUM_ANSWERS) {
-      setErrorMsg(`Answer at least ${MINIMUM_ANSWERS} questions and we can build your result.`);
+    if (answeredCount < effectiveSettings.minAnswers) {
+      setErrorMsg(`Answer at least ${effectiveSettings.minAnswers} questions and we can build your result.`);
       return;
     }
     setSynthesizing(true);
@@ -575,8 +594,9 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
               <span className="micro-tag accent">Step 1 of 3</span>
               <h1 className="discovery-title">Start with a few details about you</h1>
               <p className="discovery-lede">
-                Three questions unlock your result, and the rest follow from your answers. It takes about
-                four minutes, and you can book a call with our team if you want to talk it through.
+                {flow.settings.minAnswers} answers unlock your result, and the questions after that follow
+                from what you tell us. It takes about four minutes, and you can book a call with our team
+                if you want to talk it through.
               </p>
 
               <form onSubmit={handleDetailsSubmit} className="discovery-form" noValidate>
@@ -761,11 +781,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                 <div className="disc-path-bar">
                   <span className="disc-path-role">{roleLabel(role)}</span>
                   <span className="disc-path-note">
-                    {progress.canFinish
-                      ? progress.note
-                      : answeredCount === 0
-                        ? `Answer ${MINIMUM_ANSWERS} to unlock your result`
-                        : progress.note}
+                    {progress.note}
                   </span>
                 </div>
 
@@ -894,7 +910,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                             type="button"
                             className="btn btn-primary"
                             onClick={openReview}
-                            disabled={answeredCount < MINIMUM_ANSWERS}
+                            disabled={answeredCount < effectiveSettings.minAnswers}
                           >
                             Review my answers
                           </button>
@@ -904,8 +920,8 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
 
                     {!progress.canFinish && (
                       <p className="disc-floor-note">
-                        Three answers is the minimum. Your result is built from them, and the questions
-                        after that only sharpen it.
+                        {effectiveSettings.minAnswers} answers is the minimum. Your result is built from
+                        them, and the questions after that only sharpen it.
                       </p>
                     )}
                   </section>
@@ -942,10 +958,10 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                       type="button"
                       className="btn btn-secondary"
                       onClick={openReview}
-                      disabled={answeredCount < MINIMUM_ANSWERS}
+                      disabled={answeredCount < effectiveSettings.minAnswers}
                     >
-                      {answeredCount < MINIMUM_ANSWERS
-                        ? `Answer ${MINIMUM_ANSWERS - answeredCount} more to unlock your result`
+                      {answeredCount < effectiveSettings.minAnswers
+                        ? `Answer ${effectiveSettings.minAnswers - answeredCount} more to unlock your result`
                         : 'Skip to the end'}
                     </button>
                   </aside>
@@ -1001,16 +1017,17 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                   type="button"
                   className="btn btn-primary btn-lg"
                   onClick={runSynthesis}
-                  disabled={synthesizing || answeredCount < MINIMUM_ANSWERS}
+                  disabled={synthesizing || answeredCount < effectiveSettings.minAnswers}
                 >
                   {synthesizing ? 'Building your result...' : 'Get my result'}
                 </button>
               </div>
-              {answeredCount < MINIMUM_ANSWERS && (
+              {answeredCount < effectiveSettings.minAnswers && (
                 <p className="form-hint">
-                  {MINIMUM_ANSWERS - answeredCount} more answer
-                  {MINIMUM_ANSWERS - answeredCount === 1 ? '' : 's'} and your result will build. Three is
-                  the minimum, because a score from less would be a guess.
+                  {effectiveSettings.minAnswers - answeredCount} more answer
+                  {effectiveSettings.minAnswers - answeredCount === 1 ? '' : 's'} and your result will
+                  build. {effectiveSettings.minAnswers} is the minimum, because a score from less would be
+                  a guess.
                 </p>
               )}
             </section>
@@ -1041,67 +1058,44 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
 
         {/* ----------------------------------------------------- STEP 3 */}
         {view === 'result' && displayResult && (
-          <div className="discovery-result">
-            <section className="discovery-result-hero">
-              <div className="discovery-result-hero-copy">
-                <span className="discovery-result-eyebrow">Your Discovery result</span>
-                <h2>{displayResult.headline}</h2>
-                <p>{displayResult.summary}</p>
+          <div className="disc-result-page">
+            <section className="disc-result-open">
+              <span className="disc-result-kicker">Your Discovery result</span>
+              <h2 className="disc-result-headline">{displayResult.headline}</h2>
+              <p className="disc-result-lede">
+                {displayResult.personalReview?.personalRead || displayResult.summary}
+              </p>
 
-                <div className="discovery-chip-row">
-                  <span className="discovery-chip">
-                    Course we suggest
-                    <strong>{displayResult.recommendedTrack}</strong>
-                  </span>
-                  <span className="discovery-chip">
-                    Starting level
-                    <strong>{displayResult.recommendedStartingLevel}</strong>
-                  </span>
-                  <span className="discovery-chip">
-                    Answers used
-                    <strong>
-                      {displayResult.answeredCount}{' '}
-                      {displayResult.answeredCount === 1 ? 'answer' : 'answers'}
-                    </strong>
-                  </span>
-                </div>
-              </div>
+              <ul className="disc-result-facts">
+                <li>
+                  <span>Where you are</span>
+                  <strong>{displayResult.personalReview?.roleLabel || roleLabel(role)}</strong>
+                </li>
+                <li>
+                  <span>Answers given</span>
+                  <strong>
+                    {displayResult.answeredCount} of {flowQuestions.length || displayResult.answeredCount}
+                  </strong>
+                </li>
+                {displayResult.personalReview?.weeklyRhythm && (
+                  <li>
+                    <span>Time you have</span>
+                    <strong>{displayResult.personalReview.weeklyRhythm}</strong>
+                  </li>
+                )}
+              </ul>
 
-              <div className="discovery-score">
-                <svg viewBox="0 0 140 140" className="discovery-score-ring" aria-hidden="true">
-                  <circle cx="70" cy="70" r="58" className="discovery-score-track" />
-                  <circle
-                    cx="70"
-                    cy="70"
-                    r="58"
-                    className="discovery-score-value"
-                    style={{
-                      strokeDasharray: 2 * Math.PI * 58,
-                      strokeDashoffset: 2 * Math.PI * 58 * (1 - displayResult.readinessScore / 100)
-                    }}
-                  />
-                </svg>
-                <div className="discovery-score-inner">
-                  <strong>{displayResult.readinessScore}%</strong>
-                  <span>Decision process score</span>
-                </div>
-                <p className="discovery-score-label">{displayResult.readinessLabel}</p>
-              </div>
+              <p className="disc-result-turn">
+                Now the useful part. Here is what your answers say, and what we would do with them.
+              </p>
             </section>
 
-            {displayResult.personalReview && (
-              <section className="disc-review">
-                <div className="disc-review-head">
-                  <span className="disc-review-label">What your answers say</span>
-                  <p className="disc-review-read">{displayResult.personalReview.personalRead}</p>
-                  {displayResult.personalReview.weeklyRhythm && (
-                    <p className="disc-review-rhythm">
-                      Your week allows <strong>{displayResult.personalReview.weeklyRhythm}</strong>. The plan
-                      is sized to that, not to an ideal week.
-                    </p>
-                  )}
-                </div>
-
+            {displayResult.personalReview && displayResult.personalReview.insights.length > 0 && (
+              <section className="disc-read">
+                <header className="disc-block-head">
+                  <span className="disc-result-kicker">What stood out</span>
+                  <h3>The things we would remember about you.</h3>
+                </header>
                 <div className="disc-insights">
                   {displayResult.personalReview.insights.map((insight: any) => (
                     <article className={`disc-insight disc-insight--${insight.tone}`} key={insight.title}>
@@ -1117,183 +1111,179 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                     </article>
                   ))}
                 </div>
-
-                <div className="disc-next">
-                  <h4>What the first weeks would cover</h4>
-                  <ol>
-                    {displayResult.personalReview.nextSteps.map((step: string) => (
-                      <li key={step}>{step}</li>
-                    ))}
-                  </ol>
-                </div>
               </section>
             )}
 
-            <div className="discovery-result-grid">
-              <div className="discovery-result-left">
-                <section className="discovery-card">
-                  <h3 className="discovery-section-title">Where you stand, area by area</h3>
-                  <div className="discovery-pillars">
-                    {displayResult.pillarScores.map((pillar) => (
-                      <div key={pillar.domain} className="discovery-pillar">
-                        <div className="discovery-pillar-head">
-                          <strong>{pillar.title}</strong>
-                          <span className={`discovery-badge ${pillar.status.toLowerCase()}`}>
-                            {pillar.score}% · {statusLabel(pillar.status)}
-                          </span>
-                        </div>
-                        <div className="discovery-bar">
-                          <div
-                            className={`discovery-bar-fill ${pillar.status.toLowerCase()}`}
-                            style={{ width: `${pillar.score}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-
-                <section className="discovery-card">
-                  <h3 className="discovery-section-title">What our team will work on with you</h3>
-                  <p className="discovery-muted discovery-section-copy">
-                    We use these points to prepare for your call and to shape your course.
+            {displayResult.personalReview && displayResult.personalReview.nextSteps.length > 0 && (
+              <section className="disc-first-weeks">
+                <div className="disc-first-weeks-head">
+                  <span className="disc-result-kicker">The first three weeks</span>
+                  <h3>Where a mentor would take you first.</h3>
+                  <p>
+                    Nothing here needs a big life change. Each one is small enough to keep, and together they
+                    change how the week feels.
                   </p>
-                  <ul className="discovery-list discovery-list-focus">
-                    {displayResult.focusAreasForTeam.map((area, i) => (
-                      <li key={`focus-${i}`}>{area}</li>
-                    ))}
-                  </ul>
+                </div>
+                <ol className="disc-first-weeks-list">
+                  {displayResult.personalReview.nextSteps.map((step: string) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </section>
+            )}
 
-                  <h4 className="discovery-subsection-title">What is already strong</h4>
-                  <ul className="discovery-list discovery-list-strong">
-                    {displayResult.strengths.map((strength, i) => (
-                      <li key={`strength-${i}`}>{strength}</li>
-                    ))}
-                  </ul>
-                </section>
+            <section className="disc-call" id="book-a-call">
+              <div className="disc-call-copy">
+                <span className="disc-call-kicker">One conversation</span>
+                <h3>Let's talk through what you just read.</h3>
+                <p>
+                  Bring the result. We will go through it with you, answer what the questions could not, and
+                  tell you honestly whether we are the right people to help.
+                </p>
+                <ul className="disc-call-points">
+                  <li>A mentor on the call, not a salesperson</li>
+                  <li>Fifteen minutes, on the phone or WhatsApp</li>
+                  <li>You leave with one thing to work on, whatever you decide</li>
+                </ul>
               </div>
 
-              <div className="discovery-result-right">
-                <section className="discovery-card discovery-book-card">
-                  <span className="micro-tag accent">Next step</span>
-                  <h3 className="discovery-section-title">Book a call with our team</h3>
-                  <p className="discovery-muted discovery-section-copy">{displayResult.nextStepRecommendation}</p>
-
-                  {bookedCallInfo ? (
-                    <div className="discovery-booked">
-                      <div className="discovery-booked-head">
-                        <span className="discovery-booked-tick" aria-hidden="true">✓</span>
-                        <strong>Your call is booked</strong>
-                      </div>
-                      <dl className="discovery-booked-list">
-                        <div>
-                          <dt>Name</dt>
-                          <dd>{bookedCallInfo.participantName}</dd>
-                        </div>
-                        <div>
-                          <dt>Date</dt>
-                          <dd>{bookedCallInfo.preferredDate}</dd>
-                        </div>
-                        <div>
-                          <dt>Time</dt>
-                          <dd>{bookedCallInfo.preferredTimeSlot}</dd>
-                        </div>
-                        <div>
-                          <dt>Reference</dt>
-                          <dd><code>{bookedCallInfo.id}</code></dd>
-                        </div>
-                      </dl>
-                      <p className="discovery-booked-note">
-                        We have shared your result with the team member who will call you.
-                      </p>
-                      <div className="discovery-booked-actions">
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setBookedCallInfo(null)}>
-                          Pick another time
-                        </button>
-                        {user && (
-                          <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard')}>
-                            Go to my dashboard
-                          </button>
-                        )}
-                      </div>
+              <div className="disc-call-form">
+                {bookedCallInfo ? (
+                  <div className="discovery-booked">
+                    <div className="discovery-booked-head">
+                      <span className="discovery-booked-tick" aria-hidden="true">
+                        ✓
+                      </span>
+                      <strong>Your call is booked</strong>
                     </div>
-                  ) : (
-                    <form onSubmit={bookCall} className="discovery-form">
-                      <div className="discovery-field-row">
-                        <div className="form-group">
-                          <label className="form-label" htmlFor="bookDate">
-                            Date
-                          </label>
-                          <input
-                            id="bookDate"
-                            type="date"
-                            className="form-input"
-                            min={tomorrowIso()}
-                            value={callDate}
-                            onChange={(e) => setCallDate(e.target.value)}
-                            required
-                          />
-                        </div>
-                        <div className="form-group">
-                          <label className="form-label" htmlFor="bookSlot">
-                            Time
-                          </label>
-                          <select
-                            id="bookSlot"
-                            className="form-select"
-                            value={callSlot}
-                            onChange={(e) => setCallSlot(e.target.value)}
-                          >
-                            {TIME_SLOTS.map((slot) => (
-                              <option key={slot} value={slot}>
-                                {slot}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                    <dl className="discovery-booked-list">
+                      <div>
+                        <dt>Name</dt>
+                        <dd>{bookedCallInfo.participantName}</dd>
                       </div>
+                      <div>
+                        <dt>Date</dt>
+                        <dd>{bookedCallInfo.preferredDate}</dd>
+                      </div>
+                      <div>
+                        <dt>Time</dt>
+                        <dd>{bookedCallInfo.preferredTimeSlot}</dd>
+                      </div>
+                      <div>
+                        <dt>Reference</dt>
+                        <dd>
+                          <code>{bookedCallInfo.id}</code>
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="discovery-booked-note">
+                      Your result is already with the person who will call you, so you will not have to
+                      repeat any of this.
+                    </p>
+                    <div className="discovery-booked-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setBookedCallInfo(null)}
+                      >
+                        Pick another time
+                      </button>
+                      {user && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => navigate('/dashboard')}
+                        >
+                          Go to my dashboard
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={bookCall} className="discovery-form">
+                    <h4 className="disc-call-form-title">Book your call</h4>
 
+                    <div className="discovery-field-row">
                       <div className="form-group">
-                        <label className="form-label" htmlFor="bookPhone">
-                          Phone or WhatsApp
+                        <label className="form-label" htmlFor="bookDate">
+                          Date
                         </label>
                         <input
-                          id="bookPhone"
-                          type="tel"
+                          id="bookDate"
+                          type="date"
                           className="form-input"
-                          placeholder="+91 98765 43210"
-                          value={callPhone}
-                          onChange={(e) => setCallPhone(e.target.value)}
-                          autoComplete="tel"
+                          min={tomorrowIso()}
+                          value={callDate}
+                          onChange={(e) => setCallDate(e.target.value)}
                           required
                         />
                       </div>
-
                       <div className="form-group">
-                        <label className="form-label" htmlFor="bookNotes">
-                          Anything you want to cover? <span className="discovery-optional">Optional</span>
+                        <label className="form-label" htmlFor="bookSlot">
+                          Time
                         </label>
-                        <textarea
-                          id="bookNotes"
-                          className="form-textarea"
-                          rows={3}
-                          placeholder="e.g. I want to fix my position sizing."
-                          value={callNotes}
-                          onChange={(e) => setCallNotes(e.target.value)}
-                        />
+                        <select
+                          id="bookSlot"
+                          className="form-select"
+                          value={callSlot}
+                          onChange={(e) => setCallSlot(e.target.value)}
+                        >
+                          {TIME_SLOTS.map((slot) => (
+                            <option key={slot} value={slot}>
+                              {slot}
+                            </option>
+                          ))}
+                        </select>
                       </div>
+                    </div>
 
-                      <button type="submit" className="btn btn-primary btn-lg discovery-submit" disabled={bookingCall}>
-                        {bookingCall ? 'Booking your call...' : 'Book my call'}
-                      </button>
-                    </form>
-                  )}
-                </section>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="bookPhone">
+                        Phone or WhatsApp
+                      </label>
+                      <input
+                        id="bookPhone"
+                        type="tel"
+                        className="form-input"
+                        placeholder="+91 98765 43210"
+                        value={callPhone}
+                        onChange={(e) => setCallPhone(e.target.value)}
+                        autoComplete="tel"
+                        required
+                      />
+                    </div>
 
-                <button type="button" className="btn btn-secondary discovery-full-button" onClick={startFresh}>
-                  Start a new Discovery
-                </button>
+                    <div className="form-group">
+                      <label className="form-label" htmlFor="bookNotes">
+                        Anything you want to cover? <span className="discovery-optional">Optional</span>
+                      </label>
+                      <textarea
+                        id="bookNotes"
+                        className="form-textarea"
+                        rows={3}
+                        placeholder="e.g. I want to fix my position sizing."
+                        value={callNotes}
+                        onChange={(e) => setCallNotes(e.target.value)}
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="btn btn-primary btn-lg discovery-submit"
+                      disabled={bookingCall}
+                    >
+                      {bookingCall ? 'Booking your call...' : 'Book my call'}
+                    </button>
+                  </form>
+                )}
               </div>
+            </section>
+
+            <div className="disc-result-restart">
+              <p>Want to see how the result changes? Answer again with a different path.</p>
+              <button type="button" className="btn btn-secondary" onClick={startFresh}>
+                Start a new Discovery
+              </button>
             </div>
           </div>
         )}

@@ -1090,7 +1090,7 @@ export const PublicWebsitePage: React.FC<PublicWebsiteProps> = ({ onOpenSignIn }
                     </p>
 
                     <h2 className="statement-claim">
-                      We write the syllabus for the person <em>sitting in front of us.</em>
+                      We don't just teach. We nurture potential and <em>inspire growth.</em>
                     </h2>
 
                     <div className="statement-stats">

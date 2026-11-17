@@ -32,6 +32,8 @@ import {
   evaluateLearnerEvidenceSufficiencyAndAdaptation,
   getActiveDiscoveryQuestions,
   getAllDiscoveryQuestions,
+  getDiscoverySettings,
+  saveDiscoverySettings,
   hashPassword,
   initDatabaseAndSeed,
   verifyPassword,
@@ -105,6 +107,8 @@ export interface AuthenticatedUser {
   account_status: string;
   track: string;
   assigned_guide_id: string | null;
+  /** Empty means the staff account keeps its role-wide access. */
+  permissions_json?: string | null;
 }
 
 declare global {
@@ -125,7 +129,8 @@ function resolveAuthUser(req: Request): AuthenticatedUser | undefined {
 
   const session = db
     .prepare(
-      `SELECT s.token, s.expires_at, u.id, u.name, u.email, u.role, u.account_status, u.track, u.assigned_guide_id
+      `SELECT s.token, s.expires_at, u.id, u.name, u.email, u.role, u.account_status, u.track,
+              u.assigned_guide_id, u.permissions_json
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token = ?`
@@ -146,7 +151,8 @@ function resolveAuthUser(req: Request): AuthenticatedUser | undefined {
     role: session.role,
     account_status: session.account_status,
     track: session.track,
-    assigned_guide_id: session.assigned_guide_id
+    assigned_guide_id: session.assigned_guide_id,
+    permissions_json: session.permissions_json || null
   };
 }
 
@@ -171,7 +177,19 @@ function requireRole(allowedRoles: Array<'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRIC
         error: 'Authentication required.'
       });
     }
-    if (!allowedRoles.includes(user.role)) {
+    /* A guide can be handed a section of the admin console by an admin. When
+       their permission list names this section, the role check gets out of the
+       way and the permission gate below decides. */
+    const staffSection = sectionForAdminPath(req.path);
+    const staffPermissions = permissionsFor(user);
+    const allowedByGrant =
+      !allowedRoles.includes(user.role) &&
+      user.role === 'GUIDE' &&
+      staffSection !== null &&
+      !!staffPermissions &&
+      (staffPermissions.includes(staffSection) || staffPermissions.includes('*'));
+
+    if (!allowedRoles.includes(user.role) && !allowedByGrant) {
       writeAuditEvent({
         actorUserId: user.id,
         actorRole: user.role,
@@ -189,6 +207,87 @@ function requireRole(allowedRoles: Array<'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRIC
     return next();
   };
 }
+
+/* ---------------------------------------------------------------------------
+   Staff permissions.
+
+   An admin can hand a staff member exactly the tabs they need. When a staff
+   account has a permission list, every /api/admin request is checked against
+   the section it belongs to. An account with no list keeps the older, wider
+   behaviour, so nothing that worked before breaks.
+   --------------------------------------------------------------------------- */
+
+const SECTION_BY_PATH: Array<{ prefix: string; section: string }> = [
+  { prefix: '/api/admin/overview', section: 'overview' },
+  { prefix: '/api/admin/metrics', section: 'overview' },
+  { prefix: '/api/admin/learners', section: 'learners' },
+  { prefix: '/api/admin/tasks', section: 'tasks' },
+  { prefix: '/api/admin/progress', section: 'progress' },
+  { prefix: '/api/admin/staff', section: 'staff' },
+  { prefix: '/api/admin/users', section: 'staff' },
+  { prefix: '/api/admin/leads', section: 'leads' },
+  { prefix: '/api/admin/bookings', section: 'bookings' },
+  { prefix: '/api/admin/notifications', section: 'notifications' },
+  { prefix: '/api/admin/discovery', section: 'discovery' },
+  { prefix: '/api/admin/settings', section: 'settings' },
+  { prefix: '/api/admin/ai', section: 'settings' },
+  { prefix: '/api/admin/audit', section: 'settings' },
+  { prefix: '/api/admin/competencies', section: 'settings' },
+  { prefix: '/api/admin/courses', section: 'courses' },
+  { prefix: '/api/admin/course-steps', section: 'courses' },
+  { prefix: '/api/admin/course-questions', section: 'courses' },
+  { prefix: '/api/admin/enrollments', section: 'courses' },
+  { prefix: '/api/admin/student-courses', section: 'courses' },
+  { prefix: '/api/admin/videos', section: 'video' },
+  { prefix: '/api/admin/messages', section: 'messages' },
+  { prefix: '/api/admin/communities', section: 'communities' }
+];
+
+export const sectionForAdminPath = (path: string): string | null => {
+  const match = SECTION_BY_PATH.find((entry) => path.startsWith(entry.prefix));
+  return match ? match.section : null;
+};
+
+const permissionsFor = (user: any): string[] | null => {
+  if (!user || !user.permissions_json) return null;
+  try {
+    const parsed = JSON.parse(user.permissions_json);
+    return Array.isArray(parsed) ? parsed.map(String) : null;
+  } catch {
+    return null;
+  }
+};
+
+app.use('/api/admin', (req, res, next) => {
+  const user = resolveAuthUser(req);
+  if (!user) return next();
+
+  // An admin owns the panel. Restrictions are for staff.
+  if (user.role === 'ADMIN') return next();
+
+  const permissions = permissionsFor(user);
+  if (!permissions) return next();
+
+  // Mounted under /api/admin, req.path has the prefix stripped, so the full
+  // URL is what the map is written against.
+  const section = sectionForAdminPath(req.originalUrl.split('?')[0]);
+  if (section && (permissions.includes(section) || permissions.includes('*'))) return next();
+  if (!section && permissions.includes('*')) return next();
+
+  writeAuditEvent({
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'STAFF_SECTION_DENIED',
+    entityType: 'ENDPOINT',
+    entityId: req.originalUrl,
+    details: { section, permissions }
+  });
+
+  return res.status(403).json({
+    success: false,
+    error: `Your account does not have access to the ${section || 'requested'} section. Ask an admin to grant it.`
+  });
+});
 
 /**
  * Supports either authenticated GUIDE/ADMIN/CURRICULUM_OWNER session OR x-frins-guide-key header
@@ -546,6 +645,13 @@ app.post('/api/book-call', rateLimit(20, 60_000), (req, res) => {
     track === 'other' ? customTrack || null : null
   );
 
+  notifyAdmins({
+    title: 'Call booked',
+    message: `${name} booked a call for ${preferredDate} at ${preferredTime}. ${trackLabelMap[track] || track}.`,
+    linkUrl: '/admin/bookings',
+    eventKey: `call_booked:${bookingId}`
+  });
+
   const existingLead = db.prepare('SELECT id FROM leads WHERE lower(email) = ?').get(email) as any;
   if (existingLead) {
     db.prepare('UPDATE leads SET status = ?, notes = ? WHERE id = ?').run(
@@ -658,7 +764,9 @@ app.post('/api/auth/login', loginThrottle, (req, res) => {
       email: user.email,
       role: user.role,
       track: user.track,
-      assigned_guide_id: user.assigned_guide_id
+      assigned_guide_id: user.assigned_guide_id,
+      // Null means the staff account keeps its role-wide access.
+      permissions: user.permissions_json ? JSON.parse(user.permissions_json) : null
     }
   });
 });
@@ -673,7 +781,13 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ success: true, user: req.user });
+  let permissions: string[] | null = null;
+  try {
+    permissions = req.user!.permissions_json ? JSON.parse(req.user!.permissions_json) : null;
+  } catch {
+    permissions = null;
+  }
+  res.json({ success: true, user: { ...req.user, permissions } });
 });
 
 /**
@@ -728,7 +842,38 @@ function audienceMatches(audience: string, role: string): boolean {
   if (audience === 'ALL') return true;
   if (audience === 'LEARNERS') return role === 'LEARNER';
   if (audience === 'STAFF') return ['GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role);
+  // Events the team needs to act on: a submitted Discovery, a booked call.
+  if (audience === 'ADMIN') return ['ADMIN', 'CURRICULUM_OWNER'].includes(role);
   return false;
+}
+
+/**
+ * Records something that happened on the public site so the bell in the admin
+ * console lights up. These are never sent as broadcast notices; they are work
+ * for the team, and each one links to where the work is done.
+ */
+function notifyAdmins(params: {
+  title: string;
+  message: string;
+  linkUrl?: string;
+  eventKey: string;
+}) {
+  try {
+    db.prepare(
+      `INSERT INTO notifications (
+         id, title, message, audience, target_user_id, created_by_id, created_by_name, created_at, link_url, event_key
+       ) VALUES (?, ?, ?, 'ADMIN', NULL, NULL, 'Website', ?, ?, ?)`
+    ).run(
+      `ntf_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      params.title,
+      params.message,
+      new Date().toISOString(),
+      params.linkUrl || null,
+      params.eventKey
+    );
+  } catch {
+    /* a missed notice must never break the action that caused it */
+  }
 }
 
 /** Notices for the signed-in user, newest first, with a read flag. */
@@ -884,6 +1029,7 @@ app.get('/api/discovery/questions', (req, res) => {
     success: true,
     questionBankVersion: QUESTION_BANK_VERSION,
     totalQuestions: activeQuestions.length,
+    settings: getDiscoverySettings(),
     questions: allQuestions
   };
   // Sample answer sets are test fixtures. They are not part of the public API.
@@ -1211,6 +1357,13 @@ app.post('/api/discovery/:sessionId/book-call', (req, res) => {
     session.custom_track || null
   );
 
+  notifyAdmins({
+    title: 'Call booked from Discovery',
+    message: `${session.participant_name} booked ${preferredDate} at ${preferredTime}. Their Discovery result is attached to the booking.`,
+    linkUrl: '/admin/bookings',
+    eventKey: `call_booked:${bookingId}`
+  });
+
   // Also update or create lead status so Admin & Guide see the booked call
   db.prepare(`
     UPDATE leads SET status = 'CALL_BOOKED', notes = ? WHERE lower(email) = ?
@@ -1279,13 +1432,14 @@ async function handleRunThreeAgentPipeline(req: Request, res: Response) {
     flatAnswers[r.question_id] = r.answer_value || r.answer_text || '';
   }
 
-  /* Three answers is the floor for a result. Below that there is nothing to
+  /* The floor is set by an admin, not by code. Below it there is nothing to
      build a course around, and a score would be invented rather than earned. */
+  const flowSettings = getDiscoverySettings();
   const answeredIds = Object.keys(flatAnswers).filter((k) => String(flatAnswers[k] || '').trim());
-  if (answeredIds.length < 3) {
+  if (answeredIds.length < flowSettings.minAnswers) {
     return res.status(400).json({
       success: false,
-      error: 'Answer at least three questions and we can build your result.'
+      error: `Answer at least ${flowSettings.minAnswers} questions and we can build your result.`
     });
   }
 
@@ -1329,6 +1483,13 @@ async function handleRunThreeAgentPipeline(req: Request, res: Response) {
   );
 
   db.prepare("UPDATE discovery_sessions SET status = 'COMPLETED', updated_at = ? WHERE id = ?").run(now, sessionId);
+
+  notifyAdmins({
+    title: 'Discovery submitted',
+    message: `${session.participant_name} finished Discovery (${answeredIds.length} answers, ${candidateResult.readinessLabel}). Read the result and decide the first call.`,
+    linkUrl: `/admin/discovery/results/${sessionId}`,
+    eventKey: `discovery_submitted:${sessionId}:${runId}`
+  });
 
   const user = resolveAuthUser(req);
   writeAuditEvent({
@@ -3364,7 +3525,7 @@ app.get('/api/admin/users', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, re
   const total = (db.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).get(...params) as any).c as number;
   const rows = db
     .prepare(
-      `SELECT id, name, email, role, account_status, track, created_at
+      `SELECT id, name, email, role, account_status, track, created_at, permissions_json
        FROM users ${whereSql}
        ORDER BY CASE role WHEN 'ADMIN' THEN 0 WHEN 'CURRICULUM_OWNER' THEN 1 WHEN 'GUIDE' THEN 2 ELSE 3 END, name ASC
        LIMIT ? OFFSET ?`
@@ -3842,38 +4003,100 @@ app.get('/api/admin/discovery-questions', requireRole(['ADMIN', 'CURRICULUM_OWNE
   });
 });
 
-app.post('/api/admin/discovery-questions/set-count', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
-  const count = Math.max(1, Math.min(50, Number(req.body?.count || 7)));
-  const allRows = db.prepare('SELECT id FROM discovery_questions ORDER BY sort_order ASC, id ASC').all() as Array<{ id: string }>;
-  const now = new Date().toISOString();
+app.get('/api/admin/discovery-questions/settings', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {
+  res.json({ success: true, settings: getDiscoverySettings() });
+});
 
-  const tx = db.transaction(() => {
-    allRows.forEach((row, idx) => {
-      db.prepare('UPDATE discovery_questions SET is_active = ?, updated_at = ? WHERE id = ?').run(
-        idx < count ? 1 : 0,
-        now,
-        row.id
-      );
-    });
-  });
-  tx();
+app.post('/api/admin/discovery-questions/settings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
+  const saved = saveDiscoverySettings(
+    { minAnswers: Number(req.body?.minAnswers), maxQuestions: Number(req.body?.maxQuestions) },
+    req.user!.name
+  );
 
   writeAuditEvent({
     actorUserId: req.user!.id,
     actorRole: req.user!.role,
-    action: 'ADMIN_SET_DISCOVERY_QUESTION_COUNT',
-    entityType: 'DISCOVERY_QUESTIONS',
-    entityId: 'active_count',
-    details: { activeCount: Math.min(count, allRows.length) }
+    action: 'ADMIN_DISCOVERY_SETTINGS_UPDATED',
+    entityType: 'DISCOVERY_SETTINGS',
+    entityId: 'default',
+    details: saved
   });
 
-  const updated = getAllDiscoveryQuestions();
-  res.json({
-    success: true,
-    activeCount: updated.filter((q) => q.isActive).length,
-    questions: updated
-  });
+  res.json({ success: true, settings: saved });
 });
+
+/**
+ * Options can arrive as plain labels or as objects carrying the copy the result
+ * page should show for that answer. Both are accepted, and an existing value is
+ * kept so answers already stored against it stay attached.
+ */
+const slugFor = (label: string) => label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 28);
+
+const normaliseQuestionOptions = (input: any, existingJson?: string) => {
+  if (!Array.isArray(input)) return existingJson ?? '[]';
+
+  const previous: any[] = (() => {
+    try {
+      const parsed = JSON.parse(String(existingJson || '[]'));
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+
+  return JSON.stringify(
+    input
+      .map((option: any, index: number) => {
+        if (typeof option === 'string') {
+          const label = option.trim();
+          if (!label) return null;
+          const match = previous.find((p) => p && p.label === label);
+          return {
+            value: match?.value || `opt_${index + 1}_${slugFor(label)}`,
+            label,
+            ...(match?.outcome ? { outcome: match.outcome } : {})
+          };
+        }
+        const label = String(option?.label || '').trim();
+        if (!label) return null;
+        const outcome = option?.outcome;
+        return {
+          value: String(option?.value || `opt_${index + 1}_${slugFor(label)}`),
+          label,
+          ...(outcome && (outcome.title || outcome.body)
+            ? {
+                outcome: {
+                  title: String(outcome.title || '').slice(0, 120),
+                  body: String(outcome.body || '').slice(0, 400),
+                  tone: ['strength', 'developing', 'focus'].includes(outcome.tone) ? outcome.tone : 'developing'
+                }
+              }
+            : {})
+        };
+      })
+      .filter(Boolean)
+  );
+};
+
+const normaliseStringArray = (input: any, fallback: string[]): string[] => {
+  if (!Array.isArray(input)) return fallback;
+  return [...new Set(input.map((v) => String(v || '').trim()).filter(Boolean))].slice(0, 12);
+};
+
+const normaliseShowIf = (input: any, fallback: any[]): any[] => {
+  if (!Array.isArray(input)) return fallback;
+  return input
+    .map((rule: any) => {
+      const questionId = String(rule?.questionId || '').trim();
+      const values = Array.isArray(rule?.values)
+        ? rule.values.map((v: any) => String(v).trim()).filter(Boolean)
+        : [];
+      const roles = Array.isArray(rule?.roles) ? rule.roles.map((r: any) => String(r).trim()).filter(Boolean) : [];
+      if (!questionId || !values.length) return null;
+      return { questionId, values, roles };
+    })
+    .filter(Boolean) as any[];
+};
 
 app.post('/api/admin/discovery-questions', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const prompt = String(req.body?.prompt || '').trim();
@@ -3891,36 +4114,48 @@ app.post('/api/admin/discovery-questions', requireRole(['ADMIN', 'CURRICULUM_OWN
   const newId = `Q_CUSTOM_${crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()}`;
   const now = new Date().toISOString();
 
-  const formattedOptions =
-    inputType === 'single_choice' && rawOptions.length > 0
-      ? rawOptions.map((o: any, idx: number) =>
-          typeof o === 'string'
-            ? { value: `opt_${idx + 1}_${o.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 20)}`, label: o }
-            : { value: String(o.value || `opt_${idx + 1}`), label: String(o.label || o.value) }
+  const formattedOptionsJson =
+    inputType === 'single_choice'
+      ? normaliseQuestionOptions(
+          rawOptions.length > 0
+            ? rawOptions
+            : [
+                'A written rule I follow consistently',
+                'A habit that varies under pressure',
+                'I decide in the moment'
+              ]
         )
-      : inputType === 'single_choice'
-        ? [
-            { value: 'structured_written_rule', label: 'Yes. I follow a written rule consistently' },
-            { value: 'partial_informal_habit', label: 'Sometimes. I have a general habit, but it varies under pressure' },
-            { value: 'reactive_no_fixed_rule', label: 'No. I usually decide in the moment without a fixed rule' }
-          ]
-        : [];
+      : '[]';
+
+  const audience = normaliseStringArray(req.body?.audience, []);
+  const experience = normaliseStringArray(req.body?.experience, []);
+  const showIf = normaliseShowIf(req.body?.showIf, []);
+  const askInFlow = req.body?.askInFlow === false ? 0 : 1;
+  const resultNote = String(req.body?.resultNote || '').slice(0, 300);
+  const requestedOrder = Number(req.body?.order);
+  const order = requestedOrder > 0 && requestedOrder <= 200 ? requestedOrder : maxSort + 1;
 
   db.prepare(`
     INSERT INTO discovery_questions (
-      id, sort_order, domain, domain_title, prompt, input_type, options_json, is_active, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, sort_order, domain, domain_title, prompt, input_type, options_json, is_active, created_at, updated_at,
+      audience_json, experience_json, show_if_json, ask_in_flow, result_note
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     newId,
-    maxSort + 1,
+    order,
     domain,
     domainTitle,
     prompt,
     inputType,
-    JSON.stringify(formattedOptions),
+    formattedOptionsJson,
     isActive,
     now,
-    now
+    now,
+    JSON.stringify(audience),
+    JSON.stringify(experience),
+    JSON.stringify(showIf),
+    askInFlow,
+    resultNote || null
   );
 
   writeAuditEvent({
@@ -3956,23 +4191,65 @@ app.patch('/api/admin/discovery-questions/:questionId', requireRole(['ADMIN', 'C
       ? req.body.inputType
       : existing.input_type;
 
-  let nextOptionsJson = existing.options_json;
-  if (Array.isArray(req.body?.options)) {
-    const formatted = req.body.options.map((o: any, idx: number) =>
-      typeof o === 'string'
-        ? { value: `opt_${idx + 1}_${o.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 20)}`, label: o }
-        : { value: String(o.value || `opt_${idx + 1}`), label: String(o.label || o.value) }
-    );
-    nextOptionsJson = JSON.stringify(formatted);
-  }
+  const nextOptionsJson = normaliseQuestionOptions(req.body?.options, existing.options_json);
+
+  const existingAudience = (() => {
+    try {
+      const parsed = JSON.parse(existing.audience_json || '[]');
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const existingExperience = (() => {
+    try {
+      const parsed = JSON.parse(existing.experience_json || '[]');
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  })();
+  const existingShowIf = (() => {
+    try {
+      const parsed = JSON.parse(existing.show_if_json || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  })();
+
+  const nextAudience = normaliseStringArray(req.body?.audience, existingAudience);
+  const nextExperience = normaliseStringArray(req.body?.experience, existingExperience);
+  const nextShowIf = normaliseShowIf(req.body?.showIf, existingShowIf);
+  const nextAskInFlow =
+    typeof req.body?.askInFlow === 'boolean' ? (req.body.askInFlow ? 1 : 0) : existing.ask_in_flow;
+  const nextResultNote =
+    req.body?.resultNote !== undefined ? String(req.body.resultNote).slice(0, 300) : existing.result_note;
+  const nextOrder =
+    Number(req.body?.order) > 0 && Number(req.body.order) <= 200 ? Number(req.body.order) : existing.sort_order;
 
   const now = new Date().toISOString();
 
   db.prepare(`
     UPDATE discovery_questions
-    SET is_active = ?, prompt = ?, domain_title = ?, input_type = ?, options_json = ?, updated_at = ?
+    SET is_active = ?, prompt = ?, domain_title = ?, input_type = ?, options_json = ?, updated_at = ?,
+        audience_json = ?, experience_json = ?, show_if_json = ?, ask_in_flow = ?, result_note = ?, sort_order = ?
     WHERE id = ?
-  `).run(nextActive, nextPrompt, nextDomainTitle, nextInputType, nextOptionsJson, now, questionId);
+  `).run(
+    nextActive,
+    nextPrompt,
+    nextDomainTitle,
+    nextInputType,
+    nextOptionsJson,
+    now,
+    JSON.stringify(nextAudience),
+    JSON.stringify(nextExperience),
+    JSON.stringify(nextShowIf),
+    nextAskInFlow,
+    nextResultNote,
+    nextOrder,
+    questionId
+  );
 
   const updated = getAllDiscoveryQuestions();
   res.json({
@@ -4568,7 +4845,8 @@ app.patch('/api/admin/leads/:leadId', requireRole(['ADMIN', 'CURRICULUM_OWNER'])
 app.get('/api/admin/users/:userId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const row = db
     .prepare(
-      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at, assigned_guide_id
+      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at, assigned_guide_id,
+              permissions_json
          FROM users WHERE id = ?`
     )
     .get(req.params.userId) as any;
@@ -4767,6 +5045,37 @@ app.patch('/api/admin/users/:userId', requireRole(['ADMIN']), (req, res) => {
   });
 
   res.json({ success: true, userId, role: nextRole, accountStatus: nextStatus });
+});
+
+app.patch('/api/admin/users/:userId/permissions', requireRole(['ADMIN']), (req, res) => {
+  const { userId } = req.params;
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+  if (!target) return res.status(404).json({ success: false, error: 'User not found.' });
+
+  const raw = req.body?.permissions;
+  if (!Array.isArray(raw)) {
+    return res.status(400).json({ success: false, error: 'Send the list of sections this staff member can open.' });
+  }
+
+  const cleaned = [...new Set(raw.map((value: any) => String(value).trim()).filter(Boolean))].slice(0, 30);
+  const stored = cleaned.length ? JSON.stringify(cleaned) : null;
+
+  db.prepare('UPDATE users SET permissions_json = ?, updated_at = ? WHERE id = ?').run(
+    stored,
+    new Date().toISOString(),
+    userId
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'STAFF_PERMISSIONS_UPDATED',
+    entityType: 'USER',
+    entityId: userId,
+    details: { permissions: cleaned }
+  });
+
+  res.json({ success: true, userId, permissions: cleaned });
 });
 
 app.get('/api/admin/competencies', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {

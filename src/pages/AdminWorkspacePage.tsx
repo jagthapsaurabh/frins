@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { StaffSignInGate } from '../components/StaffSignInGate';
 import { AdminOverview } from './admin/AdminOverview';
@@ -28,7 +28,8 @@ export const AdminWorkspacePage: React.FC = () => {
 
   const known = !params.section || ADMIN_SECTIONS.some((section) => section.key === params.section);
 
-  const hasAdminAccess = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER';
+  const scopedGuide = user?.role === 'GUIDE' && (user.permissions?.length || 0) > 0;
+  const hasAdminAccess = user?.role === 'ADMIN' || user?.role === 'CURRICULUM_OWNER' || scopedGuide;
 
   if (!hasAdminAccess) {
     return (
@@ -42,6 +43,30 @@ export const AdminWorkspacePage: React.FC = () => {
 
   if (!known) {
     return <Navigate to="/admin" replace />;
+  }
+
+  // A staff account can be given a few sections and no more. The server enforces
+  // the same list, so this screen only has to explain the stop politely.
+  const permissions = user?.permissions && user.permissions.length ? user.permissions : null;
+  const allowed = !permissions || permissions.includes('*') || permissions.includes(activeTab);
+  const firstAllowed = ADMIN_SECTIONS.find((section) => permissions?.includes(section.key));
+
+  if (!allowed) {
+    return (
+      <div className="admin-body">
+        <div className="page-head">
+          <div>
+            <p className="micro-tag">Staff access</p>
+            <h1>This section is not part of your access.</h1>
+            <p>
+              Your account is set up for {permissions!.length} section{permissions!.length === 1 ? '' : 's'} of the
+              console. Ask an admin if you need this one opened up.
+            </p>
+          </div>
+          {firstAllowed && <Link to={firstAllowed.path}>Go to {firstAllowed.label}</Link>}
+        </div>
+      </div>
+    );
   }
 
   return (

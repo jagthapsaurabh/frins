@@ -10,6 +10,8 @@ export interface UserAccount {
   approved_level?: string;
   proposed_level?: string;
   evidence_status?: string;
+  /** Sections of the admin console this staff account may open. Null = role default. */
+  permissions?: string[] | null;
 }
 
 interface AuthContextValue {
