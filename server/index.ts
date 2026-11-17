@@ -20,8 +20,10 @@ import { buildTopicDraft } from './courseStudio.js';
 import {
   buildCourseDraft,
   canonicalWatchUrl,
+  fetchPlayerTimedTranscript,
   fetchTimedTranscript,
   fetchVideoExtras,
+  fetchWatchPage,
   countWords,
   extractYouTubeId,
   fetchVideoMeta,
@@ -5564,11 +5566,22 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
 
   const meta = await fetchVideoMeta(videoId);
 
+  /* One read of the watch page gives the description, the length, the creator's
+     chapters and the caption tracks. Chapters carry real start times, which is
+     what makes a two hour video skimmable. */
+  const page = await fetchWatchPage(videoId);
+
   let transcript = pasted;
   let source: 'YOUTUBE' | 'PASTED' | 'NONE' = 'PASTED';
   let language = '';
   let note: string | undefined;
   let fetchReason: string | undefined;
+
+  if (!transcript && page.segments.length) {
+    transcript = page.segments.map((segment) => segment.text).join('\n');
+    source = 'YOUTUBE';
+    language = 'en';
+  }
 
   if (!transcript) {
     const fetched = await fetchYouTubeTranscript(videoId);
@@ -5581,26 +5594,23 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     }
   }
 
-  /* The description and the creator's chapter list come off the same watch
-     page. Chapters carry real start times, which is what makes a two hour
-     video skimmable, so we keep them next to the video. */
-  const extras = await fetchVideoExtras(videoId);
-  const description = extras.description || '';
-  const chapters = extras.chapters || [];
-  const durationSeconds = extras.durationSeconds ?? null;
+  const description = page.description || '';
+  const chapters = page.chapters || [];
+  const durationSeconds = page.durationSeconds ?? null;
   const descriptionWords = countWords(description);
-  const canSummarise = descriptionWords >= 40 || chapters.length >= 2;
+  const canSummarise = descriptionWords >= 20 || chapters.length >= 2;
 
+  /* A summary never needs the transcript. The video is saved whatever YouTube
+     lets us read, and the summary says which material it used. */
   if (!transcript && !acceptDescription && !summaryOnly) {
     return res.status(422).json({
       success: false,
       error: canSummarise
-        ? 'YouTube held the captions back. You can still get a summary with real jump points, paste the transcript, or build the course from the description.'
+        ? 'The captions are held back, so a course would be written from the description and chapters. Summarise the video instead, paste the transcript, or build from the description.'
         : fetchReason || 'No transcript was found for this video. Paste the transcript and try again.',
       video: { ...meta, videoId },
       needsTranscript: true,
       canUseDescription: descriptionWords >= 40,
-      // The page can offer a summary instead of stopping at the paste box.
       canSummarise,
       durationSeconds,
       chapterCount: chapters.length
@@ -5614,20 +5624,10 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
     return res.status(422).json({
       success: false,
       error:
-        'A course needs words to work from. This video has no captions and only a thin description, so paste the transcript. A summary of it is still possible.',
+        'A course needs words to work from. This video has no captions and only a thin description, so paste the transcript. A summary of it needs nothing.',
       video: { ...meta, videoId },
       needsTranscript: true,
-      canSummarise
-    });
-  }
-
-  if (!transcript && summaryOnly && !canSummarise) {
-    return res.status(422).json({
-      success: false,
-      error:
-        'This video has no captions, no chapter list and almost no description, so there is nothing to summarise. Paste the transcript and try again.',
-      video: { ...meta, videoId },
-      needsTranscript: true
+      canSummarise: true
     });
   }
 
@@ -5720,7 +5720,7 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
 
   if (!transcript) {
     note = summaryOnly
-      ? 'Saved so the summary has a home. Ask for the summary and it appears on the right.'
+      ? 'Summary below. It was built from whatever the video publishes, and it says which.'
       : 'YouTube did not send the captions, so the course will be written from the video description. Paste the transcript any time to sharpen it.';
   }
 
@@ -5752,43 +5752,37 @@ app.post(
       });
     }
 
-    const segments = await fetchTimedTranscript(row.video_id);
-
-    /* Chapters or the duration may be missing on older rows. One watch page
-       read fills both, and the description too. */
-    let description = String(row.description || '');
-    let durationSeconds = row.duration_seconds ?? null;
-    let chapters = chaptersOf(row);
-    if (!durationSeconds || chapters.length < 2 || !description.trim()) {
-      const extras = await fetchVideoExtras(row.video_id);
-      description = description || extras.description || '';
-      durationSeconds = durationSeconds ?? (extras.durationSeconds ?? null);
-      if (chapters.length < 2) chapters = extras.chapters || [];
-      db.prepare(
-        `UPDATE video_sources
-            SET description = COALESCE(NULLIF(?, ''), description),
-                duration_seconds = COALESCE(?, duration_seconds),
-                chapters_json = COALESCE(?, chapters_json)
-          WHERE id = ?`
-      ).run(
-        extras.description || '',
-        extras.durationSeconds ?? null,
-        extras.chapters?.length ? JSON.stringify(extras.chapters) : null,
-        row.id
-      );
+    /* One read of the watch page gives everything: the description, the length,
+       the creator's chapters and the caption tracks. The player API is a second
+       door to the same words, used only when the first one stays shut. */
+    const page = await fetchWatchPage(row.video_id);
+    let segments = page.segments;
+    if (!segments.length && page.captionsListed) {
+      segments = await fetchPlayerTimedTranscript(row.video_id);
     }
 
-    if (!segments.length && !chapters.length && !description.trim()) {
-      return res.status(422).json({
-        success: false,
-        error:
-          'This video has no captions, no chapters and no description to work from. Paste the transcript and the summary will be built from the words.'
-      });
-    }
+    const description = String(row.description || '') || page.description;
+    const durationSeconds = row.duration_seconds ?? page.durationSeconds ?? null;
+    const chapters = chaptersOf(row).length >= 2 ? chaptersOf(row) : page.chapters;
+
+    /* Fill in whatever the row was missing. COALESCE keeps what is already
+       there, so a re-run never wipes a description someone edited. */
+    db.prepare(
+      `UPDATE video_sources
+          SET description = COALESCE(NULLIF(?, ''), description),
+              duration_seconds = COALESCE(?, duration_seconds),
+              chapters_json = COALESCE(?, chapters_json)
+        WHERE id = ?`
+    ).run(
+      page.description || '',
+      page.durationSeconds ?? null,
+      page.chapters?.length ? JSON.stringify(page.chapters) : null,
+      row.id
+    );
 
     const summary = await buildVideoSummary({
-      title: row.title,
-      channel: row.channel || '',
+      title: row.title || page.title,
+      channel: row.channel || page.channel || '',
       description,
       durationSeconds,
       segments,

@@ -30,7 +30,7 @@ interface VideoSummary {
   overview: string;
   sections: SummarySection[];
   takeaways: string[];
-  basis: 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION';
+  basis: 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
   generatedBy: 'LIVE_LLM' | 'DETERMINISTIC';
   modelName: string;
   durationSeconds: number | null;
@@ -144,7 +144,9 @@ const summaryBasisLabel = (basis?: string) =>
     ? 'From the captions'
     : basis === 'CHAPTERS'
       ? "From the creator's chapters"
-      : 'From the description only';
+      : basis === 'METADATA'
+        ? 'Title and length only'
+        : 'From the description only';
 
 /** A long video gets the two minute promise. A short one does not need it. */
 const readEstimate = (seconds?: number | null) =>
@@ -699,8 +701,8 @@ export const VideoStudioPage: React.FC = () => {
                   }}
                 />
                 <p className="form-hint">
-                  Watch, share, shorts and embed links all work. Captions are read straight from the
-                  video when YouTube serves them.
+                  Any YouTube video, watch, share, shorts or embed. A summary needs no transcript, so
+                  paste the link and press summarise.
                 </p>
               </div>
 
@@ -708,10 +710,10 @@ export const VideoStudioPage: React.FC = () => {
                 <div className="vs-needs">
                   <strong>YouTube held the captions back</strong>
                   <p>
-                    It happens on age restricted and members only videos.{' '}
+                    A summary does not need them, so that is the quicker way through.{' '}
                     {canSummarise
-                      ? 'You do not need the words to get the shape of it. Ask for a summary and jump to the part you need, paste the transcript, or build the course from the description.'
-                      : 'Paste the transcript from the video page, or let the model write the course from the video description.'}
+                      ? 'A course can also be written from the description and the chapter list.'
+                      : 'A course needs words, so paste the transcript from the video page.'}
                   </p>
 
                   {canSummarise && probe && (
@@ -737,7 +739,7 @@ export const VideoStudioPage: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <Sparkles size={13} /> Summarise it instead
+                            <Sparkles size={13} /> Just summarise the video
                           </>
                         )}
                       </button>
@@ -779,16 +781,26 @@ export const VideoStudioPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() => addVideo(needsTranscript)}
+                  onClick={() => addVideo(false, false, true)}
                   disabled={busy !== null}
                 >
-                  {busy === 'fetch' ? (
+                  {busy === 'fetch' || busy === 'summary' ? (
                     <>
                       <Loader2 size={14} className="vs-spin" /> Reading the video
                     </>
                   ) : (
-                    'Get the transcript'
+                    <>
+                      <Sparkles size={13} /> Summarise this video
+                    </>
                   )}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => addVideo(needsTranscript)}
+                  disabled={busy !== null}
+                >
+                  Build a course instead
                 </button>
               </div>
             </div>
@@ -968,43 +980,45 @@ export const VideoStudioPage: React.FC = () => {
 
               {!activeSummary ? (
                 <div className="vs-summary-pitch">
-                  <strong>
-                    {active.duration_seconds
-                      ? `${fmtDuration(active.duration_seconds)} of video, ${readEstimate(active.duration_seconds)}.`
-                      : 'The whole video, in a short read.'}
-                  </strong>
-                  <p>
-                    No need to sit through all of it. You get what the video covers, the time each
-                    part starts, and the few points worth keeping. Click a time to open the video at
-                    that minute.
-                  </p>
-                  {active.chapters && active.chapters.length > 0 && (
-                    <p className="vs-summary-fact">
-                      {active.chapters.length} chapters found on the video, so the jump points will be
-                      real.
-                    </p>
-                  )}
-                  <div className="vs-actions">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => generateSummary()}
-                      disabled={busy !== null}
-                    >
-                      {busy === 'summary' ? (
-                        <>
-                          <Loader2 size={14} className="vs-spin" /> Reading the video
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles size={13} /> Summarise this video
-                        </>
+                  {busy === 'summary' ? (
+                    <>
+                      <strong>Reading the video.</strong>
+                      <p>
+                        Captions first, then the creator's chapters, then the description. Up to a
+                        minute on the free model.
+                      </p>
+                      <div className="vs-summary-progress" aria-hidden="true" />
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        {active.duration_seconds
+                          ? `${fmtDuration(active.duration_seconds)} of video, ${readEstimate(active.duration_seconds)}.`
+                          : 'The whole video, in a short read.'}
+                      </strong>
+                      <p>
+                        No need to sit through all of it. You get what the video covers, the time each
+                        part starts, and the few points worth keeping. Click a time to open the video
+                        at that minute.
+                      </p>
+                      {(active.chapters?.length || 0) > 0 && (
+                        <p className="vs-summary-fact">
+                          {active.chapters?.length} chapters found on the video, so the jump points
+                          will be real.
+                        </p>
                       )}
-                    </button>
-                    {busy === 'summary' && (
-                      <span className="vs-summary-fact">Watching it so you do not have to. Up to a minute.</span>
-                    )}
-                  </div>
+                      <div className="vs-actions">
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => generateSummary()}
+                          disabled={busy !== null}
+                        >
+                          <Sparkles size={13} /> Summarise this video
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ) : (
                 <>
@@ -1016,7 +1030,9 @@ export const VideoStudioPage: React.FC = () => {
 
                   <div className="vs-summary-meta">
                     <span>{activeSummary.readingMinutes} min read</span>
-                    {active.duration_seconds ? <span>{fmtDuration(active.duration_seconds)} video</span> : null}
+                    {fmtDuration(active.duration_seconds) ? (
+                      <span>{fmtDuration(active.duration_seconds)} video</span>
+                    ) : null}
                     {activeSummary.sections.length > 0 ? (
                       <span>{activeSummary.sections.length} jump points</span>
                     ) : null}
@@ -1075,6 +1091,14 @@ export const VideoStudioPage: React.FC = () => {
                       Built from the description only. YouTube gave no captions and the creator wrote
                       no chapters, so there are no times to point at. Paste the transcript and rewrite
                       it for real jump points.
+                    </p>
+                  )}
+
+                  {activeSummary.basis === 'METADATA' && (
+                    <p className="vs-summary-fine">
+                      YouTube published no captions, no chapters and no description for this one, so
+                      there is nothing to summarise yet. Paste the transcript and the summary fills
+                      in with the time each part starts.
                     </p>
                   )}
 

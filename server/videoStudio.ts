@@ -45,6 +45,16 @@ export interface VideoExtras {
   chapters: Array<{ startSeconds: number; title: string }>;
 }
 
+/** Everything one watch page read can tell us, captions included. */
+export interface VideoMaterial extends VideoExtras {
+  title: string;
+  channel: string;
+  /** The spoken words with times, when YouTube lets us read them. */
+  segments: TimedSegment[];
+  /** True when the page lists caption tracks, even if the text stays locked. */
+  captionsListed: boolean;
+}
+
 export interface CourseDraftModule {
   position: number;
   title: string;
@@ -393,8 +403,23 @@ function mergeTinySegments(segments: TimedSegment[]): TimedSegment[] {
   return merged;
 }
 
-/** The captions with their times, which is what a summary with pointers needs. */
+/**
+ * The captions with their times, which is what a summary with pointers needs.
+ * The watch page is asked first, because it lists tracks the player API hides
+ * when a video is rate limited. The player API is the fallback.
+ */
 export async function fetchTimedTranscript(videoId: string): Promise<TimedSegment[]> {
+  try {
+    const page = await fetchWatchPage(videoId);
+    if (page.segments.length) return page.segments;
+  } catch {
+    /* fall through to the player API */
+  }
+  return fetchPlayerTimedTranscript(videoId);
+}
+
+/** The older mobile player route to the same words. */
+export async function fetchPlayerTimedTranscript(videoId: string): Promise<TimedSegment[]> {
   const client = {
     clientName: 'ANDROID_VR',
     clientVersion: '1.61.48',
@@ -556,51 +581,138 @@ function parseCaptionPayload(body: string): string {
  * Those chapters are real pointers, at real times, without a single caption.
  */
 export async function fetchVideoExtras(videoId: string): Promise<VideoExtras> {
-  const empty: VideoExtras = { description: '', durationSeconds: null, chapters: [] };
+  const material = await fetchWatchPage(videoId);
+  const { title, channel, segments, captionsListed, ...extras } = material;
+  return extras;
+}
+
+const WATCH_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+/** Reads one caption track and returns its timed lines. */
+async function readTrackSegments(baseUrl: string): Promise<TimedSegment[]> {
+  const base = baseUrl.replace(/\\u0026/g, '&');
+  for (const suffix of ['&fmt=json3', '']) {
+    try {
+      const res = await fetch(`${base}${suffix}`, {
+        headers: { 'User-Agent': WATCH_UA, 'Accept-Language': 'en-US,en;q=0.9' },
+        signal: AbortSignal.timeout(15000)
+      });
+      if (!res.ok) continue;
+      const segments = parseCaptionSegments(await res.text());
+      if (segments.length) return segments;
+    } catch {
+      /* try the next format */
+    }
+  }
+  return [];
+}
+
+/** Prefer the creator's English, then auto English, then the original language. */
+function pickCaptionTrack(tracks: CaptionTrack[]): CaptionTrack | null {
+  if (!tracks.length) return null;
+  return (
+    tracks.find((t) => t.languageCode === 'en' && t.kind !== 'asr') ||
+    tracks.find((t) => t.languageCode === 'en') ||
+    tracks.find((t) => String(t.languageCode || '').startsWith('en')) ||
+    tracks[0]
+  );
+}
+
+/**
+ * One read of the watch page gives the title, the channel, the description, the
+ * length, the creator's chapters, and the caption track list. That list is the
+ * widest door to the spoken words, so it is tried before the player API.
+ */
+export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
+  const empty: VideoMaterial = {
+    title: '',
+    channel: '',
+    description: '',
+    durationSeconds: null,
+    chapters: [],
+    segments: [],
+    captionsListed: false
+  };
+
+  let html = '';
   try {
-    const res = await fetch(`${canonicalWatchUrl(videoId)}&hl=en`, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
-      },
+    const res = await fetch(`${canonicalWatchUrl(videoId)}&hl=en&has_verified=1`, {
+      headers: { 'User-Agent': WATCH_UA, 'Accept-Language': 'en-US,en;q=0.9' },
       signal: AbortSignal.timeout(15000)
     });
     if (!res.ok) return empty;
-    const html = await res.text();
-
-    const raw =
-      html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1] ||
-      html.match(/"attributedDescription":\{"content":"((?:[^"\\]|\\.)*)"/)?.[1] ||
-      '';
-    const description = raw ? decodeJsonString(raw).trim() : '';
-
-    const lengthMatch = html.match(/"lengthSeconds":"(\d+)"/);
-    const durationSeconds = lengthMatch ? Number(lengthMatch[1]) || null : null;
-
-    // The player bar chapter list, when the creator set one.
-    const chapters: Array<{ startSeconds: number; title: string }> = [];
-    const chapterRe =
-      /"chapterRenderer":\{"title":\{"simpleText":"((?:[^"\\]|\\.)*)"\},"timeRangeStartMillis":(\d+)/g;
-    let match: RegExpExecArray | null;
-    while ((match = chapterRe.exec(html))) {
-      const title = decodeJsonString(match[1]).trim();
-      if (!title) continue;
-      chapters.push({ startSeconds: Math.max(0, Math.round(Number(match[2]) / 1000)), title });
-    }
-
-    // Otherwise, timestamps written in the description itself.
-    const fromDescription = parseTimestampedLines(description);
-    const finalChapters = chapters.length ? chapters : fromDescription;
-
-    return {
-      description,
-      durationSeconds,
-      chapters: dedupeChapters(finalChapters)
-    };
+    html = await res.text();
   } catch {
     return empty;
   }
+
+  /* Everything is read from the block that names this video. A watch page also
+     carries descriptions, lengths and chapters for other videos in its shelves,
+     and taking the first match on the page would attribute them to this one. */
+  const pinned = html.indexOf(`"videoDetails":{"videoId":"${videoId}"`);
+  const block = pinned >= 0 ? html.slice(pinned, pinned + 4000) : '';
+
+  const grab = (key: string, from = block) => {
+    const raw = from.match(new RegExp(`"${key}":"((?:[^"\\\\]|\\\\.)*)"`))?.[1];
+    return raw ? decodeJsonString(raw).trim() : '';
+  };
+
+  const title = grab('title') || decodeJsonString(html.match(/<meta name="title" content="((?:[^"]|\\.)*)"/)?.[1] || '').trim();
+  const channel = grab('author') || grab('ownerChannelName') || '';
+
+  const lengthMatch = block.match(/"lengthSeconds":"(\d+)"/);
+  const durationSeconds = lengthMatch ? Number(lengthMatch[1]) || null : null;
+
+  const description = grab('shortDescription');
+
+  /* Chapters live in the initial data, after the player block. */
+  const rest = pinned >= 0 ? html.slice(pinned + 4000) : html;
+  const chapters: Array<{ startSeconds: number; title: string }> = [];
+  const chapterRe =
+    /"chapterRenderer":\{"title":\{"simpleText":"((?:[^"\\\\]|\\\\.)*)"\},"timeRangeStartMillis":(\d+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = chapterRe.exec(rest))) {
+    const chapterTitle = decodeJsonString(match[1]).trim();
+    if (!chapterTitle) continue;
+    chapters.push({ startSeconds: Math.max(0, Math.round(Number(match[2]) / 1000)), title: chapterTitle });
+  }
+
+  /* Timestamps written into the description are the next best pointer, and the
+     only one left when a creator sets no chapter markers. */
+  const fromDescription = parseTimestampedLines(description);
+  const usableChapters = clampChapters(chapters.length ? chapters : fromDescription, durationSeconds);
+
+  /* Caption tracks sit just before the player block on the same response. */
+  let tracks: CaptionTrack[] = [];
+  const captionZone = pinned >= 0 ? html.slice(Math.max(0, pinned - 80000), pinned) : html;
+  const trackList = captionZone.match(/"captionTracks":(\[[\s\S]*?\])/);
+  if (trackList) {
+    try {
+      const parsed = JSON.parse(trackList[1]);
+      if (Array.isArray(parsed)) tracks = parsed as CaptionTrack[];
+    } catch {
+      /* the list was cut short, fall through to the player API */
+    }
+  }
+
+  const track = pickCaptionTrack(tracks);
+  let segments = track?.baseUrl ? await readTrackSegments(track.baseUrl) : [];
+  /* The page's own track is sometimes served empty to a server. When it is,
+     the mobile player API usually still hands the same words over. */
+  if (!segments.length && tracks.length) {
+    segments = await fetchPlayerTimedTranscript(videoId);
+  }
+
+  return {
+    title,
+    channel,
+    description,
+    durationSeconds,
+    chapters: usableChapters,
+    segments,
+    captionsListed: tracks.length > 0
+  };
 }
 
 /** Kept for callers that only want the description. */
@@ -624,6 +736,24 @@ export function parseTimestampedLines(text: string): Array<{ startSeconds: numbe
     out.push({ startSeconds: seconds, title });
   }
   return out;
+}
+
+/**
+ * A chapter that starts after the video ends belongs to another video on the
+ * page, or to a line of the description that only looked like a time. Drop it,
+ * so a jump point can never send someone past the end.
+ */
+export function clampChapters(
+  chapters: Array<{ startSeconds: number; title: string }>,
+  durationSeconds: number | null
+) {
+  return dedupeChapters(
+    chapters.filter(
+      (chapter) =>
+        Number.isFinite(chapter.startSeconds) &&
+        (!durationSeconds || (chapter.startSeconds >= 0 && chapter.startSeconds <= durationSeconds))
+    )
+  );
 }
 
 const dedupeChapters = (chapters: Array<{ startSeconds: number; title: string }>) => {

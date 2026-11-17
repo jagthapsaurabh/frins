@@ -26,6 +26,7 @@ import {
   extractYouTubeId,
   stripTranscriptMarkup,
   buildDeterministicDraft,
+  clampChapters,
   stripDashes
 } from '../server/videoStudio.js';
 import { buildTopicOutline } from '../server/courseStudio.js';
@@ -689,5 +690,32 @@ describe('A long video becomes a short read', () => {
       'https://youtu.be/abcdefghijk'
     );
     expect(/[\u2010\u2011\u2013\u2014\u2015]/.test(text)).toBe(false);
+  });
+});
+
+describe('A pointer never lands past the end of the video', () => {
+  it('FRI-SUMMARY-CLAMP: chapters that start after the video ends are dropped', () => {
+    const chapters = clampChapters(
+      [
+        { startSeconds: 0, title: 'Intro' },
+        { startSeconds: 300, title: 'The middle' },
+        { startSeconds: 3600, title: 'Borrowed from another video' },
+        { startSeconds: 0, title: 'Intro again' }
+      ],
+      600
+    );
+
+    expect(chapters.map((chapter) => chapter.title)).toEqual(['Intro', 'The middle']);
+  });
+
+  it('FRI-SUMMARY-CLAMP-NODURATION: without a length, real times are kept in order', () => {
+    const chapters = clampChapters(
+      [
+        { startSeconds: 120, title: 'Second' },
+        { startSeconds: 0, title: 'First' }
+      ],
+      null
+    );
+    expect(chapters.map((chapter) => chapter.title)).toEqual(['First', 'Second']);
   });
 });

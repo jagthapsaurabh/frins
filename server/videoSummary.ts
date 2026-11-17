@@ -19,7 +19,7 @@
 import { aiChat, parseJsonLoose } from './aiClient.js';
 import { keyTopics, type TimedSegment } from './videoStudio.js';
 
-export type SummaryBasis = 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION';
+export type SummaryBasis = 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
 
 export interface SummarySection {
   startSeconds: number;
@@ -207,7 +207,9 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
     ? 'TRANSCRIPT'
     : input.chapters.length >= 2
       ? 'CHAPTERS'
-      : 'DESCRIPTION';
+      : (input.description || '').trim()
+        ? 'DESCRIPTION'
+        : 'METADATA';
 
   /* -------- the offline summary, which is also what we hand the model ---- */
   const offline: VideoSummary = (() => {
@@ -259,6 +261,20 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
       };
     }
 
+    if (!(input.description || '').trim()) {
+      const length = durationSeconds ? `${formatTimestamp(durationSeconds)} long` : 'of unknown length';
+      return {
+        overview: `${input.title}${input.channel ? ` by ${input.channel}` : ''} is ${length}. YouTube published no captions, no chapters and no description for it, so there is nothing to read yet. Paste the transcript and this page fills in with the times of each part.`,
+        sections: [],
+        takeaways: [],
+        basis: 'METADATA',
+        generatedBy: 'DETERMINISTIC',
+        modelName: 'rules',
+        durationSeconds,
+        readingMinutes: 1
+      };
+    }
+
     const overview =
       firstSentences(input.description || '', 3) ||
       `${input.title}. There is no transcript and no chapter list for this video yet.`;
@@ -276,7 +292,9 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
 
   offline.readingMinutes = readingMinutesOf(offline);
 
-  if (basis === 'DESCRIPTION' && !(input.description || '').trim()) return offline;
+  /* Nothing was published at all. Say that plainly instead of asking a model
+     to pad it out. There is still a video, and there is still the truth. */
+  if (basis === 'METADATA') return offline;
 
   /* ------------------------------ ask the model to write it properly ----- */
   const allowed = new Map<string, number>();
@@ -377,9 +395,15 @@ export function summaryToText(summary: VideoSummary, title: string, url: string)
   const lines: string[] = [];
   lines.push(title);
   lines.push(url);
-  lines.push(
-    `${summary.basis === 'TRANSCRIPT' ? 'From the transcript' : summary.basis === 'CHAPTERS' ? 'From the chapters' : 'From the description'} · ${summary.readingMinutes} min read`
-  );
+  const from =
+    summary.basis === 'TRANSCRIPT'
+      ? 'From the transcript'
+      : summary.basis === 'CHAPTERS'
+        ? 'From the chapters'
+        : summary.basis === 'DESCRIPTION'
+          ? 'From the description'
+          : 'From the title and length';
+  lines.push(`${from} · ${summary.readingMinutes} min read`);
   lines.push('');
   lines.push(summary.overview);
   if (summary.sections.length) {

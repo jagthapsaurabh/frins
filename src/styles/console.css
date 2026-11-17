@@ -2875,6 +2875,28 @@ p.vs-summary-fact { margin: 6px 0 0; }
   color: #8A8A92;
 }
 
+.vs-summary-progress {
+  margin-top: 14px;
+  height: 3px;
+  width: 100%;
+  background: #F1EDE2;
+  overflow: hidden;
+}
+
+.vs-summary-progress::after {
+  content: '';
+  display: block;
+  width: 38%;
+  height: 100%;
+  background: #D4A017;
+  animation: vs-summary-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes vs-summary-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
 .vs-list-main .vs-list-badge {
   display: inline-block;
   width: auto;
