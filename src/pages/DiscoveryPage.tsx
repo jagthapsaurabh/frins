@@ -962,7 +962,7 @@ export const DiscoveryPage: React.FC<{ onOpenSignIn?: () => void }> = ({ onOpenS
                     >
                       {answeredCount < effectiveSettings.minAnswers
                         ? `Answer ${effectiveSettings.minAnswers - answeredCount} more to unlock your result`
-                        : 'Skip to the end'}
+                        : 'Finish and see my result'}
                     </button>
                   </aside>
                 </div>
