@@ -10,6 +10,8 @@ type RequireRole = (roles: Role[]) => (req: Request, res: Response, next: NextFu
  * draws, which keeps the first paint quick once the roster is in the thousands.
  */
 export function registerSummaryRoutes(app: Express, requireRole: RequireRole) {
+  // A guide holding a role that includes Overview reaches this through the
+  // section gate under /api/admin, which checks the role's tab list first.
   app.get('/api/admin/summary', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
     const count = (sql: string, ...params: any[]) => (db.prepare(sql).get(...params) as any).c as number;
 

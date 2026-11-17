@@ -2909,3 +2909,204 @@ p.vs-summary-fact { margin: 6px 0 0; }
 @media (max-width: 720px) {
   .vs-jump { grid-template-columns: 52px minmax(0, 1fr); gap: 8px; }
 }
+
+/* ------------- v25: named roles, and who holds them ---------------------- */
+
+.staff-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: -4px 0 12px;
+  border-bottom: 1px solid var(--border-subtle, #E4DFD2);
+}
+
+.staff-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 13px;
+  border-bottom: 2px solid transparent;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted, #6E6E76);
+  text-decoration: none;
+}
+
+.staff-tab:hover { color: #14141A; }
+
+.staff-tab.on {
+  color: #0A0A0B;
+  border-bottom-color: #D4A017;
+}
+
+.role-list { display: flex; flex-direction: column; }
+
+.role-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-subtle, #EDE9DE);
+}
+
+.role-row:first-child { border-top: 0; padding-top: 4px; }
+
+.role-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  margin-top: 1px;
+  border: 1px solid #E7D6A8;
+  background: #FDF9EE;
+  color: #9A6B12;
+}
+
+.role-main { flex: 1 1 auto; min-width: 0; }
+
+.role-main strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-main, #14141A);
+}
+
+.role-meta {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.role-tabs {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted, #6E6E76);
+}
+
+.role-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.role-builtin {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 22px;
+}
+
+.role-builtin li strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-main, #14141A);
+}
+
+.role-builtin li span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-muted, #6E6E76);
+}
+
+.role-form .detail-grid { align-items: start; }
+
+.level-choices { display: flex; flex-direction: column; gap: 8px; }
+
+.level-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--border-subtle, #E4DFD2);
+  background: #FCFCFB;
+  cursor: pointer;
+}
+
+.level-choice input { margin: 2px 0 0; accent-color: #B98A14; }
+
+.level-choice span { display: grid; gap: 2px; }
+
+.level-choice strong { font-size: 12.5px; color: #22222A; }
+
+.level-choice span span { font-size: 11.5px; line-height: 1.5; color: #8A8A92; }
+
+.level-choice.on {
+  border-color: #D9C48A;
+  background: #FDF9EE;
+}
+
+.access-matrix-grid .access-tile { grid-template-columns: 16px 18px minmax(0, 1fr); }
+
+/* The everything tile has no icon, so its text takes the space instead. */
+.access-tile.full {
+  width: 100%;
+  margin-bottom: 2px;
+  grid-template-columns: 16px minmax(0, 1fr);
+  padding: 10px 12px;
+}
+
+.access-tile.full .access-tile-text strong { font-size: 12.5px; }
+
+.role-note-card { padding: 16px; }
+
+.role-note-title {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  color: var(--text-main, #14141A);
+}
+
+.role-note-card p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted, #6E6E76);
+}
+
+@media (max-width: 720px) {
+  .role-builtin { grid-template-columns: minmax(0, 1fr); }
+  .role-row { flex-wrap: wrap; }
+  .role-actions { width: 100%; justify-content: flex-end; }
+}
+
+.role-access {
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border-left: 2px solid #D4A017;
+  background: #FCFAF3;
+}
+
+.role-access-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.role-access-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #14141A;
+}
+
+.role-access p { margin: 0 0 6px; }
+
+/* A quiet link, for a line inside a note. */
+.app-shell .role-access .link-button {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #6B4E06;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

@@ -12,6 +12,9 @@ export interface UserAccount {
   evidence_status?: string;
   /** Sections of the admin console this staff account may open. Null = role default. */
   permissions?: string[] | null;
+  /** The named role an admin gave this account, if any. */
+  role_id?: string | null;
+  role_name?: string | null;
 }
 
 interface AuthContextValue {

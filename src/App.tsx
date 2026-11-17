@@ -17,6 +17,7 @@ import { VideoStudioPage } from './pages/admin/VideoStudioPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { NewNotificationPage } from './pages/admin/AdminNotifications';
 import { NewStaffPage, StaffAccountPage } from './pages/admin/StaffPages';
+import { RolesPage, RoleEditorPage } from './pages/admin/RolesPage';
 import { DiscoveryQuestionPage, DiscoveryQuestionsPage } from './pages/admin/DiscoveryPages';
 import { DiscoveryResultPage } from './pages/admin/DiscoveryResults';
 import { TaskDetailPage } from './pages/admin/TaskDetailPage';
@@ -195,6 +196,36 @@ export const EcosystemShell: React.FC = () => {
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
             <AppShell>
               <VideoStudioPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/staff/roles"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <RolesPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/staff/roles/new"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <RoleEditorPage />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/staff/roles/:roleId"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <RoleEditorPage />
             </AppShell>
           </RequireStaff>
         }

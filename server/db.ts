@@ -1143,6 +1143,20 @@ export function initDatabaseAndSeed() {
       updated_at TEXT NOT NULL
     );
 
+    /* An admin can name a role and choose exactly which tabs it opens. Staff
+       accounts carry that role, so access is set once, not per person. */
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+      description TEXT,
+      base_role TEXT NOT NULL CHECK (base_role IN ('GUIDE', 'CURRICULUM_OWNER', 'ADMIN')),
+      sections_json TEXT NOT NULL DEFAULT '[]',
+      created_by_id TEXT,
+      created_by_name TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS auth_sessions (
       token TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -1799,6 +1813,8 @@ export function initDatabaseAndSeed() {
     'ALTER TABLE discovery_questions ADD COLUMN ask_in_flow INTEGER NOT NULL DEFAULT 1',
     'ALTER TABLE discovery_questions ADD COLUMN result_note TEXT',
     'ALTER TABLE users ADD COLUMN permissions_json TEXT',
+    // A staff account can be given a named role instead of a personal list.
+    'ALTER TABLE users ADD COLUMN role_id TEXT',
     'ALTER TABLE notifications ADD COLUMN event_key TEXT'
   ];
   for (const statement of flowColumns) {

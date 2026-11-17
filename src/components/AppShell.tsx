@@ -321,7 +321,7 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                 <span className="app-avatar">{initialsOf(user?.name)}</span>
                 <span className="app-account-meta">
                   <strong>{user?.name || 'Guest'}</strong>
-                  <small>{ROLE_LABEL[user?.role || ''] || 'Visitor'}</small>
+                  <small>{user?.role_name || ROLE_LABEL[user?.role || ''] || 'Visitor'}</small>
                 </span>
                 <ChevronDown size={15} className={`app-chevron ${menuOpen ? 'up' : ''}`} />
               </button>
@@ -333,7 +333,9 @@ export const AppShell: React.FC<{ children: React.ReactNode }> = ({ children }) 
                     <div>
                       <strong>{user?.name}</strong>
                       <small>{user?.email}</small>
-                      <span className="app-role-chip">{ROLE_LABEL[user?.role || ''] || 'Visitor'}</span>
+                      <span className="app-role-chip">
+                        {user?.role_name || ROLE_LABEL[user?.role || ''] || 'Visitor'}
+                      </span>
                     </div>
                   </div>
 

@@ -6,6 +6,9 @@ import { db, initDatabaseAndSeed } from '../server/db.js';
 let server: Server;
 let base = '';
 const qaEmail = `qa.other.${Date.now()}@example.com`;
+const roleStamp = Date.now();
+const roleName = `QA reviewer ${roleStamp}`;
+const roleEmail = `qa.role.${roleStamp}@example.com`;
 
 const login = async (email: string, password = 'frins123') => {
   const res = await fetch(`${base}/api/auth/login`, {
@@ -33,6 +36,8 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     db.prepare('DELETE FROM discovery_sessions WHERE lower(participant_email) = ?').run(qaEmail);
     db.prepare('DELETE FROM leads WHERE lower(email) = ?').run(qaEmail);
     db.prepare('DELETE FROM call_bookings WHERE lower(participant_email) = ?').run(qaEmail);
+    db.prepare('DELETE FROM users WHERE lower(email) = ?').run(roleEmail);
+    db.prepare('DELETE FROM roles WHERE name = ?').run(roleName);
     await new Promise<void>((resolve) => server.close(() => resolve()));
   });
 
@@ -807,5 +812,136 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
     db.prepare('DELETE FROM call_bookings WHERE id = ?').run(bookedBody.bookingId);
     db.prepare("DELETE FROM notifications WHERE title = 'Call request from Aarav Mehta'").run();
     db.prepare("DELETE FROM notifications WHERE title = 'Call cancelled' AND message LIKE '%2030-01-15%'").run();
+  });
+
+
+  it('FRI-ROLE-001: a new role opens only its own tabs for the person holding it', async () => {
+    const adminToken = await login('admin@frins.org');
+
+    const created = await fetch(`${base}/api/admin/roles`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: roleName,
+        description: 'Reviews course drafts only',
+        baseRole: 'CURRICULUM_OWNER',
+        sections: ['courses', 'video']
+      })
+    });
+    expect(created.status).toBe(201);
+    const role = (await created.json()).role;
+    expect(role.sections).toEqual(['courses', 'video']);
+    expect(role.memberCount).toBe(0);
+
+    const account = await fetch(`${base}/api/admin/users`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'QA Reviewer', email: roleEmail, roleId: role.id })
+    });
+    expect(account.status).toBe(201);
+    const accountJson = await account.json();
+    expect(accountJson.roleName).toBe(roleName);
+    const password = accountJson.temporaryPassword;
+    expect(password).toBeTruthy();
+
+    const signIn = await fetch(`${base}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: roleEmail, password })
+    });
+    const session = await signIn.json();
+    expect(session.user.role).toBe('CURRICULUM_OWNER');
+    expect(session.user.role_name).toBe(roleName);
+    expect(session.user.permissions).toEqual(['courses', 'video']);
+
+    const courses = await fetch(`${base}/api/admin/courses`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    });
+    expect(courses.status).toBe(200);
+
+    const staff = await fetch(`${base}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    });
+    expect(staff.status).toBe(403);
+
+    // The role is the only description of this person's access.
+    const row = db.prepare('SELECT role_id, permissions_json FROM users WHERE lower(email) = ?').get(roleEmail) as any;
+    expect(row.role_id).toBe(role.id);
+    expect(row.permissions_json).toBeNull();
+
+    /* Changing the role changes everyone who holds it, at the next request. */
+    const narrowed = await fetch(`${base}/api/admin/roles/${role.id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sections: ['video'] })
+    });
+    expect(narrowed.status).toBe(200);
+
+    const coursesAgain = await fetch(`${base}/api/admin/courses`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    });
+    expect(coursesAgain.status).toBe(403);
+
+    const video = await fetch(`${base}/api/admin/videos`, {
+      headers: { Authorization: `Bearer ${session.token}` }
+    });
+    expect(video.status).toBe(200);
+  });
+
+  it('FRI-ROLE-002: nobody except a full administrator can hand out access', async () => {
+    const adminToken = await login('admin@frins.org');
+    const reviewerToken = await login(roleEmail, 'nope');
+    expect(reviewerToken).toBeUndefined();
+
+    const reviewer = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(roleEmail) as any;
+    expect(reviewer).toBeTruthy();
+    const owned = db.prepare("SELECT name FROM roles WHERE name = ?").get(roleName) as any;
+    expect(owned).toBeTruthy();
+
+    // A curriculum owner without a named role still cannot change who has access.
+    const ownerToken = await login('vikram.guide@frins.org');
+    const attempt = await fetch(`${base}/api/admin/roles`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ownerToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${roleName} b`, baseRole: 'ADMIN', sections: ['*'] })
+    });
+    expect(attempt.status).toBe(403);
+
+    // A role in use cannot be deleted out from under its people.
+    const role = db.prepare('SELECT id FROM roles WHERE name = ?').get(roleName) as any;
+    const removal = await fetch(`${base}/api/admin/roles/${role.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    expect(removal.status).toBe(409);
+  });
+
+  it('FRI-ROLE-003: an unknown tab is dropped, and an empty role is refused', async () => {
+    const adminToken = await login('admin@frins.org');
+
+    const refused = await fetch(`${base}/api/admin/roles`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: `${roleName} empty`, baseRole: 'GUIDE', sections: [] })
+    });
+    expect(refused.status).toBe(400);
+
+    const filtered = await fetch(`${base}/api/admin/roles`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: `${roleName} filtered`,
+        baseRole: 'GUIDE',
+        sections: ['courses', 'not-a-tab', 'root']
+      })
+    });
+    expect(filtered.status).toBe(201);
+    const role = (await filtered.json()).role;
+    expect(role.sections).toEqual(['courses']);
+
+    await fetch(`${base}/api/admin/roles/${role.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
   });
 });

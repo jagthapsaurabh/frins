@@ -24,6 +24,7 @@ import {
   Toolbar
 } from '../../components/console/ConsoleUI';
 import { ADMIN_SECTIONS } from '../adminSections';
+import { StaffTabs, type NamedRole } from './RolesPage';
 
 const ROLE_LABEL: Record<string, string> = {
   LEARNER: 'Student',
@@ -40,6 +41,48 @@ const initialsOf = (name?: string) =>
     .map((part) => part[0]?.toUpperCase())
     .join('');
 
+/**
+ * One select for both kinds of role: the four built in ones, and any role this
+ * admin made. A named role carries its own level, so the two never disagree.
+ */
+const RolePicker: React.FC<{
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  roles: NamedRole[];
+  includeLearner?: boolean;
+  disabled?: boolean;
+}> = ({ id, value, onChange, roles, includeLearner = true, disabled }) => (
+  <select id={id} className="form-select" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <optgroup label="Built in">
+      {includeLearner && <option value="builtin:LEARNER">Student</option>}
+      <option value="builtin:GUIDE">Guide</option>
+      <option value="builtin:CURRICULUM_OWNER">Curriculum owner</option>
+      <option value="builtin:ADMIN">Administrator</option>
+    </optgroup>
+    {roles.length > 0 && (
+      <optgroup label="Your roles">
+        {roles.map((role) => (
+          <option key={role.id} value={`role:${role.id}`}>
+            {role.name}
+          </option>
+        ))}
+      </optgroup>
+    )}
+  </select>
+);
+
+const roleValueFor = (account: { role_id?: string | null; role?: string }) =>
+  account.role_id ? `role:${account.role_id}` : `builtin:${account.role || 'LEARNER'}`;
+
+const roleNameFor = (value: string, roles: NamedRole[]) => {
+  if (value.startsWith('role:')) {
+    const found = roles.find((role) => role.id === value.slice(5));
+    return found?.name || 'Role';
+  }
+  return ROLE_LABEL[value.slice(8)] || value.slice(8);
+};
+
 /** Directory of every account: staff and learners, filters on the left of the table. */
 export const StaffDirectory: React.FC = () => {
   const { authFetch, user } = useAuth();
@@ -55,6 +98,9 @@ export const StaffDirectory: React.FC = () => {
   // Only people who can sign in to a staff console. Learners live in their own tab.
   const list = usePagedList<any>(authFetch, '/api/admin/users', { q, role, page, limit: 20, scope: 'staff' });
 
+  // Only a full administrator can create accounts or hand out roles.
+  const canManage = user?.role === 'ADMIN' && !(user?.permissions?.length || 0);
+
   return (
     <div>
       <PageHead
@@ -65,11 +111,15 @@ export const StaffDirectory: React.FC = () => {
             : undefined
         }
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/staff/new')}>
-            <Plus size={14} /> New account
-          </button>
+          canManage ? (
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/admin/staff/new')}>
+              <Plus size={14} /> New account
+            </button>
+          ) : undefined
         }
       />
+
+      <StaffTabs active="accounts" />
 
       {list.error && <div className="governance-alert danger">{list.error}</div>}
 
@@ -114,7 +164,12 @@ export const StaffDirectory: React.FC = () => {
             <td data-label="Email" className="row-sub">
               {account.email}
             </td>
-            <td data-label="Role">{ROLE_LABEL[account.role] || account.role}</td>
+            <td data-label="Role">
+              <span className="row-title">{account.role_name || ROLE_LABEL[account.role] || account.role}</span>
+              {account.role_name && (
+                <span className="row-sub">{ROLE_LABEL[account.role] || account.role}</span>
+              )}
+            </td>
             <td data-label="Status">
               <span className={`status-pill ${account.account_status === 'ACTIVE' ? 'approved' : 'danger'}`}>
                 {account.account_status === 'ACTIVE' ? 'Active' : 'Suspended'}
@@ -138,19 +193,37 @@ export const NewStaffPage: React.FC = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('GUIDE');
+  const [roleValue, setRoleValue] = useState('builtin:GUIDE');
   const [track, setTrack] = useState('trader');
+  const [roles, setRoles] = useState<NamedRole[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [created, setCreated] = useState<{ password: string | null; email: string; name: string } | null>(null);
+  const [created, setCreated] = useState<{
+    password: string | null;
+    email: string;
+    name: string;
+    roleName: string;
+  } | null>(null);
+
+  useEffect(() => {
+    authFetch('/api/admin/roles')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setRoles(json?.rows || []))
+      .catch(() => undefined);
+  }, [authFetch]);
+
+  const chosenRole = roles.find((entry) => `role:${entry.id}` === roleValue);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
+    const body = chosenRole
+      ? { name, email, roleId: chosenRole.id, track }
+      : { name, email, role: roleValue.slice(8), track };
     const res = await authFetch('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ name, email, role, track })
+      body: JSON.stringify(body)
     });
     const json = await res.json();
     setBusy(false);
@@ -158,7 +231,12 @@ export const NewStaffPage: React.FC = () => {
       setError(json.error || 'Could not create the account.');
       return;
     }
-    setCreated({ password: json.temporaryPassword, email, name });
+    setCreated({
+      password: json.temporaryPassword,
+      email,
+      name,
+      roleName: chosenRole?.name || roleNameFor(roleValue, roles)
+    });
   };
 
   if (created) {
@@ -176,6 +254,7 @@ export const NewStaffPage: React.FC = () => {
               <h2>Temporary password</h2>
               <p>Shown once. Send it to {created.email}, and ask them to change it after signing in.</p>
             </div>
+            <span className="vs-badge plain">{created.roleName}</span>
           </div>
           <div className="temp-password">{created.password || 'Set by you at creation'}</div>
           <div className="page-head-actions" style={{ marginTop: 16 }}>
@@ -230,12 +309,7 @@ export const NewStaffPage: React.FC = () => {
           <div className="form-row-2">
             <div className="form-group">
               <label className="form-label" htmlFor="staff-role">Role</label>
-              <select id="staff-role" className="form-select" value={role} onChange={(e) => setRole(e.target.value)}>
-                <option value="GUIDE">Guide</option>
-                <option value="CURRICULUM_OWNER">Curriculum owner</option>
-                <option value="ADMIN">Administrator</option>
-                <option value="LEARNER">Student</option>
-              </select>
+              <RolePicker id="staff-role" value={roleValue} onChange={setRoleValue} roles={roles} />
             </div>
             <div className="form-group">
               <label className="form-label" htmlFor="staff-track">Track</label>
@@ -248,6 +322,24 @@ export const NewStaffPage: React.FC = () => {
               </select>
             </div>
           </div>
+          {chosenRole ? (
+            <p className="form-hint">
+              {chosenRole.name} opens{' '}
+              {chosenRole.sections.includes('*')
+                ? 'every tab'
+                : `${chosenRole.sections.length} ${chosenRole.sections.length === 1 ? 'tab' : 'tabs'}`}
+              : {chosenRole.sections.includes('*')
+                ? 'the whole console'
+                : chosenRole.sections
+                    .map((key) => ADMIN_SECTIONS.find((section) => section.key === key)?.label || key)
+                    .join(', ')}
+              . Change it later on the account page, or edit the role itself.
+            </p>
+          ) : (
+            <p className="form-hint">
+              A built in role sees the whole of its own workspace. A role you made opens only its own tabs.
+            </p>
+          )}
           <p className="form-hint">
             A temporary password is generated and shown once. Nobody can log in with a guessable default.
           </p>
@@ -311,7 +403,8 @@ export const StaffAccountPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
-  const [role, setRole] = useState('');
+  const [roleValue, setRoleValue] = useState('builtin:GUIDE');
+  const [roles, setRoles] = useState<NamedRole[]>([]);
   const [confirm, setConfirm] = useState<'role' | 'status' | 'password' | null>(null);
   const [busy, setBusy] = useState(false);
   // The tabs this staff account may open. Empty means the full role view.
@@ -326,7 +419,7 @@ export const StaffAccountPage: React.FC = () => {
       setError(json.error || 'That account does not exist.');
     } else {
       setAccount(json.account);
-      setRole(json.account.role);
+      setRoleValue(roleValueFor(json.account));
       setGuide(json.guide || null);
       setLearners(json.learners || []);
       setLearnerStats(json.learnerStats || null);
@@ -349,6 +442,13 @@ export const StaffAccountPage: React.FC = () => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    authFetch('/api/admin/roles')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setRoles(json?.rows || []))
+      .catch(() => undefined);
+  }, [authFetch]);
+
   const run = async (action: 'role' | 'status' | 'password') => {
     if (!account) return;
     setBusy(true);
@@ -356,13 +456,21 @@ export const StaffAccountPage: React.FC = () => {
     setError(null);
     try {
       if (action === 'role') {
+        const named = roleValue.startsWith('role:');
         const res = await authFetch(`/api/admin/users/${account.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({ role })
+          body: JSON.stringify({
+            roleId: named ? roleValue.slice(5) : '',
+            role: named ? undefined : roleValue.slice(8)
+          })
         });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.error || 'Could not change the role.');
-        setBanner(`Role set to ${ROLE_LABEL[role] || role}.`);
+        setBanner(
+          named
+            ? `Role set to ${json.roleName || 'the chosen role'}. Their tabs come from the role.`
+            : `Role set to ${ROLE_LABEL[json.role] || json.role}. They now see everything that role covers.`
+        );
         load();
       }
       if (action === 'status') {
@@ -431,7 +539,11 @@ export const StaffAccountPage: React.FC = () => {
 
       <PageHead
         title={account.name}
-        meta={ROLE_LABEL[account.role] || account.role}
+        meta={
+          account.role_name
+            ? `${account.role_name} · ${ROLE_LABEL[account.role] || account.role}`
+            : ROLE_LABEL[account.role] || account.role
+        }
         actions={
           <>
             <span className={`status-pill ${isActive ? 'approved' : 'danger'}`}>
@@ -461,7 +573,7 @@ export const StaffAccountPage: React.FC = () => {
         </div>
         <div className="fact">
           <span>Role</span>
-          <strong>{ROLE_LABEL[account.role] || account.role}</strong>
+          <strong>{account.role_name || ROLE_LABEL[account.role] || account.role}</strong>
         </div>
         <div className="fact">
           <span>Status</span>
@@ -587,7 +699,38 @@ export const StaffAccountPage: React.FC = () => {
               ))}
             </ul>
 
-            {(account.role === 'GUIDE' || account.role === 'CURRICULUM_OWNER') && !isSelf && (
+            {account.role_id && (
+              <div className="role-access">
+                <div className="role-access-head">
+                  <span className="role-access-name">{account.role_name}</span>
+                  <span className="section-note">
+                    {account.role_sections_json
+                      ? (() => {
+                          try {
+                            const list = JSON.parse(account.role_sections_json);
+                            if (!Array.isArray(list) || !list.length) return 'No tabs';
+                            if (list.includes('*')) return 'Every tab, including any added later';
+                            return `${list.length} ${list.length === 1 ? 'tab' : 'tabs'}`;
+                          } catch {
+                            return 'Set by the role';
+                          }
+                        })()
+                      : 'Set by the role'}
+                  </span>
+                </div>
+                <p className="section-note">
+                  This account takes its tabs from its role. Change the role and everyone holding it changes
+                  together. To give this one person different access, pick another role below.
+                </p>
+                {user?.role === 'ADMIN' && (
+                  <Link className="link-button" to={`/admin/staff/roles/${account.role_id}`}>
+                    Edit {account.role_name}
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {!account.role_id && (account.role === 'GUIDE' || account.role === 'CURRICULUM_OWNER') && !isSelf && (
               <div className="access-matrix">
                 <div className="access-matrix-head">
                   <div>
@@ -654,18 +797,18 @@ export const StaffAccountPage: React.FC = () => {
 
             <div className="form-group" style={{ marginTop: 14 }}>
               <label className="form-label" htmlFor="account-role">Role</label>
-              <select
+              <RolePicker
                 id="account-role"
-                className="form-select"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
+                value={roleValue}
+                onChange={setRoleValue}
+                roles={roles}
                 disabled={isSelf}
-              >
-                <option value="LEARNER">Student</option>
-                <option value="GUIDE">Guide</option>
-                <option value="CURRICULUM_OWNER">Curriculum owner</option>
-                <option value="ADMIN">Administrator</option>
-              </select>
+              />
+              <p className="form-hint">
+                {roleValue.startsWith('role:')
+                  ? 'This account takes its tabs from the role. Edit the role to change everyone who holds it.'
+                  : 'A built in role keeps the whole of its own workspace.'}
+              </p>
             </div>
 
             {isSelf ? (
@@ -675,7 +818,7 @@ export const StaffAccountPage: React.FC = () => {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={busy || role === account.role}
+                  disabled={busy || roleValue === roleValueFor(account)}
                   onClick={() => setConfirm('role')}
                 >
                   <ShieldCheck size={14} /> Save role
@@ -821,7 +964,7 @@ export const StaffAccountPage: React.FC = () => {
         }
         message={
           confirm === 'role'
-            ? `Their console will change to ${ROLE_LABEL[role] || role} the next time they sign in.`
+            ? `Their console will change to ${roleNameFor(roleValue, roles)} the next time they sign in.`
             : confirm === 'status'
               ? `They are ${isActive ? 'signed out of the console' : 'able to sign in again'} after this.`
               : 'The old password stops working straight away.'

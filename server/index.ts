@@ -116,6 +116,10 @@ export interface AuthenticatedUser {
   assigned_guide_id: string | null;
   /** Empty means the staff account keeps its role-wide access. */
   permissions_json?: string | null;
+  /** A named role, when an admin gave this account one. */
+  role_id?: string | null;
+  role_name?: string | null;
+  role_sections_json?: string | null;
 }
 
 declare global {
@@ -137,9 +141,11 @@ function resolveAuthUser(req: Request): AuthenticatedUser | undefined {
   const session = db
     .prepare(
       `SELECT s.token, s.expires_at, u.id, u.name, u.email, u.role, u.account_status, u.track,
-              u.assigned_guide_id, u.permissions_json
+              u.assigned_guide_id, u.permissions_json, u.role_id,
+              r.name AS role_name, r.sections_json AS role_sections_json
        FROM auth_sessions s
        JOIN users u ON u.id = s.user_id
+       LEFT JOIN roles r ON r.id = u.role_id
        WHERE s.token = ?`
     )
     .get(token) as any;
@@ -159,7 +165,10 @@ function resolveAuthUser(req: Request): AuthenticatedUser | undefined {
     account_status: session.account_status,
     track: session.track,
     assigned_guide_id: session.assigned_guide_id,
-    permissions_json: session.permissions_json || null
+    permissions_json: session.permissions_json || null,
+    role_id: session.role_id || null,
+    role_name: session.role_name || null,
+    role_sections_json: session.role_sections_json || null
   };
 }
 
@@ -226,15 +235,18 @@ function requireRole(allowedRoles: Array<'LEARNER' | 'GUIDE' | 'ADMIN' | 'CURRIC
 
 const SECTION_BY_PATH: Array<{ prefix: string; section: string }> = [
   { prefix: '/api/admin/overview', section: 'overview' },
+  { prefix: '/api/admin/summary', section: 'overview' },
   { prefix: '/api/admin/metrics', section: 'overview' },
   { prefix: '/api/admin/learners', section: 'learners' },
   { prefix: '/api/admin/tasks', section: 'tasks' },
   { prefix: '/api/admin/progress', section: 'progress' },
   { prefix: '/api/admin/staff', section: 'staff' },
+  { prefix: '/api/admin/roles', section: 'staff' },
   { prefix: '/api/admin/users', section: 'staff' },
   { prefix: '/api/admin/leads', section: 'leads' },
   { prefix: '/api/admin/bookings', section: 'bookings' },
   { prefix: '/api/admin/notifications', section: 'notifications' },
+  { prefix: '/api/admin/discovery-questions', section: 'discovery' },
   { prefix: '/api/admin/discovery', section: 'discovery' },
   { prefix: '/api/admin/settings', section: 'settings' },
   { prefix: '/api/admin/ai', section: 'settings' },
@@ -250,20 +262,45 @@ const SECTION_BY_PATH: Array<{ prefix: string; section: string }> = [
   { prefix: '/api/admin/communities', section: 'communities' }
 ];
 
+/** The tabs a role can be given. Mirrors src/pages/adminSections.tsx. */
+export const ADMIN_SECTION_KEYS = [
+  'overview',
+  'tasks',
+  'messages',
+  'courses',
+  'video',
+  'communities',
+  'learners',
+  'progress',
+  'staff',
+  'leads',
+  'bookings',
+  'notifications',
+  'discovery',
+  'settings'
+] as const;
+
 export const sectionForAdminPath = (path: string): string | null => {
   const match = SECTION_BY_PATH.find((entry) => path.startsWith(entry.prefix));
   return match ? match.section : null;
 };
 
-const permissionsFor = (user: any): string[] | null => {
-  if (!user || !user.permissions_json) return null;
+const readSectionList = (value: unknown): string[] | null => {
+  if (!value) return null;
   try {
-    const parsed = JSON.parse(user.permissions_json);
+    const parsed = typeof value === 'string' ? JSON.parse(value) : value;
     return Array.isArray(parsed) ? parsed.map(String) : null;
   } catch {
     return null;
   }
 };
+
+/**
+ * What this account may open. A named role wins; a personal list is the older
+ * way; nothing at all means the account keeps its role-wide access.
+ */
+const permissionsFor = (user: any): string[] | null =>
+  readSectionList(user?.role_sections_json) ?? readSectionList(user?.permissions_json);
 
 app.use('/api/admin', (req, res, next) => {
   const user = resolveAuthUser(req);
@@ -750,7 +787,12 @@ app.post('/api/auth/login', loginThrottle, (req, res) => {
   }
 
   const user = db
-    .prepare('SELECT * FROM users WHERE lower(email) = ?')
+    .prepare(
+      `SELECT u.*, r.name AS role_name, r.sections_json AS role_sections_json
+         FROM users u
+         LEFT JOIN roles r ON r.id = u.role_id
+        WHERE lower(u.email) = ?`
+    )
     .get(email) as any;
 
   if (!user || !verifyPassword(password, user.password_hash)) {
@@ -796,7 +838,9 @@ app.post('/api/auth/login', loginThrottle, (req, res) => {
       track: user.track,
       assigned_guide_id: user.assigned_guide_id,
       // Null means the staff account keeps its role-wide access.
-      permissions: user.permissions_json ? JSON.parse(user.permissions_json) : null
+      permissions: permissionsFor(user),
+      role_id: user.role_id || null,
+      role_name: user.role_name || null
     }
   });
 });
@@ -811,13 +855,16 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  let permissions: string[] | null = null;
-  try {
-    permissions = req.user!.permissions_json ? JSON.parse(req.user!.permissions_json) : null;
-  } catch {
-    permissions = null;
-  }
-  res.json({ success: true, user: { ...req.user, permissions } });
+  res.json({
+    success: true,
+    user: {
+      ...req.user,
+      // A named role is resolved server side, so the console, the sidebar and
+      // every endpoint read the same list.
+      permissions: permissionsFor(req.user),
+      role_name: req.user!.role_name || null
+    }
+  });
 });
 
 /**
@@ -3527,6 +3574,201 @@ app.get('/api/admin/bookings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req,
   return paged(req, res, rows, total, page, limit);
 });
 
+/* ---------------------------------------------------------------------------
+   Roles.
+
+   An admin names a role, ticks the tabs it opens, and gives that role to a
+   staff account. The role is the single place access is described, so changing
+   a role changes everyone who holds it, and a person's own list is no longer
+   the only way in.
+
+   Only an unrestricted administrator may touch any of this. A limited admin
+   could otherwise hand themselves the keys back.
+   --------------------------------------------------------------------------- */
+
+const ROLE_BASE_ROLES = ['GUIDE', 'CURRICULUM_OWNER', 'ADMIN'] as const;
+type RoleBase = (typeof ROLE_BASE_ROLES)[number];
+
+const isFullAdmin = (user: AuthenticatedUser | undefined) =>
+  Boolean(user && user.role === 'ADMIN' && !permissionsFor(user));
+
+const requireFullAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const user = resolveAuthUser(req);
+  if (!user) return res.status(401).json({ success: false, error: 'Authentication required.' });
+  if (!isFullAdmin(user)) {
+    return res.status(403).json({
+      success: false,
+      error: 'Only a full administrator can change who has access. Ask the account owner.'
+    });
+  }
+  req.user = user;
+  return next();
+};
+
+/** Ticks may be a list of tabs, or * for everything, including tabs added later. */
+const cleanSections = (raw: unknown): string[] | null => {
+  if (!Array.isArray(raw)) return null;
+  const values = raw.map((value) => String(value).trim()).filter(Boolean);
+  if (values.includes('*')) return ['*'];
+  const known = new Set<string>(ADMIN_SECTION_KEYS);
+  return [...new Set(values.filter((value) => known.has(value)))];
+};
+
+const roleRow = (id: string) =>
+  db
+    .prepare(
+      `SELECT r.*, (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS member_count
+         FROM roles r WHERE r.id = ?`
+    )
+    .get(id) as any;
+
+const roleForClient = (row: any) => {
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    baseRole: row.base_role,
+    sections: readSectionList(row.sections_json) || [],
+    memberCount: Number(row.member_count) || 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
+};
+
+app.get('/api/admin/roles', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT r.*, (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS member_count
+         FROM roles r ORDER BY r.created_at ASC`
+    )
+    .all() as any[];
+  res.json({ success: true, rows: rows.map(roleForClient) });
+});
+
+app.post('/api/admin/roles', requireFullAdmin, (req, res) => {
+  const name = String(req.body?.name || '').trim().replace(/\s+/g, ' ');
+  const description = String(req.body?.description || '').trim().slice(0, 240);
+  const baseRole = String(req.body?.baseRole || 'GUIDE').toUpperCase() as RoleBase;
+  const sections = cleanSections(req.body?.sections);
+
+  if (name.length < 2 || name.length > 60) {
+    return res.status(400).json({ success: false, error: 'Give the role a name between 2 and 60 characters.' });
+  }
+  if (!ROLE_BASE_ROLES.includes(baseRole)) {
+    return res.status(400).json({ success: false, error: 'Choose the level this role is built on.' });
+  }
+  if (!sections || !sections.length) {
+    return res.status(400).json({ success: false, error: 'Tick at least one tab this role can open.' });
+  }
+  if (db.prepare('SELECT id FROM roles WHERE name = ?').get(name)) {
+    return res.status(409).json({ success: false, error: `There is already a role called ${name}.` });
+  }
+
+  const now = new Date().toISOString();
+  const id = `rol_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  db.prepare(
+    `INSERT INTO roles (id, name, description, base_role, sections_json, created_by_id, created_by_name, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, name, description || null, baseRole, JSON.stringify(sections), req.user!.id, req.user!.name, now, now);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'ROLE_CREATED',
+    entityType: 'ROLE',
+    entityId: id,
+    details: { name, baseRole, sections }
+  });
+
+  res.status(201).json({ success: true, role: roleForClient(roleRow(id)) });
+});
+
+app.patch('/api/admin/roles/:roleId', requireFullAdmin, (req, res) => {
+  const existing = roleRow(req.params.roleId);
+  if (!existing) return res.status(404).json({ success: false, error: 'That role does not exist.' });
+
+  const name = req.body?.name === undefined ? existing.name : String(req.body.name).trim().replace(/\s+/g, ' ');
+  const description =
+    req.body?.description === undefined ? existing.description || '' : String(req.body.description).trim().slice(0, 240);
+  const baseRole =
+    req.body?.baseRole === undefined ? existing.base_role : String(req.body.baseRole).toUpperCase();
+  const sections =
+    req.body?.sections === undefined ? readSectionList(existing.sections_json) : cleanSections(req.body.sections);
+
+  if (name.length < 2 || name.length > 60) {
+    return res.status(400).json({ success: false, error: 'Give the role a name between 2 and 60 characters.' });
+  }
+  if (!ROLE_BASE_ROLES.includes(baseRole as RoleBase)) {
+    return res.status(400).json({ success: false, error: 'Choose the level this role is built on.' });
+  }
+  if (!sections || !sections.length) {
+    return res.status(400).json({ success: false, error: 'Tick at least one tab this role can open.' });
+  }
+  const clash = db.prepare('SELECT id FROM roles WHERE name = ? AND id <> ?').get(name, existing.id);
+  if (clash) {
+    return res.status(409).json({ success: false, error: `There is already a role called ${name}.` });
+  }
+
+  db.prepare(
+    `UPDATE roles SET name = ?, description = ?, base_role = ?, sections_json = ?, updated_at = ? WHERE id = ?`
+  ).run(
+    name,
+    description || null,
+    baseRole,
+    JSON.stringify(sections),
+    new Date().toISOString(),
+    existing.id
+  );
+
+  /* Someone who holds this role changes level with it. Their own permission
+     list is cleared, so the role stays the one description of their access. */
+  if (baseRole !== existing.base_role) {
+    db.prepare('UPDATE users SET role = ?, permissions_json = NULL, updated_at = ? WHERE role_id = ?').run(
+      baseRole,
+      new Date().toISOString(),
+      existing.id
+    );
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'ROLE_UPDATED',
+    entityType: 'ROLE',
+    entityId: existing.id,
+    details: { name, baseRole, sections, members: existing.member_count }
+  });
+
+  res.json({ success: true, role: roleForClient(roleRow(existing.id)) });
+});
+
+app.delete('/api/admin/roles/:roleId', requireFullAdmin, (req, res) => {
+  const existing = roleRow(req.params.roleId);
+  if (!existing) return res.status(404).json({ success: false, error: 'That role does not exist.' });
+
+  if (existing.member_count > 0) {
+    return res.status(409).json({
+      success: false,
+      error: `${existing.name} is held by ${existing.member_count} ${
+        existing.member_count === 1 ? 'account' : 'accounts'
+      }. Move them to another role first.`
+    });
+  }
+
+  db.prepare('DELETE FROM roles WHERE id = ?').run(existing.id);
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'ROLE_DELETED',
+    entityType: 'ROLE',
+    entityId: existing.id,
+    details: { name: existing.name }
+  });
+
+  res.json({ success: true });
+});
+
 app.get('/api/admin/users', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const { page, limit, offset } = readPaging(req, 20);
   const role = String(req.query.role || '').trim();
@@ -3538,27 +3780,32 @@ app.get('/api/admin/users', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, re
   // Staff and learners are two different jobs. The access list only ever shows
   // people who can sign in to a staff console.
   if (scope === 'staff') {
-    where.push("role IN ('ADMIN', 'CURRICULUM_OWNER', 'GUIDE')");
+    where.push("u.role IN ('ADMIN', 'CURRICULUM_OWNER', 'GUIDE')");
   } else if (scope === 'learner') {
-    where.push("role = 'LEARNER'");
+    where.push("u.role = 'LEARNER'");
   }
   if (role && role !== 'ALL') {
-    where.push('role = ?');
+    where.push('u.role = ?');
     params.push(role);
   }
   if (hasSearch(q)) {
-    where.push('(name LIKE ? OR email LIKE ?)');
+    where.push('(u.name LIKE ? OR u.email LIKE ?)');
     params.push(likeTerm(q), likeTerm(q));
   }
   const whereSql = `WHERE ${where.join(' AND ')}`;
 
-  const total = (db.prepare(`SELECT COUNT(*) AS c FROM users ${whereSql}`).get(...params) as any).c as number;
+  const total = (
+    db.prepare(`SELECT COUNT(*) AS c FROM users u LEFT JOIN roles r ON r.id = u.role_id ${whereSql}`).get(...params) as any
+  ).c as number;
   const rows = db
     .prepare(
-      `SELECT id, name, email, role, account_status, track, created_at, permissions_json
-       FROM users ${whereSql}
-       ORDER BY CASE role WHEN 'ADMIN' THEN 0 WHEN 'CURRICULUM_OWNER' THEN 1 WHEN 'GUIDE' THEN 2 ELSE 3 END, name ASC
-       LIMIT ? OFFSET ?`
+      `SELECT u.id, u.name, u.email, u.role, u.account_status, u.track, u.created_at,
+              u.permissions_json, u.role_id, r.name AS role_name
+         FROM users u
+         LEFT JOIN roles r ON r.id = u.role_id
+         ${whereSql}
+        ORDER BY CASE u.role WHEN 'ADMIN' THEN 0 WHEN 'CURRICULUM_OWNER' THEN 1 WHEN 'GUIDE' THEN 2 ELSE 3 END, u.name ASC
+        LIMIT ? OFFSET ?`
     )
     .all(...params, limit, offset);
 
@@ -3855,6 +4102,8 @@ app.post('/api/admin/discovery-sessions/:sessionId/create-learner', requireRole(
   res.status(201).json({ success: true, userId: id, temporaryPassword: password });
 });
 
+/* A guide holding a role that includes Overview reaches this through the
+   section gate, which is the only thing that lets a guide past a role check. */
 app.get('/api/admin/overview', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, res) => {
   const users = db
     .prepare('SELECT id, name, email, role, account_status, track, assigned_guide_id, created_at, updated_at FROM users ORDER BY created_at DESC')
@@ -4875,9 +5124,13 @@ app.patch('/api/admin/leads/:leadId', requireRole(['ADMIN', 'CURRICULUM_OWNER'])
 app.get('/api/admin/users/:userId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req, res) => {
   const row = db
     .prepare(
-      `SELECT id, name, email, role, account_status, track, phone, city, created_at, updated_at, assigned_guide_id,
-              permissions_json
-         FROM users WHERE id = ?`
+      `SELECT u.id, u.name, u.email, u.role, u.account_status, u.track, u.phone, u.city,
+              u.created_at, u.updated_at, u.assigned_guide_id, u.permissions_json,
+              u.role_id, r.name AS role_name, r.sections_json AS role_sections_json,
+              r.base_role AS role_base_role, r.description AS role_description
+         FROM users u
+         LEFT JOIN roles r ON r.id = u.role_id
+        WHERE u.id = ?`
     )
     .get(req.params.userId) as any;
   if (!row) return res.status(404).json({ success: false, error: 'User not found.' });
@@ -4953,7 +5206,7 @@ app.get('/api/admin/users/:userId', requireRole(['ADMIN', 'CURRICULUM_OWNER']), 
   });
 });
 
-app.post('/api/admin/users/:userId/reset-password', requireRole(['ADMIN']), (req, res) => {
+app.post('/api/admin/users/:userId/reset-password', requireFullAdmin, (req, res) => {
   const { userId } = req.params;
   const target = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(userId) as any;
   if (!target) {
@@ -4980,20 +5233,31 @@ app.post('/api/admin/users/:userId/reset-password', requireRole(['ADMIN']), (req
   res.json({ success: true, userId: target.id, temporaryPassword });
 });
 
-app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
+app.post('/api/admin/users', requireFullAdmin, (req, res) => {
   const name = String(req.body?.name || '').trim();
   const email = String(req.body?.email || '').trim().toLowerCase();
-  const role = String(req.body?.role || 'LEARNER').toUpperCase();
+  const roleId = String(req.body?.roleId || '').trim();
   const track = String(req.body?.track || 'trader').toLowerCase();
   const suppliedPassword = String(req.body?.password || '').trim();
   const password = suppliedPassword || generateTemporaryPassword();
   const generatedPassword = suppliedPassword ? null : password;
+
+  /* A named role carries its own level, so picking one is the whole answer. */
+  const namedRole = roleId ? roleRow(roleId) : null;
+  if (roleId && !namedRole) {
+    return res.status(400).json({ success: false, error: 'That role does not exist any more. Pick another.' });
+  }
+  const role = namedRole ? String(namedRole.base_role) : String(req.body?.role || 'LEARNER').toUpperCase();
+  const assignedSections = namedRole ? cleanSections(readSectionList(namedRole.sections_json)) : null;
 
   if (!name || !email) {
     return res.status(400).json({ success: false, error: 'Name and email are required.' });
   }
   if (!['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role)) {
     return res.status(400).json({ success: false, error: 'Invalid role specified.' });
+  }
+  if (namedRole && role === 'ADMIN' && !isFullAdmin(req.user)) {
+    return res.status(403).json({ success: false, error: 'Only a full administrator can create another one.' });
   }
 
   const existing = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
@@ -5005,8 +5269,9 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
   const now = new Date().toISOString();
 
   db.prepare(`
-    INSERT INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
+    INSERT INTO users (id, name, email, password_hash, role, account_status, track, assigned_guide_id,
+                       role_id, permissions_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     name,
@@ -5015,6 +5280,9 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
     role,
     track,
     role === 'LEARNER' ? defaultGuideId() : null,
+    namedRole ? namedRole.id : null,
+    // A named role already describes the access, so no personal list is kept.
+    namedRole ? null : assignedSections ? JSON.stringify(assignedSections) : null,
     now,
     now
   );
@@ -5034,36 +5302,54 @@ app.post('/api/admin/users', requireRole(['ADMIN']), (req, res) => {
     action: 'ADMIN_USER_PROVISIONED',
     entityType: 'USER',
     entityId: id,
-    details: { name, email, role, track }
+    details: { name, email, role, track, roleId: namedRole?.id || null, roleName: namedRole?.name || null }
   });
 
   res.status(201).json({
     success: true,
     userId: id,
+    roleName: namedRole?.name || null,
     // Shown once in the admin console so it can be handed over securely.
     temporaryPassword: generatedPassword
   });
 });
 
-app.patch('/api/admin/users/:userId', requireRole(['ADMIN']), (req, res) => {
+app.patch('/api/admin/users/:userId', requireFullAdmin, (req, res) => {
   const { userId } = req.params;
   const { role, accountStatus } = req.body || {};
+  const roleIdGiven = req.body?.roleId !== undefined;
+  const roleId = String(req.body?.roleId || '').trim();
 
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
   if (!target) {
     return res.status(404).json({ success: false, error: 'User not found.' });
   }
 
-  const nextRole = role && ['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role) ? role : target.role;
+  /* A named role decides the level too, and replaces any personal list. */
+  let namedRole: any = null;
+  if (roleIdGiven) {
+    if (roleId) {
+      namedRole = roleRow(roleId);
+      if (!namedRole) return res.status(400).json({ success: false, error: 'That role does not exist any more.' });
+    }
+  }
+
+  const nextRole = namedRole
+    ? String(namedRole.base_role)
+    : role && ['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role)
+      ? role
+      : target.role;
   const nextStatus = accountStatus && ['ACTIVE', 'SUSPENDED'].includes(accountStatus) ? accountStatus : target.account_status;
+  const nextRoleId = roleIdGiven ? namedRole?.id || null : target.role_id || null;
   const now = new Date().toISOString();
 
-  db.prepare('UPDATE users SET role = ?, account_status = ?, updated_at = ? WHERE id = ?').run(
-    nextRole,
-    nextStatus,
-    now,
-    userId
-  );
+  db.prepare(
+    `UPDATE users
+        SET role = ?, account_status = ?, role_id = ?,
+            permissions_json = CASE WHEN ? THEN NULL ELSE permissions_json END,
+            updated_at = ?
+      WHERE id = ?`
+  ).run(nextRole, nextStatus, nextRoleId, roleIdGiven ? 1 : 0, now, userId);
 
   writeAuditEvent({
     actorUserId: req.user!.id,
@@ -5071,13 +5357,28 @@ app.patch('/api/admin/users/:userId', requireRole(['ADMIN']), (req, res) => {
     action: 'ADMIN_USER_UPDATED',
     entityType: 'USER',
     entityId: userId,
-    details: { previousRole: target.role, nextRole, previousStatus: target.account_status, nextStatus }
+    details: {
+      previousRole: target.role,
+      nextRole,
+      previousStatus: target.account_status,
+      nextStatus,
+      previousRoleId: target.role_id || null,
+      nextRoleId,
+      roleName: namedRole?.name || null
+    }
   });
 
-  res.json({ success: true, userId, role: nextRole, accountStatus: nextStatus });
+  res.json({
+    success: true,
+    userId,
+    role: nextRole,
+    accountStatus: nextStatus,
+    roleId: nextRoleId,
+    roleName: namedRole?.name || null
+  });
 });
 
-app.patch('/api/admin/users/:userId/permissions', requireRole(['ADMIN']), (req, res) => {
+app.patch('/api/admin/users/:userId/permissions', requireFullAdmin, (req, res) => {
   const { userId } = req.params;
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
   if (!target) return res.status(404).json({ success: false, error: 'User not found.' });
