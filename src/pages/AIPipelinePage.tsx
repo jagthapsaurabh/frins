@@ -32,6 +32,14 @@ export const AIPipelinePage: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [connectionNote, setConnectionNote] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Named connections, one per platform, and which job each one answers.
+  const [newLabel, setNewLabel] = useState('');
+  const [newProvider, setNewProvider] = useState('GEMINI');
+  const [newModel, setNewModel] = useState('gemini-1.5-flash');
+  const [newKey, setNewKey] = useState('');
+  const [connBusy, setConnBusy] = useState(false);
+  const [routeNote, setRouteNote] = useState<{ ok: boolean; text: string } | null>(null);
+
   // Safety checker
   const [sampleText, setSampleText] = useState<string>(
     'Contact the participant at participant@example.com or +91 9000000000. Buy NIFTY calls with a target price of Rs 450 for guaranteed returns.'
@@ -101,6 +109,64 @@ export const AIPipelinePage: React.FC = () => {
     setBaseUrl(json.settings.baseUrl || '');
     setConnectionNote({ ok: true, text: 'Saved. New AI runs will use this provider.' });
     loadAll();
+  };
+
+  const addConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConnBusy(true);
+    setRouteNote(null);
+    const meta = (settings?.providers || []).find((item: any) => item.value === newProvider);
+    const res = await authFetch('/api/admin/ai/connections', {
+      method: 'POST',
+      body: JSON.stringify({
+        label: newLabel,
+        provider: newProvider,
+        model: newModel || meta?.model || '',
+        baseUrl: meta?.baseUrl || '',
+        apiKey: newKey || undefined
+      })
+    });
+    const json = await res.json().catch(() => ({}));
+    setConnBusy(false);
+    if (!res.ok || !json.success) {
+      setRouteNote({ ok: false, text: json.error || 'Could not save that connection.' });
+      return;
+    }
+    setSettings(json.settings);
+    setNewLabel('');
+    setNewKey('');
+    setRouteNote({ ok: true, text: 'Connection saved. Point a job at it below.' });
+  };
+
+  const removeConnection = async (id: string) => {
+    setConnBusy(true);
+    setRouteNote(null);
+    const res = await authFetch(`/api/admin/ai/connections/${id}`, { method: 'DELETE' });
+    const json = await res.json().catch(() => ({}));
+    setConnBusy(false);
+    if (!res.ok || !json.success) {
+      setRouteNote({ ok: false, text: json.error || 'Could not remove it.' });
+      return;
+    }
+    setSettings(json.settings);
+    setRouteNote({ ok: true, text: 'Removed. Any job using it is back on the default.' });
+  };
+
+  const setRoute = async (task: string, connectionId: string) => {
+    setConnBusy(true);
+    setRouteNote(null);
+    const res = await authFetch('/api/admin/ai/routes', {
+      method: 'PUT',
+      body: JSON.stringify({ task, connectionId })
+    });
+    const json = await res.json().catch(() => ({}));
+    setConnBusy(false);
+    if (!res.ok || !json.success) {
+      setRouteNote({ ok: false, text: json.error || 'Could not change that job.' });
+      return;
+    }
+    setSettings(json.settings);
+    setRouteNote({ ok: true, text: 'Saved. The next run uses the new model.' });
   };
 
   const testConnection = async () => {
@@ -407,6 +473,162 @@ export const AIPipelinePage: React.FC = () => {
                 )}
               </div>
             </form>
+          </section>
+
+          <section className="panel-card">
+            <div className="panel-head">
+              <div>
+                <h2>
+                  <Sparkles size={13} /> Which model does which job
+                </h2>
+                <p>
+                  Different jobs can run on different platforms. Video summaries can go to a model that
+                  watches the video itself, while course drafts stay on the free one.
+                </p>
+              </div>
+            </div>
+
+            <div className="route-list">
+              {(settings?.routes || []).map((route: any) => (
+                <div className="route-row" key={route.key}>
+                  <div className="route-main">
+                    <strong>{route.label}</strong>
+                    <p>{route.hint}</p>
+                    <span className="route-meta">
+                      {route.connectionLabel} · {route.model || 'no model'}
+                      {route.available ? '' : ' · needs a key'}
+                    </span>
+                  </div>
+                  <select
+                    className="form-select route-select"
+                    aria-label={`Model for ${route.label}`}
+                    value={route.connectionId || ''}
+                    disabled={connBusy}
+                    onChange={(e) => setRoute(route.key, e.target.value)}
+                  >
+                    <option value="">Default</option>
+                    {(settings?.connections || [])
+                      .filter((connection: any) => connection.id !== 'default')
+                      .map((connection: any) => (
+                        <option key={connection.id} value={connection.id}>
+                          {connection.label}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ))}
+            </div>
+
+            <div className="route-add">
+              <strong>Add a platform</strong>
+              <form onSubmit={addConnection}>
+                <div className="form-row-3">
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="connLabel">
+                      Name
+                    </label>
+                    <input
+                      id="connLabel"
+                      className="form-input"
+                      value={newLabel}
+                      onChange={(e) => setNewLabel(e.target.value)}
+                      placeholder="Gemini for video"
+                      maxLength={60}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="connProvider">
+                      Platform
+                    </label>
+                    <select
+                      id="connProvider"
+                      className="form-select"
+                      value={newProvider}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setNewProvider(next);
+                        const meta = (settings?.providers || []).find((item: any) => item.value === next);
+                        setNewModel(meta?.model || '');
+                      }}
+                    >
+                      {(settings?.providers || [])
+                        .filter((item: any) => item.value !== 'NONE')
+                        .map((item: any) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" htmlFor="connModel">
+                      Model
+                    </label>
+                    <input
+                      id="connModel"
+                      className="form-input"
+                      value={newModel}
+                      onChange={(e) => setNewModel(e.target.value)}
+                      placeholder="gemini-1.5-flash"
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="connKey">
+                    API key
+                  </label>
+                  <input
+                    id="connKey"
+                    type="password"
+                    className="form-input"
+                    value={newKey}
+                    onChange={(e) => setNewKey(e.target.value)}
+                    placeholder="Paste the key for this platform"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={connBusy}>
+                    {connBusy ? 'Saving' : 'Add platform'}
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {(settings?.connections || []).filter((connection: any) => !connection.isDefault).length > 0 && (
+              <ul className="conn-list">
+                {(settings?.connections || [])
+                  .filter((connection: any) => !connection.isDefault)
+                  .map((connection: any) => (
+                    <li key={connection.id}>
+                      <div>
+                        <strong>{connection.label}</strong>
+                        <span>
+                          {connection.provider} · {connection.model || 'default model'} · {connection.maskedKey}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => removeConnection(connection.id)}
+                        disabled={connBusy}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
+
+            {routeNote && (
+              <p
+                className="form-hint"
+                style={{ color: routeNote.ok ? 'var(--success-text)' : 'var(--danger-text)' }}
+              >
+                {routeNote.text}
+              </p>
+            )}
           </section>
 
           <section className="panel-card">

@@ -133,7 +133,8 @@ export async function buildTopicDraft(input: TopicRequest): Promise<CourseDraft 
     }),
     json: true,
     temperature: 0.5,
-    timeoutMs: 90000
+    timeoutMs: 90000,
+    task: 'course'
   });
 
   if (!result.ok) return { ...fallback, fallbackReason: result.error };

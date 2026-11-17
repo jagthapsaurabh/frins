@@ -15,7 +15,16 @@ import {
   runOfflineBenchmarkSuite
 } from './aiPipeline.js';
 import { registerCommunityRoutes } from './communities.js';
-import { AI_PROVIDERS, aiChat, aiSummary, resolveAiRuntime, type AiProviderKey } from './aiClient.js';
+import {
+  AI_PROVIDERS,
+  AI_TASKS,
+  aiChat,
+  aiConnectionsForClient,
+  aiRouteSummary,
+  aiSummary,
+  resolveAiRuntime,
+  type AiProviderKey
+} from './aiClient.js';
 import { buildTopicDraft } from './courseStudio.js';
 import {
   buildCourseDraft,
@@ -25,13 +34,21 @@ import {
   fetchVideoExtras,
   fetchWatchPage,
   readWatchPage,
+  watchReaderRestingUntil,
   countWords,
   extractYouTubeId,
   fetchVideoMeta,
   fetchYouTubeTranscript,
   stripTranscriptMarkup
 } from './videoStudio.js';
-import { buildVideoSummary, summaryToText, type VideoSummary } from './videoSummary.js';
+import {
+  buildVideoSummary,
+  formatTimestamp,
+  readingMinutesOf,
+  summaryToText,
+  type VideoSummary
+} from './videoSummary.js';
+import { summariseVideoWithModel, videoWatcherForSummaries } from './videoAi.js';
 import { registerSummaryRoutes } from './summaries.js';
 import {
   analyzeStudentTaskSubmissionWithAI,
@@ -426,7 +443,11 @@ const aiPublicSettings = () => {
     // What a draft would actually run on right now, free model included.
     effective: aiSummary(),
     runtimeAvailable: runtime.available,
-    providers: Object.entries(AI_PROVIDERS).map(([value, meta]) => ({ value, ...meta }))
+    providers: Object.entries(AI_PROVIDERS).map(([value, meta]) => ({ value, ...meta })),
+    // Every named connection, and which one answers each job.
+    connections: aiConnectionsForClient(),
+    routes: aiRouteSummary(),
+    tasks: AI_TASKS
   };
 };
 
@@ -462,6 +483,114 @@ app.put('/api/admin/ai/settings', requireRole(['ADMIN']), (req, res) => {
     entityType: 'AI_SETTINGS',
     entityId: 'default',
     details: { provider, model, hasKey: Boolean(nextKey) }
+  });
+
+  res.json({ success: true, settings: aiPublicSettings() });
+});
+
+/**
+ * Save a named connection. The default one also writes to ai_settings, so the
+ * older single provider form and this list never disagree.
+ */
+app.post('/api/admin/ai/connections', requireRole(['ADMIN']), (req, res) => {
+  const provider = String(req.body?.provider || 'NONE').toUpperCase();
+  if (!AI_PROVIDERS[provider]) {
+    return res.status(400).json({ success: false, error: 'Pick a provider from the list.' });
+  }
+
+  const label = String(req.body?.label || '').trim().slice(0, 60);
+  if (!label) return res.status(400).json({ success: false, error: 'Give the connection a name, like Gemini for video.' });
+
+  const id = String(req.body?.id || '').trim() || `conn_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+  const model = String(req.body?.model || '').trim();
+  const baseUrl = String(req.body?.baseUrl || '').trim();
+  const incomingKey = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : null;
+  const clearKey = Boolean(req.body?.clearKey);
+
+  const existing = db.prepare('SELECT * FROM ai_connections WHERE id = ?').get(id) as any;
+  const nextKey = clearKey ? '' : incomingKey ? incomingKey : existing?.api_key || '';
+
+  if (!existing && id === 'default') {
+    return res.status(400).json({ success: false, error: 'The default connection is made when the app starts.' });
+  }
+
+  db.prepare(
+    `INSERT INTO ai_connections (id, label, provider, model, api_key, base_url, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET label = excluded.label, provider = excluded.provider,
+       model = excluded.model, api_key = excluded.api_key, base_url = excluded.base_url,
+       updated_at = excluded.updated_at`
+  ).run(id, label, provider, model, nextKey, baseUrl, existing?.created_at || new Date().toISOString(), new Date().toISOString());
+
+  if (id === 'default') {
+    db.prepare(
+      `UPDATE ai_settings SET provider = ?, model = ?, api_key = ?, base_url = ?, updated_at = ?, updated_by = ?
+        WHERE id = 'default'`
+    ).run(provider, model, nextKey, baseUrl, new Date().toISOString(), req.user!.id);
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'AI_CONNECTION_SAVED',
+    entityType: 'AI_CONNECTION',
+    entityId: id,
+    details: { label, provider, model, hasKey: Boolean(nextKey) }
+  });
+
+  res.status(existing ? 200 : 201).json({ success: true, settings: aiPublicSettings() });
+});
+
+app.delete('/api/admin/ai/connections/:connectionId', requireRole(['ADMIN']), (req, res) => {
+  const id = String(req.params.connectionId || '');
+  if (id === 'default') {
+    return res.status(409).json({ success: false, error: 'The default connection stays. Change it instead.' });
+  }
+  const existing = db.prepare('SELECT * FROM ai_connections WHERE id = ?').get(id) as any;
+  if (!existing) return res.status(404).json({ success: false, error: 'That connection does not exist.' });
+
+  // A job pointing at a deleted connection goes back to the default.
+  db.prepare('DELETE FROM ai_routes WHERE connection_id = ?').run(id);
+  db.prepare('DELETE FROM ai_connections WHERE id = ?').run(id);
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'AI_CONNECTION_REMOVED',
+    entityType: 'AI_CONNECTION',
+    entityId: id,
+    details: { label: existing.label, provider: existing.provider }
+  });
+
+  res.json({ success: true, settings: aiPublicSettings() });
+});
+
+/** Point a job at a connection. An empty id sends it back to the default. */
+app.put('/api/admin/ai/routes', requireRole(['ADMIN']), (req, res) => {
+  const task = String(req.body?.task || '') as any;
+  if (!AI_TASKS.some((entry) => entry.key === task)) {
+    return res.status(400).json({ success: false, error: 'That is not a job the engine knows.' });
+  }
+
+  const connectionId = String(req.body?.connectionId || '').trim();
+  if (connectionId) {
+    const connection = db.prepare('SELECT id FROM ai_connections WHERE id = ?').get(connectionId) as any;
+    if (!connection) return res.status(400).json({ success: false, error: 'That connection does not exist.' });
+    db.prepare(
+      `INSERT INTO ai_routes (task, connection_id, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(task) DO UPDATE SET connection_id = excluded.connection_id, updated_at = excluded.updated_at`
+    ).run(task, connectionId, new Date().toISOString());
+  } else {
+    db.prepare('DELETE FROM ai_routes WHERE task = ?').run(task);
+  }
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'AI_ROUTE_UPDATED',
+    entityType: 'AI_ROUTE',
+    entityId: task,
+    details: { task, connectionId: connectionId || 'default' }
   });
 
   res.json({ success: true, settings: aiPublicSettings() });
@@ -6147,9 +6276,34 @@ app.post(
     if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
 
     const cached = summaryOf(row);
-    /* A summary that found nothing to read is worth another try on every open:
-       the usual cause is a page read that did not land, and it may land now. */
+    /* A summary that found nothing is worth another try on its own, but only
+       when the reader is allowed to ask. While it is resting, the last answer
+       stands, with the hour of the next attempt on it, instead of one more
+       refusal per page open. */
     const retryEmpty = cached?.basis === 'METADATA';
+    const resting = watchReaderRestingUntil();
+    /* Pressing Try again is a person asking, so it is allowed even while the
+       reader is resting. Opening the page is not. */
+    if (retryEmpty && resting && req.body?.refresh !== true) {
+      return res.json({
+        success: true,
+        summary: {
+          ...cached,
+          note:
+            cached.note ||
+            `YouTube is turning our server away for now. We will try again around ${resting.toLocaleTimeString('en-IN', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true,
+              timeZone: 'Asia/Kolkata'
+            })}.`
+        },
+        summary_text: summaryToText(cached, row.title, canonicalWatchUrl(row.video_id)),
+        video: videoForClient(row),
+        cached: true,
+        retryAt: resting.toISOString()
+      });
+    }
     if (cached && !retryEmpty && req.body?.refresh !== true) {
       return res.json({
         success: true,
@@ -6172,6 +6326,75 @@ app.post(
     const description = String(row.description || '') || page.description;
     const durationSeconds = row.duration_seconds ?? page.durationSeconds ?? null;
     const chapters = chaptersOf(row).length >= 2 ? chaptersOf(row) : page.chapters;
+
+    /* When the summary job is pointed at a model that can watch the video, the
+       link goes to it. That is the only way to summarise a video whose captions
+       stay locked and whose description says little. It is tried first whenever
+       the words are missing, and its answer is checked against the real length
+       before any of its times are shown. */
+    const watcher = videoWatcherForSummaries();
+    if (watcher && !segments.length) {
+      const watched = await summariseVideoWithModel(
+        watcher,
+        canonicalWatchUrl(row.video_id),
+        durationSeconds
+      );
+
+      if (watched.ok) {
+        const summary: VideoSummary = {
+          overview: watched.summary.overview,
+          sections: watched.summary.sections.map((section) => ({
+            startSeconds: section.startSeconds,
+            timestamp: formatTimestamp(section.startSeconds),
+            title: section.title,
+            points: section.points
+          })),
+          takeaways: watched.summary.takeaways,
+          basis: 'VIDEO',
+          generatedBy: 'LIVE_LLM',
+          modelName: watched.summary.modelName,
+          durationSeconds,
+          readingMinutes: 1
+        };
+        summary.readingMinutes = readingMinutesOf(summary);
+
+        db.prepare(
+          `UPDATE video_sources
+              SET summary_json = ?, duration_seconds = COALESCE(?, duration_seconds),
+                  description = COALESCE(NULLIF(?, ''), description), updated_at = ?
+            WHERE id = ?`
+        ).run(JSON.stringify(summary), durationSeconds, page.description || '', new Date().toISOString(), row.id);
+
+        writeAuditEvent({
+          actorUserId: actor?.id || null,
+          actorRole: actor?.role || 'ADMIN',
+          action: 'VIDEO_SUMMARISED',
+          entityType: 'VIDEO_SOURCE',
+          entityId: row.id,
+          details: {
+            videoId: row.video_id,
+            basis: 'VIDEO',
+            generatedBy: 'LIVE_LLM',
+            connection: watched.summary.connectionLabel,
+            model: watched.summary.modelName,
+            sections: summary.sections.length,
+            durationSeconds
+          }
+        });
+
+        return res.json({
+          success: true,
+          summary,
+          summary_text: summaryToText(summary, row.title, canonicalWatchUrl(row.video_id)),
+          video: videoForClient(videoRowForAdmin(row.id)),
+          watchedBy: watched.summary.connectionLabel
+        });
+      }
+
+      /* The model was asked and could not. Keep its reason for the panel, and
+         carry on to the honest fallback below rather than showing nothing. */
+      req.body.watchedError = watched.reason;
+    }
 
     /* Fill in whatever the row was missing. COALESCE keeps what is already
        there, so a re-run never wipes a description someone edited. */
@@ -6196,7 +6419,8 @@ app.post(
       segments,
       chapters,
       readStatus: page.readStatus,
-      captionLanguages: page.captionLanguages
+      captionLanguages: page.captionLanguages,
+      nextAttemptAt: page.nextAttemptAt
     });
 
     const now = new Date().toISOString();

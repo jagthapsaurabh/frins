@@ -19,7 +19,7 @@
 import { aiChat, parseJsonLoose } from './aiClient.js';
 import { keyTopics, type TimedSegment, type WatchPageStatus } from './videoStudio.js';
 
-export type SummaryBasis = 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
+export type SummaryBasis = 'TRANSCRIPT' | 'VIDEO' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
 
 export interface SummarySection {
   startSeconds: number;
@@ -42,6 +42,22 @@ export interface VideoSummary {
   /** Said plainly when there was nothing to read, and why. */
   note?: string;
 }
+
+/** 4:32 pm, in the reader's own day, so a "later" has a time on it. */
+const clockTime = (iso: string) => {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return 'later';
+  try {
+    return at.toLocaleTimeString('en-IN', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  } catch {
+    return 'later';
+  }
+};
 
 /** English, Hindi, Bangla: the names a person reads, from the codes YouTube sends. */
 const languageNames = (codes: string[]) => {
@@ -134,7 +150,7 @@ const cleanPoint = (value: unknown) =>
     .replace(/\s+/g, ' ')
     .trim();
 
-const readingMinutesOf = (summary: Pick<VideoSummary, 'overview' | 'sections' | 'takeaways'>) => {
+export const readingMinutesOf = (summary: Pick<VideoSummary, 'overview' | 'sections' | 'takeaways'>) => {
   const text = [
     summary.overview,
     ...summary.sections.flatMap((section) => [section.title, ...section.points]),
@@ -221,6 +237,10 @@ interface BuildInput {
   readStatus?: WatchPageStatus;
   /** Caption languages the page lists, even when their text stays locked. */
   captionLanguages?: string[];
+  /** When we will try the page again by ourselves, after a failed read. */
+  nextAttemptAt?: string;
+  /** What a video watching model said when it could not help. */
+  watchedError?: string;
 }
 
 export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary> {
@@ -303,7 +323,10 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
           input.readStatus === 'BOT_WALL'
             ? `We could not read this video's page. YouTube asked to confirm a browser rather than a server, so it sent nothing back for ${input.title}.`
             : `We could not read this video's page just now, so YouTube sent nothing back for ${input.title}. That is usually a passing block on their side.`;
-        note = 'Try again in a minute. If it stays shut, paste the transcript and everything else works the same.';
+        note = input.nextAttemptAt
+          ? `We will try again by ourselves around ${clockTime(input.nextAttemptAt)}. Press Try again to go sooner, or paste the transcript and everything else works the same.`
+          : 'Press Try again in a minute, or paste the transcript and everything else works the same.';
+        if (input.watchedError) note = `${note} The video watching model was asked first, and said: ${input.watchedError}`;
       } else if (languages.length) {
         overview = `${input.title}${input.channel ? ` by ${input.channel}` : ''} has captions in ${named}, and YouTube keeps the words themselves from our server. Its page has no description and no chapter marks to read instead.`;
         note = 'Open the video, choose More, then Show transcript, copy it and paste it above. The summary then carries the minute each part starts.';
@@ -387,7 +410,8 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
     }),
     json: true,
     temperature: 0.3,
-    timeoutMs: 90000
+    timeoutMs: 90000,
+    task: 'summary'
   });
 
   if (!result.ok) {

@@ -1190,6 +1190,26 @@ export function initDatabaseAndSeed() {
       updated_by TEXT
     );
 
+    /* A named model connection. The default row mirrors ai_settings, so an
+       install that only ever used one provider keeps working untouched. */
+    CREATE TABLE IF NOT EXISTS ai_connections (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      model TEXT,
+      api_key TEXT,
+      base_url TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    /* Which connection does which job. No row means the default connection. */
+    CREATE TABLE IF NOT EXISTS ai_routes (
+      task TEXT PRIMARY KEY,
+      connection_id TEXT NOT NULL,
+      updated_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS leads (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -1881,6 +1901,25 @@ export function initDatabaseAndSeed() {
       sections: ['*']
     }
   ];
+  /* The first connection mirrors whatever ai_settings already holds, so a
+     site that has been running on one provider carries on exactly as before. */
+  const connectionCount = (db.prepare('SELECT COUNT(*) AS c FROM ai_connections').get() as any).c;
+  if (!connectionCount) {
+    const saved = db.prepare("SELECT * FROM ai_settings WHERE id = 'default'").get() as any;
+    db.prepare(
+      `INSERT OR IGNORE INTO ai_connections (id, label, provider, model, api_key, base_url, created_at, updated_at)
+       VALUES ('default', ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'Default',
+      String(saved?.provider || 'FREE').toUpperCase(),
+      String(saved?.model || 'openai-fast'),
+      saved?.api_key || null,
+      String(saved?.base_url || 'https://text.pollinations.ai/openai'),
+      now,
+      now
+    );
+  }
+
   for (const role of builtInRoles) {
     db.prepare(
       `INSERT OR IGNORE INTO roles

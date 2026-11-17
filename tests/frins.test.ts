@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   CANONICAL_QUESTIONS,
   DISCOVERY_TEST_PERSONAS,
@@ -31,6 +31,10 @@ import {
 } from '../server/videoStudio.js';
 import { buildTopicOutline } from '../server/courseStudio.js';
 import { resolveAiRuntime, parseJsonLoose } from '../server/aiClient.js';
+import {
+  taskKnowsVideo,
+  resolveAiRuntimeFor,
+} from '../server/aiClient.js';
 import {
   buildVideoSummary,
   extractSections,
@@ -796,6 +800,65 @@ describe('A page we could not read is not an empty video', () => {
       ).overview
     ];
     for (const text of texts) expect(/[\u2010\u2011\u2013\u2014\u2015]/.test(text)).toBe(false);
+  });
+});
+
+describe('A job can run on its own platform', () => {
+  let original: any = null;
+
+  beforeAll(() => {
+    initDatabaseAndSeed();
+    original = db.prepare("SELECT * FROM ai_connections WHERE id = 'default'").get() as any;
+  });
+
+  afterAll(() => {
+    db.prepare("DELETE FROM ai_routes").run();
+    db.prepare("DELETE FROM ai_connections WHERE id <> 'default'").run();
+    if (original) {
+      db.prepare("UPDATE ai_connections SET provider = ?, model = ?, api_key = ?, base_url = ? WHERE id = 'default'").run(
+        original.provider,
+        original.model,
+        original.api_key,
+        original.base_url
+      );
+    }
+  });
+
+  it('FRI-AI-ROUTE-001: a named connection answers only the job it is given', () => {
+    db.prepare(
+      `INSERT INTO ai_connections (id, label, provider, model, api_key, base_url, created_at, updated_at)
+       VALUES ('conn_gem', 'Gemini for video', 'GEMINI', 'gemini-1.5-flash', 'test-key', 'https://generativelanguage.googleapis.com/v1beta', ?, ?)`
+    ).run(new Date().toISOString(), new Date().toISOString());
+
+    // Nothing routed yet: both jobs stay on the default.
+    expect(resolveAiRuntimeFor('summary').provider).toBe(resolveAiRuntimeFor('course').provider);
+
+    db.prepare("INSERT INTO ai_routes (task, connection_id, updated_at) VALUES ('summary', 'conn_gem', ?)").run(
+      new Date().toISOString()
+    );
+
+    const summary = resolveAiRuntimeFor('summary');
+    expect(summary.provider).toBe('GEMINI');
+    expect(summary.model).toBe('gemini-1.5-flash');
+    expect(summary.label).toBe('Gemini for video');
+    expect(taskKnowsVideo('summary')).toBe(true);
+
+    // The other job is untouched.
+    expect(resolveAiRuntimeFor('course').provider).not.toBe('GEMINI');
+    expect(taskKnowsVideo('course')).toBe(false);
+  });
+
+  it('FRI-AI-ROUTE-002: a routed job with no key says so instead of quietly moving', () => {
+    db.prepare(
+      `INSERT INTO ai_connections (id, label, provider, model, api_key, base_url, created_at, updated_at)
+       VALUES ('conn_nokey', 'Gemini without a key', 'GEMINI', 'gemini-1.5-flash', NULL, 'https://generativelanguage.googleapis.com/v1beta', ?, ?)`
+    ).run(new Date().toISOString(), new Date().toISOString());
+    db.prepare("UPDATE ai_routes SET connection_id = 'conn_nokey' WHERE task = 'summary'").run();
+
+    const runtime = resolveAiRuntimeFor('summary');
+    expect(runtime.provider).toBe('GEMINI');
+    expect(runtime.available).toBe(false);
+    expect(taskKnowsVideo('summary')).toBe(false);
   });
 });
 

@@ -71,6 +71,12 @@ export interface VideoMaterial extends VideoExtras {
   readStatus: WatchPageStatus;
   /** The caption languages the page lists, even when their text stays locked. */
   captionLanguages: string[];
+  /** When this answer was produced, so a stale one can say its age. */
+  attemptedAt?: string;
+  /** When we will try again without being asked, after a failed read. */
+  nextAttemptAt?: string;
+  /** True when this answer came from the short lived cache. */
+  fromCache?: boolean;
 }
 
 export interface CourseDraftModule {
@@ -750,18 +756,114 @@ export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
   };
 }
 
+/* --------------------------------------------------------------------------
+   Reading YouTube politely.
+
+   Every open of a video used to mean a new page read, and every failed read
+   meant an immediate second try. That is how a quiet server turns into one
+   YouTube refuses: too many requests, too close together. Three things keep it
+   calm now. Answers are cached. Reads are spaced. And after a few refusals in a
+   row the reader stops asking for a few minutes, so the page can say "next try
+   at 4:32" instead of failing again on every visit.
+   -------------------------------------------------------------------------- */
+
+interface CachedRead {
+  material: VideoMaterial;
+  at: number;
+}
+
+const readCache = new Map<string, CachedRead>();
+const READ_CACHE_MS = 10 * 60 * 1000;
+const FAILED_CACHE_MS = 2 * 60 * 1000;
+/** No two page reads start closer together than this. */
+const MIN_GAP_MS = 1200;
+/** After this many refusals in a row, stand down for a while. */
+const FAILURES_BEFORE_REST = 3;
+const REST_MS = 5 * 60 * 1000;
+
+let lastReadStarted = 0;
+let consecutiveFailures = 0;
+let restingUntil = 0;
+let readGate: Promise<unknown> = Promise.resolve();
+
+/** Serialises readers and keeps the gap between them. */
+const throughReadGate = <T>(job: () => Promise<T>): Promise<T> => {
+  const next = readGate.then(async () => {
+    const wait = MIN_GAP_MS - (Date.now() - lastReadStarted);
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    lastReadStarted = Date.now();
+    return job();
+  }, job);
+  readGate = next.catch(() => undefined);
+  return next;
+};
+
+const readIsEmpty = (material: VideoMaterial) =>
+  material.readStatus !== 'OK';
+
+const stamp = (material: VideoMaterial, extra: Partial<VideoMaterial> = {}): VideoMaterial => ({
+  ...material,
+  attemptedAt: new Date().toISOString(),
+  ...extra
+});
+
 /**
- * A watch page read that tries twice. YouTube refuses a server now and then and
- * answers the same request a moment later, so one quick second attempt turns
- * most of those into a normal read.
+ * One watch page read, shared: cached when it worked, rested when it did not.
  */
 export async function readWatchPage(videoId: string): Promise<VideoMaterial> {
-  const first = await fetchWatchPage(videoId);
-  if (first.readStatus === 'OK') return first;
-  await new Promise((resolve) => setTimeout(resolve, 700));
-  const second = await fetchWatchPage(videoId);
-  return second.readStatus === 'OK' ? second : first;
+  const now = Date.now();
+  const cached = readCache.get(videoId);
+  if (cached) {
+    const fresh = readIsEmpty(cached.material)
+      ? now - cached.at < FAILED_CACHE_MS
+      : now - cached.at < READ_CACHE_MS;
+    if (fresh) {
+      return stamp(cached.material, {
+        fromCache: true,
+        nextAttemptAt: readIsEmpty(cached.material) ? new Date(cached.at + FAILED_CACHE_MS).toISOString() : undefined
+      });
+    }
+  }
+
+  /* Standing down. Give the caller the last thing we knew, with the hour we
+     will be willing to try again, rather than another failed attempt. */
+  if (now < restingUntil) {
+    const last = cached?.material || (await fetchWatchPage(videoId));
+    return stamp(last, {
+      fromCache: true,
+      nextAttemptAt: new Date(restingUntil).toISOString()
+    });
+  }
+
+  const material = await throughReadGate(() => fetchWatchPage(videoId));
+  readCache.set(videoId, { material, at: Date.now() });
+
+  if (readIsEmpty(material)) {
+    consecutiveFailures += 1;
+    if (consecutiveFailures >= FAILURES_BEFORE_REST) {
+      restingUntil = Date.now() + REST_MS;
+      consecutiveFailures = 0;
+    }
+  } else {
+    consecutiveFailures = 0;
+    restingUntil = 0;
+  }
+
+  return stamp(material, {
+    nextAttemptAt: readIsEmpty(material) ? new Date(Date.now() + FAILED_CACHE_MS).toISOString() : undefined
+  });
 }
+
+/** True when the reader is currently standing down, and when it will try again. */
+export const watchReaderRestingUntil = () => (Date.now() < restingUntil ? new Date(restingUntil) : null);
+
+/** Only used by tests, so a cache never leaks between cases. */
+export const __clearWatchCache = () => {
+  readCache.clear();
+  consecutiveFailures = 0;
+  restingUntil = 0;
+  lastReadStarted = 0;
+};
 
 /** Kept for callers that only want the description. */
 export async function fetchVideoDescription(videoId: string): Promise<string> {
@@ -1224,7 +1326,8 @@ export async function buildCourseDraft(input: DraftRequest): Promise<CourseDraft
     }),
     json: true,
     temperature: 0.35,
-    timeoutMs: 90000
+    timeoutMs: 90000,
+    task: 'course'
   });
 
   if (!result.ok) {

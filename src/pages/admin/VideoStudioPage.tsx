@@ -30,7 +30,7 @@ interface VideoSummary {
   overview: string;
   sections: SummarySection[];
   takeaways: string[];
-  basis: 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
+  basis: 'TRANSCRIPT' | 'VIDEO' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
   generatedBy: 'LIVE_LLM' | 'DETERMINISTIC';
   modelName: string;
   durationSeconds: number | null;
@@ -164,11 +164,13 @@ const readTrouble = (status?: string) => {
 const summaryBasisLabel = (basis?: string) =>
   basis === 'TRANSCRIPT'
     ? 'From the captions'
-    : basis === 'CHAPTERS'
-      ? "From the creator's chapters"
-      : basis === 'METADATA'
-        ? 'Title and length only'
-        : 'From the description only';
+    : basis === 'VIDEO'
+      ? 'From the video itself'
+      : basis === 'CHAPTERS'
+        ? "From the creator's chapters"
+        : basis === 'METADATA'
+          ? 'Title and length only'
+          : 'From the description only';
 
 /** A long video gets the two minute promise. A short one does not need it. */
 const readEstimate = (seconds?: number | null) =>
@@ -1141,10 +1143,24 @@ export const VideoStudioPage: React.FC = () => {
                     </p>
                   )}
 
+                  {activeSummary.basis === 'DESCRIPTION' && (
+                    <p className="vs-summary-fine vs-summary-next">
+                      A model that watches the video can write this from the video itself. Add one on the{' '}
+                      <a href="/ai-pipeline">AI engine</a> page, under Which model does which job.
+                    </p>
+                  )}
+
                   {activeSummary.basis === 'METADATA' && (
                     <p className="vs-summary-fine">
                       {activeSummary.note ||
                         'There is nothing to read for this one yet. Paste the transcript and the summary fills in with the time each part starts.'}
+                    </p>
+                  )}
+
+                  {activeSummary.basis === 'VIDEO' && (
+                    <p className="vs-summary-fine">
+                      The model watched the video and wrote this. Every time below was checked against
+                      the video's real length before it was shown.
                     </p>
                   )}
 

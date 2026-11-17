@@ -3143,3 +3143,35 @@ p.vs-summary-fact { margin: 6px 0 0; }
   line-height: 1.55;
   color: #8A8A92;
 }
+
+/* ---- Which model does which job (turn 72) ---- */
+.route-list { display: flex; flex-direction: column; border-top: 1px solid var(--border-subtle); }
+.route-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--border-subtle);
+}
+.route-main { min-width: 0; }
+.route-main strong { display: block; font-size: 13px; color: var(--ink); }
+.route-main p { margin: 3px 0 4px; font-size: 12px; color: var(--text-muted); max-width: 60ch; }
+.route-meta {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-light-muted);
+}
+.route-select { width: 220px; flex: 0 0 auto; }
+.route-add { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.route-add > strong { display: block; font-size: 13px; margin-bottom: 10px; }
+.conn-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.conn-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-top: 1px solid var(--border-subtle);
+}
+.conn-list li > div { min-width: 0; flex: 1 1 auto; }
+.conn-list strong { display: block; font-size: 12px; }
+.conn-list span { display: block; font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+
+@media (max-width: 780px) {
+  .route-row { flex-direction: column; gap: 8px; }
+  .route-select { width: 100%; }
+}
+.vs-summary-next { border-top: 1px solid var(--border-subtle); padding-top: 10px; }
+.vs-summary-next a { color: var(--accent); text-decoration: underline; }

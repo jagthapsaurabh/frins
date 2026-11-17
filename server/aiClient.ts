@@ -172,6 +172,154 @@ export function resolveAiRuntime(): AiRuntime {
   return build('FREE', '', AI_PROVIDERS.FREE.model, AI_PROVIDERS.FREE.baseUrl);
 }
 
+/* --------------------------------------------------------------------------
+   One provider per job.
+
+   The default connection answers everything. A site that wants Gemini to watch
+   the video for a summary, while the free model writes course drafts, says so
+   once here: named connections, and a route for each job.
+   -------------------------------------------------------------------------- */
+
+export type AiTaskKey = 'summary' | 'course';
+
+export const AI_TASKS: Array<{ key: AiTaskKey; label: string; hint: string }> = [
+  {
+    key: 'summary',
+    label: 'Video summaries',
+    hint: 'Turns a long video into a short read with jump points. Gemini can watch the video itself, so captions can stay locked.'
+  },
+  {
+    key: 'course',
+    label: 'Course drafts',
+    hint: 'Writes modules, tasks and questions from a video or a topic.'
+  }
+];
+
+export interface AiConnectionView {
+  id: string;
+  label: string;
+  provider: string;
+  model: string;
+  baseUrl: string;
+  hasKey: boolean;
+  maskedKey: string;
+  keyless: boolean;
+  available: boolean;
+  isDefault: boolean;
+}
+
+const readConnections = (): any[] => {
+  try {
+    return db.prepare('SELECT * FROM ai_connections ORDER BY created_at ASC').all() as any[];
+  } catch {
+    return [];
+  }
+};
+
+const readRoutes = (): Record<string, string> => {
+  try {
+    const rows = db.prepare('SELECT task, connection_id FROM ai_routes').all() as any[];
+    return Object.fromEntries(rows.map((row) => [String(row.task), String(row.connection_id)]));
+  } catch {
+    return {};
+  }
+};
+
+const runtimeFromConnection = (connection: any): AiRuntime => {
+  const provider = String(connection?.provider || 'NONE').toUpperCase() as AiProviderKey;
+  const meta = providerMeta(provider);
+  const key = String(connection?.api_key || '').trim();
+  const baseUrl = String(connection?.base_url || meta.baseUrl || '').trim().replace(/\/$/, '');
+  const model = String(connection?.model || meta.model || '').trim();
+  const keyless = meta.keyless;
+  return {
+    provider,
+    model,
+    key,
+    baseUrl,
+    keyless,
+    label: String(connection?.label || meta.label),
+    available: provider !== 'NONE' && Boolean(baseUrl) && (keyless || Boolean(key)),
+    free: keyless
+  };
+};
+
+/** The connection a job is pointed at, if it has one and it can answer. */
+export function resolveAiRuntimeFor(task?: AiTaskKey): AiRuntime {
+  if (!task) return resolveAiRuntime();
+  const routeId = readRoutes()[task];
+  if (!routeId) return resolveAiRuntime();
+  const connection = readConnections().find((row) => row.id === routeId);
+  if (!connection) return resolveAiRuntime();
+  const runtime = runtimeFromConnection(connection);
+  /* A route to a connection whose key is missing should not quietly fall back
+     to another provider. It says it is not ready, and the caller says why. */
+  return runtime;
+}
+
+/** Which connection a job will actually use, in words for the console. */
+export function aiRouteSummary() {
+  const routes = readRoutes();
+  const connections = readConnections();
+  const labelFor = (id?: string) => {
+    if (!id) return null;
+    const found = connections.find((row) => row.id === id);
+    return found ? String(found.label) : null;
+  };
+  return AI_TASKS.map((task) => {
+    const runtime = resolveAiRuntimeFor(task.key);
+    return {
+      ...task,
+      connectionId: routes[task.key] || '',
+      connectionLabel: labelFor(routes[task.key]) || 'Default',
+      model: runtime.model,
+      available: runtime.available,
+      provider: runtime.provider
+    };
+  });
+}
+
+export function aiConnectionsForClient(): AiConnectionView[] {
+  const runtime = resolveAiRuntime();
+  const rows = readConnections();
+  if (!rows.length) {
+    return [
+      {
+        id: 'default',
+        label: 'Default',
+        provider: runtime.provider,
+        model: runtime.model,
+        baseUrl: runtime.baseUrl,
+        hasKey: Boolean(runtime.key),
+        maskedKey: runtime.key ? 'Saved key ending ' + runtime.key.slice(-4) : 'No key',
+        keyless: runtime.keyless,
+        available: runtime.available,
+        isDefault: true
+      }
+    ];
+  }
+  return rows.map((row) => {
+    const built = runtimeFromConnection(row);
+    const key = String(row.api_key || '');
+    return {
+      id: String(row.id),
+      label: String(row.label || 'Connection'),
+      provider: built.provider,
+      model: built.model,
+      baseUrl: built.baseUrl,
+      hasKey: Boolean(key),
+      maskedKey: key ? 'Saved key ending ' + key.slice(-4) : built.keyless ? 'No key needed' : 'No key',
+      keyless: built.keyless,
+      available: built.available,
+      isDefault: row.id === 'default'
+    };
+  });
+}
+
+/** True when this job is answered by a model that can watch a video itself. */
+export const taskKnowsVideo = (task: AiTaskKey) =>
+  resolveAiRuntimeFor(task).provider === 'GEMINI' && resolveAiRuntimeFor(task).available;
+
 /** A short line the console can show without exposing a key. */
 export function aiSummary() {
   const runtime = resolveAiRuntime();
@@ -238,7 +386,14 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /** One request, to whichever provider is configured. */
 async function callOnce(runtime: AiRuntime, input: AiChatInput): Promise<AiChatResult> {
   if (!runtime.available) {
-    return { ok: false, error: 'No model is connected and the free model is off.', provider: runtime.provider };
+    return {
+      ok: false,
+      error:
+        runtime.provider === 'NONE'
+          ? 'No model is connected and the free model is off.'
+          : `${runtime.label} is chosen for this job but has no key yet. Add one on the AI engine page, or point the job back at the default connection.`,
+      provider: runtime.provider
+    };
   }
 
   const timeout = input.timeoutMs || Number(process.env.AI_TIMEOUT_MS || 60000);
@@ -371,8 +526,10 @@ async function callOnce(runtime: AiRuntime, input: AiChatInput): Promise<AiChatR
  * how long to wait and the wait is short, it waits and tries once more, because
  * a course draft is worth ninety seconds to an admin.
  */
-export async function aiChat(input: AiChatInput & { waitForRetry?: boolean }): Promise<AiChatResult> {
-  const runtime = resolveAiRuntime();
+export async function aiChat(
+  input: AiChatInput & { waitForRetry?: boolean; task?: AiTaskKey }
+): Promise<AiChatResult> {
+  const runtime = resolveAiRuntimeFor(input.task);
   const first = await throughQueue(() => callOnce(runtime, input));
 
   if (first.ok) return first;
