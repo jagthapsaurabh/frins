@@ -36,6 +36,8 @@ interface VideoSummary {
   durationSeconds: number | null;
   readingMinutes: number;
   fallbackReason?: string;
+  /** Why there is nothing to read, in the server's own words. */
+  note?: string;
 }
 
 interface VideoRow {
@@ -139,6 +141,26 @@ const fmtDuration = (seconds?: number | null) => {
   return `${minutes} min`;
 };
 
+/** Why a page read came back empty, said the way a person would say it. */
+const readTrouble = (status?: string) => {
+  if (status === 'UNAVAILABLE') {
+    return {
+      title: 'YouTube says this video is unavailable',
+      body: 'It may be private, taken down, or the link may be short of a character. Check it in a browser first.'
+    };
+  }
+  if (status === 'BOT_WALL') {
+    return {
+      title: 'YouTube asked for a browser, not a server',
+      body: 'It wanted to confirm a person was asking, so it sent nothing back. Try again in a minute, or paste the transcript.'
+    };
+  }
+  return {
+    title: "We could not read this video's page",
+    body: 'YouTube sent nothing back for the link, which is usually a passing block on their side. Try again in a minute.'
+  };
+};
+
 const summaryBasisLabel = (basis?: string) =>
   basis === 'TRANSCRIPT'
     ? 'From the captions'
@@ -200,7 +222,12 @@ export const VideoStudioPage: React.FC = () => {
   const [needsTranscript, setNeedsTranscript] = useState(false);
   const [canUseDescription, setCanUseDescription] = useState(false);
   const [canSummarise, setCanSummarise] = useState(false);
-  const [probe, setProbe] = useState<{ durationSeconds: number | null; chapterCount: number } | null>(null);
+  const [probe, setProbe] = useState<{
+    durationSeconds: number | null;
+    chapterCount: number;
+    pageRead?: string;
+    captionLanguages?: string[];
+  } | null>(null);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
   const [summaryCopied, setSummaryCopied] = useState(false);
 
@@ -296,8 +323,13 @@ export const VideoStudioPage: React.FC = () => {
         setCanUseDescription(Boolean(json.canUseDescription));
         setCanSummarise(Boolean(json.canSummarise));
         setProbe(
-          json.canSummarise
-            ? { durationSeconds: json.durationSeconds ?? null, chapterCount: Number(json.chapterCount) || 0 }
+          json.canSummarise || json.pageRead
+            ? {
+                durationSeconds: json.durationSeconds ?? null,
+                chapterCount: Number(json.chapterCount) || 0,
+                pageRead: json.pageRead,
+                captionLanguages: json.captionLanguages
+              }
             : null
         );
         return;
@@ -708,13 +740,28 @@ export const VideoStudioPage: React.FC = () => {
 
               {needsTranscript && (
                 <div className="vs-needs">
-                  <strong>YouTube held the captions back</strong>
-                  <p>
-                    A summary does not need them, so that is the quicker way through.{' '}
-                    {canSummarise
-                      ? 'A course can also be written from the description and the chapter list.'
-                      : 'A course needs words, so paste the transcript from the video page.'}
-                  </p>
+                  {probe?.pageRead && probe.pageRead !== 'OK' ? (
+                    <>
+                      <strong>{readTrouble(probe.pageRead).title}</strong>
+                      <p>{readTrouble(probe.pageRead).body}</p>
+                    </>
+                  ) : (
+                    <>
+                      <strong>YouTube held the captions back</strong>
+                      <p>
+                        A summary does not need them, so that is the quicker way through.{' '}
+                        {canSummarise
+                          ? 'A course can also be written from the description and the chapter list.'
+                          : 'A course needs words, so paste the transcript from the video page.'}
+                      </p>
+                      {probe?.captionLanguages && probe.captionLanguages.length > 0 && (
+                        <p className="vs-needs-fact">
+                          Captions exist in {probe.captionLanguages.join(', ')}. YouTube keeps the words
+                          from servers, so copy them from the video's transcript panel.
+                        </p>
+                      )}
+                    </>
+                  )}
 
                   {canSummarise && probe && (
                     <p className="vs-needs-fact">
@@ -896,8 +943,8 @@ export const VideoStudioPage: React.FC = () => {
                     {transcript
                       ? `${active.word_count.toLocaleString('en-IN')} words`
                       : active.transcript_source === 'NONE'
-                        ? 'No captions. The summary is built from what the creator published.'
-                        : 'No captions. A course can still be written from the description.'}
+                        ? 'The words stayed with YouTube. The summary is built from what the creator published.'
+                        : 'The words stayed with YouTube. A course can still be written from the description.'}
                   </span>
                 </div>
               </div>
@@ -1088,17 +1135,16 @@ export const VideoStudioPage: React.FC = () => {
 
                   {activeSummary.basis === 'DESCRIPTION' && (
                     <p className="vs-summary-fine">
-                      Built from the description only. YouTube gave no captions and the creator wrote
-                      no chapters, so there are no times to point at. Paste the transcript and rewrite
-                      it for real jump points.
+                      Built from the description. YouTube kept the captions back and the creator wrote
+                      no chapter marks, so there are no times to point at. Paste the transcript and
+                      rewrite it for real jump points.
                     </p>
                   )}
 
                   {activeSummary.basis === 'METADATA' && (
                     <p className="vs-summary-fine">
-                      YouTube published no captions, no chapters and no description for this one, so
-                      there is nothing to summarise yet. Paste the transcript and the summary fills
-                      in with the time each part starts.
+                      {activeSummary.note ||
+                        'There is nothing to read for this one yet. Paste the transcript and the summary fills in with the time each part starts.'}
                     </p>
                   )}
 
@@ -1125,11 +1171,12 @@ export const VideoStudioPage: React.FC = () => {
                     >
                       {busy === 'summary' ? (
                         <>
-                          <Loader2 size={13} className="vs-spin" /> Rewriting
+                          <Loader2 size={13} className="vs-spin" /> Reading again
                         </>
                       ) : (
                         <>
-                          <RefreshCw size={13} /> Rewrite
+                          <RefreshCw size={13} />{' '}
+                          {activeSummary.basis === 'METADATA' ? 'Try again' : 'Rewrite'}
                         </>
                       )}
                     </button>

@@ -45,6 +45,20 @@ export interface VideoExtras {
   chapters: Array<{ startSeconds: number; title: string }>;
 }
 
+/**
+ * How the page read went. An empty video and an unread page look the same in
+ * the fields above, and they are not the same thing to say out loud.
+ */
+export type WatchPageStatus =
+  | 'OK'
+  /** YouTube says the video is gone, private or never existed. */
+  | 'UNAVAILABLE'
+  /** YouTube wants a signed-in browser to prove a human is asking, so a server is turned away. */
+  | 'BOT_WALL'
+  | 'NO_VIDEO_BLOCK'
+  | 'HTTP_ERROR'
+  | 'UNREACHABLE';
+
 /** Everything one watch page read can tell us, captions included. */
 export interface VideoMaterial extends VideoExtras {
   title: string;
@@ -53,6 +67,10 @@ export interface VideoMaterial extends VideoExtras {
   segments: TimedSegment[];
   /** True when the page lists caption tracks, even if the text stays locked. */
   captionsListed: boolean;
+  /** Whether the read landed, so a failure is never reported as an empty video. */
+  readStatus: WatchPageStatus;
+  /** The caption languages the page lists, even when their text stays locked. */
+  captionLanguages: string[];
 }
 
 export interface CourseDraftModule {
@@ -582,7 +600,7 @@ function parseCaptionPayload(body: string): string {
  */
 export async function fetchVideoExtras(videoId: string): Promise<VideoExtras> {
   const material = await fetchWatchPage(videoId);
-  const { title, channel, segments, captionsListed, ...extras } = material;
+  const { title, channel, segments, captionsListed, readStatus, captionLanguages, ...extras } = material;
   return extras;
 }
 
@@ -625,15 +643,17 @@ function pickCaptionTrack(tracks: CaptionTrack[]): CaptionTrack | null {
  * widest door to the spoken words, so it is tried before the player API.
  */
 export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
-  const empty: VideoMaterial = {
+  const empty = (readStatus: WatchPageStatus): VideoMaterial => ({
     title: '',
     channel: '',
     description: '',
     durationSeconds: null,
     chapters: [],
     segments: [],
-    captionsListed: false
-  };
+    captionsListed: false,
+    readStatus,
+    captionLanguages: []
+  });
 
   let html = '';
   try {
@@ -641,10 +661,10 @@ export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
       headers: { 'User-Agent': WATCH_UA, 'Accept-Language': 'en-US,en;q=0.9' },
       signal: AbortSignal.timeout(15000)
     });
-    if (!res.ok) return empty;
+    if (!res.ok) return empty('HTTP_ERROR');
     html = await res.text();
   } catch {
-    return empty;
+    return empty('UNREACHABLE');
   }
 
   /* Everything is read from the block that names this video. A watch page also
@@ -704,6 +724,19 @@ export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
     segments = await fetchPlayerTimedTranscript(videoId);
   }
 
+  /* The player block is what carries the length and the description. A page
+     without it is a page we did not really read, whatever the HTTP status, and
+     YouTube's own reason is the difference between a dead link and a refusal. */
+  let readStatus: WatchPageStatus = 'OK';
+  if (pinned < 0 || (!description && !durationSeconds && !title)) {
+    const status = html.match(/"playabilityStatus":\{"status":"([A-Z_]+)"(?:,"reason":"((?:[^"\\]|\\.)*)")?/);
+    const code = status?.[1] || '';
+    const reason = status?.[2] || '';
+    if (code === 'ERROR' || /unavailable|private|removed/i.test(reason)) readStatus = 'UNAVAILABLE';
+    else if (code === 'LOGIN_REQUIRED' || /sign in to confirm|not a bot/i.test(reason)) readStatus = 'BOT_WALL';
+    else readStatus = 'NO_VIDEO_BLOCK';
+  }
+
   return {
     title,
     channel,
@@ -711,8 +744,23 @@ export async function fetchWatchPage(videoId: string): Promise<VideoMaterial> {
     durationSeconds,
     chapters: usableChapters,
     segments,
-    captionsListed: tracks.length > 0
+    captionsListed: tracks.length > 0,
+    readStatus,
+    captionLanguages: [...new Set(tracks.map((track) => String(track.languageCode || '')).filter(Boolean))]
   };
+}
+
+/**
+ * A watch page read that tries twice. YouTube refuses a server now and then and
+ * answers the same request a moment later, so one quick second attempt turns
+ * most of those into a normal read.
+ */
+export async function readWatchPage(videoId: string): Promise<VideoMaterial> {
+  const first = await fetchWatchPage(videoId);
+  if (first.readStatus === 'OK') return first;
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const second = await fetchWatchPage(videoId);
+  return second.readStatus === 'OK' ? second : first;
 }
 
 /** Kept for callers that only want the description. */

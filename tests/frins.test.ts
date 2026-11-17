@@ -31,7 +31,13 @@ import {
 } from '../server/videoStudio.js';
 import { buildTopicOutline } from '../server/courseStudio.js';
 import { resolveAiRuntime, parseJsonLoose } from '../server/aiClient.js';
-import { extractSections, formatTimestamp, summaryToText, type VideoSummary } from '../server/videoSummary.js';
+import {
+  buildVideoSummary,
+  extractSections,
+  formatTimestamp,
+  summaryToText,
+  type VideoSummary
+} from '../server/videoSummary.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
   const out: Record<string, { answerValue: string; answerText?: string }> = {};
@@ -690,6 +696,106 @@ describe('A long video becomes a short read', () => {
       'https://youtu.be/abcdefghijk'
     );
     expect(/[\u2010\u2011\u2013\u2014\u2015]/.test(text)).toBe(false);
+  });
+});
+
+describe('A page we could not read is not an empty video', () => {
+  const quiet = buildVideoSummary({
+    title: 'The Best 5-Minute Scalping Strategy',
+    channel: 'Tanisha Garg',
+    description: '',
+    durationSeconds: null,
+    segments: [],
+    chapters: [],
+    readStatus: 'UNREACHABLE',
+    captionLanguages: []
+  });
+
+  it('FRI-SUMMARY-READ-001: a failed read says so, and never blames the video', async () => {
+    const summary = await quiet;
+    expect(summary.basis).toBe('METADATA');
+    expect(summary.overview).toContain('could not read');
+    expect(summary.note).toContain('Try again');
+    expect(summary.overview).not.toContain('YouTube published no');
+    expect(summary.overview).not.toContain('of unknown length');
+  });
+
+  it('FRI-SUMMARY-READ-002: captions that exist but stay locked are named, not denied', async () => {
+    const summary = await buildVideoSummary({
+      title: 'The Best 5-Minute Scalping Strategy',
+      channel: 'Tanisha Garg',
+      description: '',
+      durationSeconds: null,
+      segments: [],
+      chapters: [],
+      readStatus: 'OK',
+      captionLanguages: ['en', 'hi', 'bn']
+    });
+    expect(summary.basis).toBe('METADATA');
+    expect(summary.overview).toContain('English, Hindi and Bangla');
+    expect(summary.overview).toContain('keeps the words');
+    expect(summary.note).toContain('Show transcript');
+    expect(summary.overview).not.toContain('no captions');
+  });
+
+  it('FRI-SUMMARY-READ-003: a page that really is empty keeps its length and says nothing is there', async () => {
+    const summary = await buildVideoSummary({
+      title: 'A silent clip',
+      channel: 'Someone',
+      description: '',
+      durationSeconds: 1331,
+      segments: [],
+      chapters: [],
+      readStatus: 'OK',
+      captionLanguages: []
+    });
+    expect(summary.overview).toContain('22:11 long');
+    expect(summary.overview).toContain('no description, no chapters and no captions');
+  });
+
+  it('FRI-SUMMARY-READ-005: a dead link and a bot wall read differently', async () => {
+    const gone = await buildVideoSummary({
+      title: 'A video that was taken down',
+      description: '',
+      durationSeconds: null,
+      segments: [],
+      chapters: [],
+      readStatus: 'UNAVAILABLE',
+      captionLanguages: []
+    });
+    expect(gone.overview).toContain('unavailable');
+    expect(gone.note).toContain('Check the link');
+
+    const walled = await buildVideoSummary({
+      title: 'A video behind a wall',
+      description: '',
+      durationSeconds: null,
+      segments: [],
+      chapters: [],
+      readStatus: 'BOT_WALL',
+      captionLanguages: []
+    });
+    expect(walled.overview).toContain('browser');
+    expect(walled.overview).not.toContain('unavailable');
+  });
+
+  it('FRI-SUMMARY-READ-004: none of these three reads carries a dash', async () => {
+    const texts = [
+      (await quiet).overview,
+      (await quiet).note || '',
+      (
+        await buildVideoSummary({
+          title: 'T',
+          description: '',
+          durationSeconds: null,
+          segments: [],
+          chapters: [],
+          readStatus: 'OK',
+          captionLanguages: ['en', 'hi']
+        })
+      ).overview
+    ];
+    for (const text of texts) expect(/[\u2010\u2011\u2013\u2014\u2015]/.test(text)).toBe(false);
   });
 });
 

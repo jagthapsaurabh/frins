@@ -17,7 +17,7 @@
    --------------------------------------------------------------------------- */
 
 import { aiChat, parseJsonLoose } from './aiClient.js';
-import { keyTopics, type TimedSegment } from './videoStudio.js';
+import { keyTopics, type TimedSegment, type WatchPageStatus } from './videoStudio.js';
 
 export type SummaryBasis = 'TRANSCRIPT' | 'CHAPTERS' | 'DESCRIPTION' | 'METADATA';
 
@@ -39,7 +39,26 @@ export interface VideoSummary {
   /** How long the summary takes to read, in minutes. */
   readingMinutes: number;
   fallbackReason?: string;
+  /** Said plainly when there was nothing to read, and why. */
+  note?: string;
 }
+
+/** English, Hindi, Bangla: the names a person reads, from the codes YouTube sends. */
+const languageNames = (codes: string[]) => {
+  const names = codes.map((code) => {
+    const base = String(code).toLowerCase().split('-')[0];
+    try {
+      const label = new Intl.DisplayNames(['en'], { type: 'language' }).of(base);
+      return label && label !== base ? label : String(code).toUpperCase();
+    } catch {
+      return String(code).toUpperCase();
+    }
+  });
+  const unique = [...new Set(names)];
+  return unique.length <= 1
+    ? unique[0] || 'this video'
+    : `${unique.slice(0, -1).join(', ')} and ${unique[unique.length - 1]}`;
+};
 
 /** 1:02:03, or 12:40. */
 export const formatTimestamp = (totalSeconds: number) => {
@@ -198,6 +217,10 @@ interface BuildInput {
   durationSeconds?: number | null;
   segments: TimedSegment[];
   chapters: Array<{ startSeconds: number; title: string }>;
+  /** How the page read went, so a failed read is never called an empty video. */
+  readStatus?: WatchPageStatus;
+  /** Caption languages the page lists, even when their text stays locked. */
+  captionLanguages?: string[];
 }
 
 export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary> {
@@ -262,9 +285,37 @@ export async function buildVideoSummary(input: BuildInput): Promise<VideoSummary
     }
 
     if (!(input.description || '').trim()) {
-      const length = durationSeconds ? `${formatTimestamp(durationSeconds)} long` : 'of unknown length';
+      /* Three different things used to read the same here: YouTube published
+         nothing, YouTube listed captions but kept the words, and our own read
+         failed. Only the first is about the video, so they are said apart. */
+      const languages = (input.captionLanguages || []).filter(Boolean);
+      const named = languageNames(languages);
+      const readFailed = input.readStatus && input.readStatus !== 'OK';
+
+      let overview: string;
+      let note: string;
+
+      if (input.readStatus === 'UNAVAILABLE') {
+        overview = `YouTube says this video is unavailable. It may be private, taken down, or the link may be short of a character.`;
+        note = 'Check the link in a browser. If it opens there, paste the transcript and everything else works the same.';
+      } else if (readFailed) {
+        overview =
+          input.readStatus === 'BOT_WALL'
+            ? `We could not read this video's page. YouTube asked to confirm a browser rather than a server, so it sent nothing back for ${input.title}.`
+            : `We could not read this video's page just now, so YouTube sent nothing back for ${input.title}. That is usually a passing block on their side.`;
+        note = 'Try again in a minute. If it stays shut, paste the transcript and everything else works the same.';
+      } else if (languages.length) {
+        overview = `${input.title}${input.channel ? ` by ${input.channel}` : ''} has captions in ${named}, and YouTube keeps the words themselves from our server. Its page has no description and no chapter marks to read instead.`;
+        note = 'Open the video, choose More, then Show transcript, copy it and paste it above. The summary then carries the minute each part starts.';
+      } else {
+        const length = durationSeconds ? `${formatTimestamp(durationSeconds)} long` : 'of a length we could not read';
+        overview = `${input.title}${input.channel ? ` by ${input.channel}` : ''} is ${length}. YouTube lists no description, no chapters and no captions for it, so there is nothing to read yet.`;
+        note = 'Paste the transcript and this page fills in with the times of each part.';
+      }
+
       return {
-        overview: `${input.title}${input.channel ? ` by ${input.channel}` : ''} is ${length}. YouTube published no captions, no chapters and no description for it, so there is nothing to read yet. Paste the transcript and this page fills in with the times of each part.`,
+        overview,
+        note,
         sections: [],
         takeaways: [],
         basis: 'METADATA',

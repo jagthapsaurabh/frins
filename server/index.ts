@@ -24,6 +24,7 @@ import {
   fetchTimedTranscript,
   fetchVideoExtras,
   fetchWatchPage,
+  readWatchPage,
   countWords,
   extractYouTubeId,
   fetchVideoMeta,
@@ -5971,7 +5972,7 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
   /* One read of the watch page gives the description, the length, the creator's
      chapters and the caption tracks. Chapters carry real start times, which is
      what makes a two hour video skimmable. */
-  const page = await fetchWatchPage(videoId);
+  const page = await readWatchPage(videoId);
 
   let transcript = pasted;
   let source: 'YOUTUBE' | 'PASTED' | 'NONE' = 'PASTED';
@@ -6015,7 +6016,9 @@ app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES
       canUseDescription: descriptionWords >= 40,
       canSummarise,
       durationSeconds,
-      chapterCount: chapters.length
+      chapterCount: chapters.length,
+      pageRead: page.readStatus,
+      captionLanguages: page.captionLanguages
     });
   }
 
@@ -6144,7 +6147,10 @@ app.post(
     if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
 
     const cached = summaryOf(row);
-    if (cached && req.body?.refresh !== true) {
+    /* A summary that found nothing to read is worth another try on every open:
+       the usual cause is a page read that did not land, and it may land now. */
+    const retryEmpty = cached?.basis === 'METADATA';
+    if (cached && !retryEmpty && req.body?.refresh !== true) {
       return res.json({
         success: true,
         summary: cached,
@@ -6157,7 +6163,7 @@ app.post(
     /* One read of the watch page gives everything: the description, the length,
        the creator's chapters and the caption tracks. The player API is a second
        door to the same words, used only when the first one stays shut. */
-    const page = await fetchWatchPage(row.video_id);
+    const page = await readWatchPage(row.video_id);
     let segments = page.segments;
     if (!segments.length && page.captionsListed) {
       segments = await fetchPlayerTimedTranscript(row.video_id);
@@ -6188,7 +6194,9 @@ app.post(
       description,
       durationSeconds,
       segments,
-      chapters
+      chapters,
+      readStatus: page.readStatus,
+      captionLanguages: page.captionLanguages
     });
 
     const now = new Date().toISOString();
