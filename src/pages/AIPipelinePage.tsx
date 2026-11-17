@@ -204,15 +204,24 @@ export const AIPipelinePage: React.FC = () => {
   const splits = trainingData?.splits || {};
   const benchmark = trainingData?.benchmarks?.[0];
   const passedCases = (benchmark?.cases || []).filter((item: any) => item.passed).length;
-  const connected = Boolean(settings?.hasKey && provider !== 'NONE');
+  // The free provider needs no key, so a key is not what makes it connected.
   const providerMeta = (settings?.providers || []).find((item: any) => item.value === provider);
+  const keyless = Boolean(providerMeta?.keyless);
+  const connected = Boolean(provider !== 'NONE' && (keyless || settings?.hasKey));
   const statusLabel = settings?.providerLabel || 'Not connected';
+  const effective = settings?.effective || null;
 
   return (
     <div>
       <PageHead
         title="AI engine"
-        meta={connected ? `Connected to ${statusLabel}` : 'No provider connected'}
+        meta={
+          effective?.available
+            ? effective.free
+              ? `Running on the free model (${effective.model})`
+              : `Connected to ${effective.label}`
+            : 'No provider connected'
+        }
         actions={
           <button type="button" className="btn btn-secondary" onClick={runBenchmark}>
             <FlaskConical size={14} /> Run benchmark
@@ -332,17 +341,28 @@ export const AIPipelinePage: React.FC = () => {
                       <label className="form-label" htmlFor="aiKey">
                         API key
                       </label>
-                      <input
-                        id="aiKey"
-                        type="password"
-                        className="form-input"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder={settings?.hasKey ? 'Saved. Type a new key to replace it.' : 'Paste the key'}
-                        autoComplete="off"
-                      />
+                      {keyless ? (
+                        <input
+                          id="aiKey"
+                          className="form-input"
+                          value="No key needed"
+                          readOnly
+                          aria-readonly="true"
+                        />
+                      ) : (
+                        <input
+                          id="aiKey"
+                          type="password"
+                          className="form-input"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder={settings?.hasKey ? 'Saved. Type a new key to replace it.' : 'Paste the key'}
+                          autoComplete="off"
+                        />
+                      )}
                     </div>
                   </div>
+                  {providerMeta?.hint && <p className="form-hint">{providerMeta.hint}</p>}
                   <div className="form-group">
                     <label className="form-label" htmlFor="aiBaseUrl">
                       Base URL

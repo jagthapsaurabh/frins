@@ -22,7 +22,14 @@ import {
 } from '../server/db.js';
 import { buildDiscoveryFlow } from '../src/pages/discoveryFlow.js';
 import { flowProgress } from '../src/shared/discoveryFlow.js';
-import { extractYouTubeId, stripTranscriptMarkup, buildDeterministicDraft } from '../server/videoStudio.js';
+import {
+  extractYouTubeId,
+  stripTranscriptMarkup,
+  buildDeterministicDraft,
+  stripDashes
+} from '../server/videoStudio.js';
+import { buildTopicOutline } from '../server/courseStudio.js';
+import { resolveAiRuntime, parseJsonLoose } from '../server/aiClient.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
   const out: Record<string, { answerValue: string; answerText?: string }> = {};
@@ -531,5 +538,74 @@ Decide the stop first, then the size follows
 
     expect(investor.modules[0].lesson).toContain('build a position');
     expect(trader.modules[0].lesson).toContain('decide a trade');
+  });
+});
+
+describe('A course from a topic, without a key', () => {
+  it('FRI-STUDIO-AI: a fresh install runs on the free model, with no key anywhere', () => {
+    const runtime = resolveAiRuntime();
+    expect(runtime.available).toBe(true);
+    expect(runtime.provider).toBe('FREE');
+    expect(runtime.free).toBe(true);
+    expect(runtime.key).toBe('');
+    expect(runtime.baseUrl).toContain('pollinations');
+  });
+
+  it('FRI-STUDIO-TOPIC: a topic always yields a course with a lesson and a task per module', () => {
+    const draft = buildTopicOutline({
+      topic: 'Position sizing from the stop, not from lot size',
+      brief: 'One worked example. Halve the risk after two losses.',
+      track: 'trader',
+      level: 'L1 to L2',
+      moduleCount: 3
+    });
+
+    expect(draft.modules.length).toBe(3);
+    expect(draft.tasks).toBe(3);
+    expect(draft.basis).toBe('TOPIC');
+    expect(draft.generatedBy).toBe('DETERMINISTIC');
+
+    for (const module of draft.modules) {
+      expect(module.title.length).toBeGreaterThan(3);
+      expect(module.lesson.length).toBeGreaterThan(40);
+      expect(module.task.title.length).toBeGreaterThan(3);
+      expect(module.task.instructions.length).toBeGreaterThan(20);
+      expect(module.task.dueDays).toBeGreaterThan(0);
+      // House style: no en or em dashes anywhere a learner reads.
+      expect(module.title).not.toMatch(/[\u2013\u2014]/);
+      expect(module.lesson).not.toMatch(/[\u2013\u2014]/);
+    }
+  });
+
+  it('FRI-STUDIO-CLEAN: model text is cleaned and fenced JSON still parses', () => {
+    expect(stripDashes('Size from the stop \u2014 not the lot')).toBe('Size from the stop, not the lot');
+    expect(stripDashes('Half\u2011formed rule')).toBe('Half-formed rule');
+
+    const fenced = '```json\n{"title":"A course","modules":[{"title":"One"}]}\n```';
+    const parsed = parseJsonLoose<{ title: string; modules: any[] }>(fenced);
+    expect(parsed?.title).toBe('A course');
+    expect(parsed?.modules.length).toBe(1);
+
+    const chatty = 'Here is the course you asked for.\n{"title":"Chatty"}\nThat is all.';
+    expect(parseJsonLoose<any>(chatty)?.title).toBe('Chatty');
+    expect(parseJsonLoose<any>('no json at all')).toBeNull();
+  });
+
+  it('FRI-STUDIO-RULE: a copy of a course keeps one lesson and one task per module', () => {
+    const draft = buildTopicOutline({
+      topic: 'Reading a balance sheet before the first position',
+      track: 'investor',
+      level: 'L1 · Foundations',
+      moduleCount: 2
+    });
+
+    const shape = draft.modules.map((m) => ({
+      lesson: m.lesson.length > 0,
+      task: Boolean(m.task.title && m.task.instructions)
+    }));
+    expect(shape).toEqual([
+      { lesson: true, task: true },
+      { lesson: true, task: true }
+    ]);
   });
 });

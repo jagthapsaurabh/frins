@@ -2242,6 +2242,7 @@ a.kpi:hover { background: #FCFCFD; }
 
 .vs-alert-error { background: var(--danger-bg, #FEF3F2); border: 1px solid var(--danger-border, #FDA29B); color: var(--danger-text, #912018); }
 .vs-alert-ok { background: var(--success-bg, #ECFDF3); border: 1px solid var(--success-border, #A6F4C5); color: var(--success-text, #05603A); }
+.vs-alert-warn { background: #FDF9EE; border: 1px solid #E7D6A8; color: #6B4E06; margin: 0 0 10px; }
 
 .vs-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 .vs-actions-end { justify-content: flex-end; }
@@ -2628,4 +2629,65 @@ a.kpi:hover { background: #FCFCFD; }
 @media (max-width: 720px) {
   .access-matrix-head { flex-direction: column; }
   .access-matrix-actions { flex-direction: column; align-items: flex-start; }
+}
+
+/* ------------- v23: two ways into the course studio ---------------------- */
+
+.vs-mode {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-subtle, #E4DFD2);
+}
+
+.vs-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted, #6E6E76);
+  cursor: pointer;
+}
+
+.vs-mode-tab:hover { color: #14141A; }
+
+.vs-mode-tab.on {
+  color: #0A0A0B;
+  border-bottom-color: #D4A017;
+}
+
+.vs-mode-note {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: #8A8A92;
+}
+
+.vs-basis {
+  margin: -4px 0 10px;
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #9A6B12;
+}
+
+.vs-optional {
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #9A9AA2;
+  margin-left: 4px;
+}
+
+@media (max-width: 720px) {
+  .vs-mode-note { margin-left: 0; width: 100%; }
 }

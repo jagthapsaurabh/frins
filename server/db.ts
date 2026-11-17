@@ -1782,6 +1782,10 @@ export function initDatabaseAndSeed() {
   `);
 
   const flowColumns = [
+    // A video whose captions are withheld can still become a course: we keep the
+    // description and let the model draft from it.
+    'ALTER TABLE video_sources ADD COLUMN description TEXT',
+    'ALTER TABLE video_sources ADD COLUMN draft_basis TEXT',
     "ALTER TABLE discovery_questions ADD COLUMN audience_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE discovery_questions ADD COLUMN experience_json TEXT NOT NULL DEFAULT '[]'",
     "ALTER TABLE discovery_questions ADD COLUMN show_if_json TEXT NOT NULL DEFAULT '[]'",
@@ -1796,6 +1800,31 @@ export function initDatabaseAndSeed() {
     } catch {
       /* the column already exists */
     }
+  }
+
+  /* Out of the box the console writes drafts with a free model, so a new
+     install can generate a course without anyone buying a key. An admin who
+     wants a different provider sets it on the AI engine page, and that choice
+     is never overwritten: the guard below runs once. */
+  const aiDefaultGuarded = db
+    .prepare("SELECT value FROM app_meta WHERE key = 'ai_free_default_v1'")
+    .get() as any;
+  if (!aiDefaultGuarded) {
+    const aiRow = db.prepare("SELECT * FROM ai_settings WHERE id = 'default'").get() as any;
+    const provider = String(aiRow?.provider || 'NONE').toUpperCase();
+    const hasKey = Boolean(String(aiRow?.api_key || '').trim());
+    if (!aiRow) {
+      db.prepare(
+        `INSERT INTO ai_settings (id, provider, model, api_key, base_url, updated_at, updated_by)
+         VALUES ('default', 'FREE', 'openai-fast', NULL, 'https://text.pollinations.ai/openai', ?, NULL)`
+      ).run(now);
+    } else if (provider === 'NONE' && !hasKey) {
+      db.prepare(
+        `UPDATE ai_settings SET provider = 'FREE', model = 'openai-fast',
+                base_url = 'https://text.pollinations.ai/openai', updated_at = ? WHERE id = 'default'`
+      ).run(now);
+    }
+    db.prepare("INSERT OR REPLACE INTO app_meta (key, value, updated_at) VALUES ('ai_free_default_v1', '1', ?)").run(now);
   }
 
   // Settings row for the public Discovery flow. This has to come after the

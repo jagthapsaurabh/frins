@@ -1,6 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Copy, Download, Film, Link2, Loader2, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Download,
+  FileText,
+  Film,
+  Link2,
+  Loader2,
+  Sparkles,
+  Trash2,
+  Wand2
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PageHead } from '../../components/console/ConsoleUI';
@@ -15,10 +26,12 @@ interface VideoRow {
   language: string | null;
   word_count: number;
   transcript_chars: number;
+  description_chars?: number;
   transcript_source: 'YOUTUBE' | 'PASTED';
   course_id: string | null;
   created_by_name: string | null;
   created_at: string;
+  description?: string | null;
 }
 
 interface DraftModule {
@@ -43,8 +56,23 @@ interface Draft {
   level: string;
   generatedBy: 'LIVE_LLM' | 'DETERMINISTIC';
   modelName: string;
+  basis?: 'TRANSCRIPT' | 'DESCRIPTION' | 'TOPIC';
+  fallbackReason?: string;
   modules: DraftModule[];
   tasks: number;
+}
+
+interface LearnerRow {
+  id: string;
+  name: string;
+  track: string;
+}
+
+interface AiInfo {
+  label: string;
+  model: string;
+  free: boolean;
+  available: boolean;
 }
 
 const TRACKS = [
@@ -70,23 +98,30 @@ const formatDate = (iso: string) => {
     : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
+const basisLabel = (basis?: string) =>
+  basis === 'TOPIC' ? 'From the topic' : basis === 'DESCRIPTION' ? 'From the description' : 'From the transcript';
+
 /**
- * Admin: paste a YouTube link, read or paste its transcript, and turn it into
- * a course with lessons and tasks. Nothing is saved until the admin says so.
+ * Admin: bring a video in, or describe a topic, and turn either into a course
+ * with lessons and tasks. Nothing is saved until the admin says so.
  */
 export const VideoStudioPage: React.FC = () => {
   const { authFetch } = useAuth();
   const navigate = useNavigate();
 
+  const [mode, setMode] = useState<'video' | 'topic'>('video');
+
   const [videos, setVideos] = useState<VideoRow[]>([]);
   const [loadingList, setLoadingList] = useState(true);
 
+  /* ------------------------------------------------------------ video mode */
   const [link, setLink] = useState('');
   const [pasted, setPasted] = useState('');
   const [needsTranscript, setNeedsTranscript] = useState(false);
+  const [canUseDescription, setCanUseDescription] = useState(false);
   const [fetchNote, setFetchNote] = useState<string | null>(null);
 
-  const [busy, setBusy] = useState<'fetch' | 'draft' | 'save' | null>(null);
+  const [busy, setBusy] = useState<'fetch' | 'draft' | 'save' | 'plan' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
 
@@ -94,11 +129,22 @@ export const VideoStudioPage: React.FC = () => {
   const [transcript, setTranscript] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [latePaste, setLatePaste] = useState('');
 
+  /* ------------------------------------------------------------ topic mode */
+  const [topic, setTopic] = useState('');
+  const [brief, setBrief] = useState('');
+  const [learners, setLearners] = useState<LearnerRow[]>([]);
+  const [learnerId, setLearnerId] = useState('');
+  const [ai, setAi] = useState<AiInfo | null>(null);
+
+  /* ----------------------------------------------------------------- shared */
   const [track, setTrack] = useState('trader');
   const [level, setLevel] = useState('L1 to L2');
   const [moduleCount, setModuleCount] = useState(4);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [draftOrigin, setDraftOrigin] = useState<'video' | 'topic'>('video');
   const [savedCourseId, setSavedCourseId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VideoRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -111,8 +157,6 @@ export const VideoStudioPage: React.FC = () => {
         const json = await res.json();
         setVideos(json.rows || []);
       }
-    } catch {
-      /* the list is not critical, the form still works */
     } finally {
       setLoadingList(false);
     }
@@ -122,9 +166,26 @@ export const VideoStudioPage: React.FC = () => {
     loadVideos();
   }, [loadVideos]);
 
-  /* ------------------------------------------------------------ add link */
+  useEffect(() => {
+    authFetch('/api/admin/course-studio/ai')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (json?.ai) setAi(json.ai);
+      })
+      .catch(() => undefined);
+  }, [authFetch]);
 
-  const addVideo = async (withTranscript: boolean) => {
+  useEffect(() => {
+    if (mode !== 'topic' || learners.length) return;
+    authFetch('/api/admin/learners?limit=200')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setLearners(json?.rows || []))
+      .catch(() => undefined);
+  }, [authFetch, mode, learners.length]);
+
+  /* ------------------------------------------------------------- video flow */
+
+  const addVideo = async (withTranscript: boolean, acceptDescription = false) => {
     setError(null);
     setBanner(null);
     if (!link.trim()) {
@@ -136,29 +197,39 @@ export const VideoStudioPage: React.FC = () => {
       const res = await authFetch('/api/admin/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: link.trim(), transcript: withTranscript ? pasted : '' })
+        body: JSON.stringify({
+          url: link.trim(),
+          transcript: withTranscript ? pasted : '',
+          acceptDescription
+        })
       });
       const json = await res.json();
 
       if (!res.ok) {
         setError(json.error || 'Could not read that video.');
         if (json.needsTranscript) setNeedsTranscript(true);
+        setCanUseDescription(Boolean(json.canUseDescription));
         return;
       }
 
       setActive(json.video);
       setTranscript(json.video.transcript || '');
       setNeedsTranscript(false);
+      setCanUseDescription(false);
       setFetchNote(json.note || null);
       setBanner(
         json.video.transcript_source === 'YOUTUBE'
           ? 'Transcript pulled from YouTube.'
-          : 'Transcript saved. Everything else works the same.'
+          : json.video.transcript
+            ? 'Transcript saved. Everything else works the same.'
+            : 'Saved. The course will be written from the video description.'
       );
       setDraft(null);
+      setDraftOrigin('video');
       setSavedCourseId(null);
       setLink('');
       setPasted('');
+      setPasteOpen(false);
       loadVideos();
     } catch {
       setError('Could not reach the server.');
@@ -174,16 +245,52 @@ export const VideoStudioPage: React.FC = () => {
     try {
       const res = await authFetch(`/api/admin/videos/${row.id}`);
       if (!res.ok) {
-        setError('Could not open that video.');
+        setError('That video is no longer in the studio.');
         return;
       }
       const json = await res.json();
+      setMode('video');
       setActive(json.video);
       setTranscript(json.video.transcript || '');
+      setFetchNote(null);
+      setNeedsTranscript(false);
+      setCanUseDescription(false);
       setDraft(null);
+      setDraftOrigin('video');
       setSavedCourseId(json.video.course_id || null);
-      setShowTranscript(false);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      setPasteOpen(false);
+      setLatePaste('');
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const attachTranscript = async () => {
+    if (!active) return;
+    setError(null);
+    setBanner(null);
+    setBusy('fetch');
+    try {
+      const res = await authFetch(`/api/admin/videos/${active.id}/transcript`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: latePaste })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Could not save that transcript.');
+        return;
+      }
+      setActive(json.video);
+      setTranscript(json.video.transcript || '');
+      setLatePaste('');
+      setPasteOpen(false);
+      setBanner('Transcript added. Generate the course again and it will use the words from the video.');
+      loadVideos();
+    } catch {
+      setError('Could not reach the server.');
     } finally {
       setBusy(null);
     }
@@ -193,39 +300,75 @@ export const VideoStudioPage: React.FC = () => {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      const res = await authFetch(`/api/admin/videos/${deleteTarget.id}`, { method: 'DELETE' });
-      if (res.ok) {
-        setVideos((rows) => rows.filter((r) => r.id !== deleteTarget.id));
-        if (active?.id === deleteTarget.id) {
-          setActive(null);
-          setDraft(null);
-        }
+      await authFetch(`/api/admin/videos/${deleteTarget.id}`, { method: 'DELETE' });
+      if (active?.id === deleteTarget.id) {
+        setActive(null);
+        setDraft(null);
+        setTranscript('');
       }
+      setDeleteTarget(null);
+      loadVideos();
     } finally {
       setDeleting(false);
-      setDeleteTarget(null);
     }
   };
 
-  /* -------------------------------------------------------------- draft */
+  /* ------------------------------------------------------------- shared AI */
 
-  const generate = async () => {
+  const generateFromVideo = async () => {
     if (!active) return;
-    setBusy('draft');
     setError(null);
     setBanner(null);
+    setBusy('draft');
     try {
       const res = await authFetch(`/api/admin/videos/${active.id}/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track, level, moduleCount })
+        body: JSON.stringify({ track, level, moduleCount, learnerId: learnerId || undefined })
       });
       const json = await res.json();
-      if (!res.ok || !json.success) {
-        setError(json.error || 'Could not build a course from this transcript.');
+      if (!res.ok) {
+        setError(json.error || 'Could not write the draft.');
         return;
       }
       setDraft(json.draft);
+      setDraftOrigin('video');
+      setSavedCourseId(null);
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const generateFromTopic = async () => {
+    setError(null);
+    setBanner(null);
+    if (topic.trim().length < 3) {
+      setError('Write the topic first. A few words is enough.');
+      return;
+    }
+    setBusy('plan');
+    try {
+      const res = await authFetch('/api/admin/course-studio/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: topic.trim(),
+          brief: brief.trim(),
+          track,
+          level,
+          moduleCount,
+          learnerId: learnerId || undefined
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setError(json.error || 'Could not write the course.');
+        return;
+      }
+      setDraft(json.draft);
+      setDraftOrigin('topic');
       setSavedCourseId(null);
     } catch {
       setError('Could not reach the server.');
@@ -235,22 +378,36 @@ export const VideoStudioPage: React.FC = () => {
   };
 
   const saveCourse = async () => {
-    if (!active || !draft) return;
-    setBusy('save');
+    if (!draft) return;
     setError(null);
+    setBanner(null);
+    setBusy('save');
     try {
-      const res = await authFetch(`/api/admin/videos/${active.id}/save`, {
+      const endpoint =
+        draftOrigin === 'topic'
+          ? '/api/admin/course-studio/save'
+          : `/api/admin/videos/${active?.id}/save`;
+      const body =
+        draftOrigin === 'topic'
+          ? { draft, learnerId: learnerId || undefined }
+          : { draft };
+
+      const res = await authFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ draft })
+        body: JSON.stringify(body)
       });
       const json = await res.json();
-      if (!res.ok || !json.success) {
+      if (!res.ok) {
         setError(json.error || 'Could not save the course.');
         return;
       }
       setSavedCourseId(json.courseId);
-      setBanner(`Saved as a course with ${json.stepCount} steps. It is in Courses now.`);
+      setBanner(
+        json.assignedTo
+          ? `Saved as a course and assigned to ${json.assignedTo}.`
+          : `Saved as a course with ${json.stepCount} steps.`
+      );
       loadVideos();
     } catch {
       setError('Could not reach the server.');
@@ -281,37 +438,41 @@ export const VideoStudioPage: React.FC = () => {
     try {
       await navigator.clipboard.writeText(transcript);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      setTimeout(() => setCopied(false), 1600);
     } catch {
-      setError('The browser blocked clipboard access. Select the text and copy it.');
+      setCopied(false);
     }
   };
 
   const downloadTranscript = () => {
-    if (!active) return;
+    if (!transcript) return;
     const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${active.title.replace(/[^\w]+/g, '-').slice(0, 60)}-transcript.txt`;
+    a.download = `${(active?.title || 'transcript').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.txt`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
   const totalMinutes = useMemo(
-    () =>
-      (draft?.modules || []).reduce(
-        (sum, m) => sum + 20 + (Number(m.task.estimatedMinutes) || 0),
-        30
-      ),
+    () => (draft?.modules || []).reduce((sum, m) => sum + (Number(m.task?.estimatedMinutes) || 0), 0),
     [draft]
   );
+
+  const aiLine = ai?.available
+    ? ai.free
+      ? `Written by the free model (${ai.model}). No key needed.`
+      : `Written by ${ai.label} (${ai.model}).`
+    : 'No model connected. Drafts come from the built-in writer.';
+
+  const learnerName = learners.find((l) => l.id === learnerId)?.name;
 
   return (
     <div className="vs-page">
       <PageHead
-        title="Video studio"
-        meta="YouTube in, course out"
+        title="Course studio"
+        meta="A video, or a topic"
         actions={
           <button type="button" className="btn btn-secondary" onClick={() => navigate('/admin/courses')}>
             All courses
@@ -330,131 +491,263 @@ export const VideoStudioPage: React.FC = () => {
         </div>
       )}
 
+      <div className="vs-mode">
+        <button
+          type="button"
+          className={`vs-mode-tab ${mode === 'video' ? 'on' : ''}`}
+          onClick={() => setMode('video')}
+        >
+          <Film size={14} /> From a video
+        </button>
+        <button
+          type="button"
+          className={`vs-mode-tab ${mode === 'topic' ? 'on' : ''}`}
+          onClick={() => setMode('topic')}
+        >
+          <FileText size={14} /> From a topic
+        </button>
+        <span className="vs-mode-note">{aiLine}</span>
+      </div>
+
       <div className="vs-grid">
         {/* ------------------------------------------------------- input */}
         <section className="vs-col">
-          <div className="panel-card">
-            <div className="panel-head">
-              <h2>
-                <Link2 size={14} /> Bring a video in
-              </h2>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label" htmlFor="vsLink">
-                YouTube link
-              </label>
-              <input
-                id="vsLink"
-                className="form-input"
-                placeholder="https://www.youtube.com/watch?v=..."
-                value={link}
-                onChange={(e) => setLink(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addVideo(needsTranscript);
-                  }
-                }}
-              />
-              <p className="form-hint">
-                Watch, share, shorts and embed links all work. The title and channel come from YouTube.
-              </p>
-            </div>
-
-            {needsTranscript && (
-              <div className="vs-needs">
-                <strong>Paste the transcript instead</strong>
-                <p>
-                  Open the video on YouTube, choose Show transcript under the description, and paste
-                  everything here. Timestamps and caption markup are cleaned up automatically.
-                </p>
-                <textarea
-                  className="form-textarea"
-                  rows={6}
-                  placeholder="Paste the whole transcript. It can be long."
-                  value={pasted}
-                  onChange={(e) => setPasted(e.target.value)}
-                />
-              </div>
-            )}
-
-            <div className="vs-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => addVideo(needsTranscript)}
-                disabled={busy !== null}
-              >
-                {busy === 'fetch' ? (
-                  <>
-                    <Loader2 size={14} className="vs-spin" /> Reading the video
-                  </>
-                ) : needsTranscript ? (
-                  'Save this transcript'
-                ) : (
-                  'Get the transcript'
-                )}
-              </button>
-              {needsTranscript && (
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    setNeedsTranscript(false);
-                    setPasted('');
-                  }}
-                >
-                  Try another link
-                </button>
-              )}
-            </div>
-          </div>
-
-          {active && (
+          {mode === 'video' ? (
             <div className="panel-card">
               <div className="panel-head">
                 <h2>
-                  <Film size={14} /> Transcript
+                  <Link2 size={14} /> Bring a video in
+                </h2>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="vsLink">
+                  YouTube link
+                </label>
+                <input
+                  id="vsLink"
+                  className="form-input"
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={link}
+                  onChange={(e) => setLink(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addVideo(needsTranscript);
+                    }
+                  }}
+                />
+                <p className="form-hint">
+                  Watch, share, shorts and embed links all work. Captions are read straight from the
+                  video when YouTube serves them.
+                </p>
+              </div>
+
+              {needsTranscript && (
+                <div className="vs-needs">
+                  <strong>YouTube held the captions back</strong>
+                  <p>
+                    It happens on age restricted and members only videos. Two ways forward: paste the
+                    transcript from the video page, or let the model write the course from the
+                    video description.
+                  </p>
+                  <textarea
+                    className="form-textarea"
+                    rows={6}
+                    placeholder="Paste the whole transcript. It can be long."
+                    value={pasted}
+                    onChange={(e) => setPasted(e.target.value)}
+                  />
+
+                  <div className="vs-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => addVideo(true)}
+                      disabled={busy !== null || !pasted.trim()}
+                    >
+                      Save this transcript
+                    </button>
+                    {canUseDescription && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => addVideo(false, true)}
+                        disabled={busy !== null}
+                      >
+                        <Sparkles size={13} /> Use the description instead
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="vs-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => addVideo(needsTranscript)}
+                  disabled={busy !== null}
+                >
+                  {busy === 'fetch' ? (
+                    <>
+                      <Loader2 size={14} className="vs-spin" /> Reading the video
+                    </>
+                  ) : (
+                    'Get the transcript'
+                  )}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="panel-card">
+              <div className="panel-head">
+                <h2>
+                  <FileText size={14} /> Start from a topic
+                </h2>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="vsTopic">
+                  Topic
+                </label>
+                <input
+                  id="vsTopic"
+                  className="form-input"
+                  placeholder="e.g. Position sizing from the stop, not from lot size"
+                  value={topic}
+                  onChange={(e) => setTopic(e.target.value)}
+                  maxLength={180}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="vsBrief">
+                  What has to be in it <span className="vs-optional">Optional</span>
+                </label>
+                <textarea
+                  id="vsBrief"
+                  className="form-textarea"
+                  rows={5}
+                  placeholder="Anything the course has to cover, or a mistake the learner keeps making. The more specific this is, the less generic the course."
+                  value={brief}
+                  onChange={(e) => setBrief(e.target.value)}
+                  maxLength={4000}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="vsLearner">
+                  Write it for <span className="vs-optional">Optional</span>
+                </label>
+                <select
+                  id="vsLearner"
+                  className="form-select"
+                  value={learnerId}
+                  onChange={(e) => setLearnerId(e.target.value)}
+                >
+                  <option value="">Anyone on this track</option>
+                  {learners.map((learner) => (
+                    <option key={learner.id} value={learner.id}>
+                      {learner.name} · {learner.track}
+                    </option>
+                  ))}
+                </select>
+                <p className="form-hint">
+                  {learnerName
+                    ? `The course will use ${learnerName}'s level and the focus areas from their Discovery review. Saving assigns it to them.`
+                    : 'Pick a learner and the course is written around them, then assigned on save.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {mode === 'video' && active && (
+            <div className="panel-card">
+              <div className="panel-head">
+                <h2>
+                  <Film size={14} /> Source
                 </h2>
                 <span className={`vs-badge ${active.transcript_source === 'YOUTUBE' ? 'ok' : 'plain'}`}>
-                  {active.transcript_source === 'YOUTUBE' ? 'From YouTube' : 'Pasted'}
+                  {transcript
+                    ? active.transcript_source === 'YOUTUBE'
+                      ? 'From YouTube'
+                      : 'Pasted'
+                    : 'Description only'}
                 </span>
               </div>
 
               <div className="vs-video">
-                {active.thumbnail ? (
-                  <img src={active.thumbnail} alt="" />
-                ) : (
-                  <div className="vs-video-fallback" />
-                )}
+                {active.thumbnail ? <img src={active.thumbnail} alt="" /> : <div className="vs-video-fallback" />}
                 <div>
                   <strong>{active.title}</strong>
                   <span>
                     {active.channel || 'YouTube'}
                     {active.language ? ` · ${active.language}` : ''}
                   </span>
-                  <span>{active.word_count.toLocaleString('en-IN')} words</span>
+                  <span>
+                    {transcript
+                      ? `${active.word_count.toLocaleString('en-IN')} words`
+                      : 'No captions. A course can still be written from the description.'}
+                  </span>
                 </div>
               </div>
 
-              <div className="vs-actions">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => setShowTranscript((v) => !v)}
-                >
-                  {showTranscript ? 'Hide the text' : 'Read the transcript'}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={copyTranscript}>
-                  {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
-                </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={downloadTranscript}>
-                  <Download size={13} /> Download
-                </button>
-              </div>
-
-              {showTranscript && <pre className="vs-transcript">{transcript}</pre>}
+              {transcript ? (
+                <>
+                  <div className="vs-actions">
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowTranscript((v) => !v)}
+                    >
+                      {showTranscript ? 'Hide the text' : 'Read the transcript'}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={copyTranscript}>
+                      {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+                    </button>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={downloadTranscript}>
+                      <Download size={13} /> Download
+                    </button>
+                  </div>
+                  {showTranscript && <pre className="vs-transcript">{transcript}</pre>}
+                </>
+              ) : (
+                <>
+                  <p className="form-hint">
+                    Paste the transcript from the video page any time. The course gets sharper when the
+                    model reads the actual words.
+                  </p>
+                  {pasteOpen ? (
+                    <div className="vs-needs">
+                      <textarea
+                        className="form-textarea"
+                        rows={6}
+                        placeholder="Paste the transcript here."
+                        value={latePaste}
+                        onChange={(e) => setLatePaste(e.target.value)}
+                      />
+                      <div className="vs-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={attachTranscript}
+                          disabled={busy !== null || !latePaste.trim()}
+                        >
+                          Save the transcript
+                        </button>
+                        <button type="button" className="btn btn-ghost" onClick={() => setPasteOpen(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPasteOpen(true)}>
+                      Add the transcript
+                    </button>
+                  )}
+                </>
+              )}
 
               {fetchNote && <p className="form-hint">{fetchNote}</p>}
             </div>
@@ -470,7 +763,7 @@ export const VideoStudioPage: React.FC = () => {
               </h2>
             </div>
 
-            {!active ? (
+            {mode === 'video' && !active ? (
               <div className="empty-state">
                 <strong>Nothing to build yet</strong>
                 Add a video on the left and its transcript lands here.
@@ -482,12 +775,7 @@ export const VideoStudioPage: React.FC = () => {
                     <label className="form-label" htmlFor="vsTrack">
                       Track
                     </label>
-                    <select
-                      id="vsTrack"
-                      className="form-select"
-                      value={track}
-                      onChange={(e) => setTrack(e.target.value)}
-                    >
+                    <select id="vsTrack" className="form-select" value={track} onChange={(e) => setTrack(e.target.value)}>
                       {TRACKS.map((t) => (
                         <option key={t.value} value={t.value}>
                           {t.label}
@@ -500,12 +788,7 @@ export const VideoStudioPage: React.FC = () => {
                     <label className="form-label" htmlFor="vsLevel">
                       Level
                     </label>
-                    <select
-                      id="vsLevel"
-                      className="form-select"
-                      value={level}
-                      onChange={(e) => setLevel(e.target.value)}
-                    >
+                    <select id="vsLevel" className="form-select" value={level} onChange={(e) => setLevel(e.target.value)}>
                       {LEVELS.map((l) => (
                         <option key={l.value} value={l.value}>
                           {l.label}
@@ -537,10 +820,10 @@ export const VideoStudioPage: React.FC = () => {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    onClick={generate}
+                    onClick={mode === 'topic' ? generateFromTopic : generateFromVideo}
                     disabled={busy !== null}
                   >
-                    {busy === 'draft' ? (
+                    {busy === 'draft' || busy === 'plan' ? (
                       <>
                         <Loader2 size={14} className="vs-spin" /> Writing the course
                       </>
@@ -565,9 +848,22 @@ export const VideoStudioPage: React.FC = () => {
               <div className="panel-head">
                 <h2>Draft</h2>
                 <span className={`vs-badge ${draft.generatedBy === 'LIVE_LLM' ? 'ok' : 'plain'}`}>
-                  {draft.generatedBy === 'LIVE_LLM' ? `Model: ${draft.modelName}` : 'Built from the transcript'}
+                  {draft.generatedBy === 'LIVE_LLM'
+                    ? `Model: ${draft.modelName}`
+                    : draft.basis === 'TOPIC'
+                      ? 'Outline only'
+                      : 'Built from the transcript'}
                 </span>
               </div>
+
+              <p className="vs-basis">{basisLabel(draft.basis)}</p>
+
+              {draft.fallbackReason && (
+                <div className="vs-alert vs-alert-warn" role="status">
+                  {draft.fallbackReason} This draft came from the built in writer instead. Try again, or
+                  add your own key in Settings, AI engine.
+                </div>
+              )}
 
               <div className="vs-draft-meta">
                 <input
@@ -638,9 +934,7 @@ export const VideoStudioPage: React.FC = () => {
                               min={5}
                               max={240}
                               value={module.task.estimatedMinutes}
-                              onChange={(e) =>
-                                updateTask(index, { estimatedMinutes: Number(e.target.value) })
-                              }
+                              onChange={(e) => updateTask(index, { estimatedMinutes: Number(e.target.value) })}
                             />
                           </label>
                           <label>
@@ -676,6 +970,8 @@ export const VideoStudioPage: React.FC = () => {
                       <>
                         <Loader2 size={14} className="vs-spin" /> Saving
                       </>
+                    ) : draftOrigin === 'topic' && learnerId ? (
+                      `Save and assign to ${learnerName || 'the learner'}`
                     ) : (
                       'Save as a course'
                     )}
@@ -708,9 +1004,12 @@ export const VideoStudioPage: React.FC = () => {
                 <div className="vs-list-main">
                   <strong>{row.title}</strong>
                   <span>
-                    {row.channel || 'YouTube'} · {row.word_count.toLocaleString('en-IN')} words ·{' '}
-                    {formatDate(row.created_at)}
-                    {row.transcript_source === 'PASTED' ? ' · pasted transcript' : ''}
+                    {row.channel || 'YouTube'} ·{' '}
+                    {row.word_count > 0
+                      ? `${row.word_count.toLocaleString('en-IN')} words`
+                      : 'description only'}{' '}
+                    · {formatDate(row.created_at)}
+                    {row.transcript_source === 'PASTED' && row.word_count > 0 ? ' · pasted transcript' : ''}
                   </span>
                 </div>
                 <div className="vs-list-actions">
@@ -723,11 +1022,7 @@ export const VideoStudioPage: React.FC = () => {
                       Course
                     </button>
                   )}
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => reopenVideo(row)}
-                  >
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => reopenVideo(row)}>
                     Open
                   </button>
                   <button

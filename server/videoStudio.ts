@@ -1,3 +1,5 @@
+import { aiChat, parseJsonLoose } from './aiClient.js';
+
 /* ---------------------------------------------------------------------------
    Video studio.
 
@@ -44,6 +46,8 @@ export interface CourseDraftModule {
   };
 }
 
+export type DraftBasis = 'TRANSCRIPT' | 'DESCRIPTION' | 'TOPIC';
+
 export interface CourseDraft {
   title: string;
   summary: string;
@@ -52,6 +56,10 @@ export interface CourseDraft {
   level: string;
   generatedBy: 'LIVE_LLM' | 'DETERMINISTIC';
   modelName: string;
+  /** What the draft was written from, so the console can say so. */
+  basis: DraftBasis;
+  /** Set when a model was tried and could not be reached. */
+  fallbackReason?: string;
   modules: CourseDraftModule[];
   tasks: number;
 }
@@ -412,6 +420,50 @@ function parseCaptionPayload(body: string): string {
   return stripTranscriptMarkup(trimmed);
 }
 
+/**
+ * The description under the video. When YouTube refuses to hand captions to a
+ * server, this is still readable, and it is enough for a model to write a
+ * course around the video's actual subject.
+ */
+export async function fetchVideoDescription(videoId: string): Promise<string> {
+  try {
+    const res = await fetch(`${canonicalWatchUrl(videoId)}&hl=en`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      signal: AbortSignal.timeout(12000)
+    });
+    if (!res.ok) return '';
+    const html = await res.text();
+
+    const raw =
+      html.match(/"shortDescription":"((?:[^"\\]|\\.)*)"/)?.[1] ||
+      html.match(/"attributedDescription":\{"content":"((?:[^"\\]|\\.)*)"/)?.[1] ||
+      '';
+
+    if (!raw) return '';
+    return decodeJsonString(raw).trim();
+  } catch {
+    return '';
+  }
+}
+
+/** YouTube stores the description as a JSON string inside the page. */
+function decodeJsonString(value: string): string {
+  try {
+    return JSON.parse(`"${value}"`);
+  } catch {
+    return value
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '')
+      .replace(/\\"/g, '"')
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\\\\/g, '\\');
+  }
+}
+
 /* ------------------------------------------------------------- generate */
 
 const STOP_WORDS = new Set([
@@ -671,6 +723,7 @@ export function buildDeterministicDraft(input: DeterministicInput): CourseDraft 
     level,
     generatedBy: 'DETERMINISTIC',
     modelName: 'frins-transcript-builder-v1',
+    basis: 'TRANSCRIPT',
     modules,
     tasks: modules.length
   };
@@ -679,98 +732,153 @@ export function buildDeterministicDraft(input: DeterministicInput): CourseDraft 
 /* ------------------------------------------------------------------ live */
 
 const SYSTEM_PROMPT = `You design market education courses for FRINS.
-You are given a YouTube transcript. Turn it into a short course.
+You are given the source material for a course: a transcript, a video description, or a topic the admin typed.
 Rules:
 - Never promise returns, never give buy or sell calls, never call anything risk free.
 - Plain English, short sentences, no em dashes.
-- Every module needs one lesson and one task the learner can submit.
-- Tasks must be checkable against what the video actually said.
+- Every module needs one lesson of 120 to 220 words and one task the learner can submit.
+- Tasks must be checkable. Say exactly what the learner turns in and what a reviewer looks for.
+- If the material is thin, stay close to it. Do not invent statistics, prices or names.
 Return JSON only, with this shape:
-{"title":"","summary":"","description":"","modules":[{"title":"","lesson":"","task":{"title":"","instructions":"","expectedCriteria":"","estimatedMinutes":30,"dueDays":7}}]}`;
+{"title":"","summary":"","description":"","modules":[{"title":"","focus":"","lesson":"","task":{"title":"","instructions":"","expectedCriteria":"","estimatedMinutes":30,"dueDays":7}}]}`;
 
-/**
- * With AI_PROVIDER=real and a key, the draft comes from the model. Any failure
- * falls back to the transcript builder and says so. A draft is never presented
- * as model written when it is not.
- */
-export async function buildCourseDraft(input: {
+export const stripDashes = (value: unknown, fallback = '') =>
+  String(value ?? fallback)
+    // Hyphen variants become a plain hyphen; en and em dashes become a comma.
+    .replace(/[\u2010\u2011]/g, '-')
+    .replace(/[\u2013\u2014\u2015]/g, ',')
+    .replace(/\s+,/g, ',');
+
+const toModules = (rawModules: any[]): CourseDraftModule[] =>
+  rawModules.slice(0, 12).map((m: any, index: number) => ({
+    position: index + 1,
+    title: stripDashes(m?.title, `Module ${index + 1}`),
+    focus: stripDashes(m?.focus, ''),
+    lesson: stripDashes(m?.lesson, ''),
+    task: {
+      title: stripDashes(m?.task?.title, `Apply Module ${index + 1}`),
+      instructions: stripDashes(m?.task?.instructions, ''),
+      expectedCriteria: stripDashes(m?.task?.expectedCriteria, ''),
+      estimatedMinutes: Number(m?.task?.estimatedMinutes) > 0 ? Number(m.task.estimatedMinutes) : 30,
+      dueDays: Number(m?.task?.dueDays) > 0 ? Number(m.task.dueDays) : 7
+    }
+  }));
+
+/** A hold-the-shape draft for when there is no transcript and no model. */
+function emptyDraft(input: DraftRequest, basis: DraftBasis): CourseDraft {
+  const count = Math.min(12, Math.max(2, input.moduleCount));
+  return {
+    title: input.title,
+    summary: `A ${count} module course built around this video.`,
+    description: '',
+    track: input.track,
+    level: input.level,
+    generatedBy: 'DETERMINISTIC',
+    modelName: 'rules',
+    basis,
+    modules: Array.from({ length: count }).map((_, index) => ({
+      position: index + 1,
+      title: `Module ${index + 1}`,
+      focus: '',
+      lesson: 'Write this lesson, or connect a model and generate again.',
+      task: {
+        title: `Task ${index + 1}`,
+        instructions: 'Describe what the learner should hand in.',
+        expectedCriteria: '',
+        estimatedMinutes: 30,
+        dueDays: 7
+      }
+    })),
+    tasks: count
+  };
+}
+
+export interface DraftRequest {
   title: string;
-  transcript: string;
+  /** The transcript, when YouTube served one or an admin pasted one. */
+  transcript?: string;
+  /** The video description, used when the captions are withheld. */
+  description?: string;
+  channel?: string;
   track: string;
   level: string;
   moduleCount: number;
-}): Promise<CourseDraft> {
-  const provider = (process.env.AI_PROVIDER || 'mock').toLowerCase();
-  const apiKey = process.env.AI_API_KEY || '';
-  const baseUrl = (process.env.AI_API_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-  const model = process.env.AI_MODEL || 'gpt-4o-mini';
+  /** A learner to write for. Shapes the examples and the difficulty. */
+  learner?: { name?: string; track?: string; level?: string; focus?: string[] } | null;
+}
 
-  const offline = buildDeterministicDraft(input);
-  if (!(provider === 'real' || provider === 'external') || !apiKey) {
-    return offline;
-  }
+/**
+ * Write a course from whatever material is available. The model comes from the
+ * console settings, which start on the free one, so this works with no key.
+ * A failure falls back to the transcript builder, and a draft is never labelled
+ * as model written when it is not.
+ */
+export async function buildCourseDraft(input: DraftRequest): Promise<CourseDraft | null> {
+  const transcript = String(input.transcript || '').trim();
+  const description = String(input.description || '').trim();
+  const hasTranscript = countWords(transcript) >= 60;
+  const hasDescription = countWords(description) >= 40;
+  const basis: DraftBasis = hasTranscript ? 'TRANSCRIPT' : 'DESCRIPTION';
 
-  // Transcripts are long. Keep the request inside a sane token budget.
-  const excerpt = input.transcript.slice(0, 24000);
+  const offline = hasTranscript
+    ? buildDeterministicDraft({
+        title: input.title,
+        transcript,
+        track: input.track,
+        level: input.level,
+        moduleCount: input.moduleCount
+      })
+    : null;
 
-  try {
-    const response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: JSON.stringify({
-              title: input.title,
-              track: input.track,
-              level: input.level,
-              moduleCount: input.moduleCount,
-              transcript: excerpt
-            })
-          }
-        ]
-      }),
-      signal: AbortSignal.timeout(Number(process.env.AI_TIMEOUT_MS || 45000))
-    });
+  if (!hasTranscript && !hasDescription) return offline;
 
-    if (!response.ok) return offline;
+  const material = hasTranscript
+    ? transcript.slice(0, 24000)
+    : `Video title: ${input.title}\nChannel: ${input.channel || 'unknown'}\nDescription:\n${description.slice(0, 6000)}`;
 
-    const data = (await response.json()) as any;
-    const parsed = JSON.parse(data?.choices?.[0]?.message?.content || '{}');
-    const rawModules = Array.isArray(parsed?.modules) ? parsed.modules : [];
-    if (!rawModules.length) return offline;
+  const learnerLine = input.learner
+    ? `Write for one learner: ${input.learner.name || 'a learner'}. Track: ${input.learner.track || input.track}. Level: ${input.learner.level || input.level}.${
+        input.learner.focus && input.learner.focus.length
+          ? ` Their recent review flagged: ${input.learner.focus.join('; ')}.`
+          : ''
+      }`
+    : 'Write for a learner on the stated track and level.';
 
-    const modules: CourseDraftModule[] = rawModules.slice(0, 12).map((m: any, index: number) => ({
-      position: index + 1,
-      title: String(m?.title || `Module ${index + 1}`).replace(/[\u2013\u2014]/g, ','),
-      focus: String(m?.focus || '').replace(/[\u2013\u2014]/g, ','),
-      lesson: String(m?.lesson || '').replace(/[\u2013\u2014]/g, ','),
-      task: {
-        title: String(m?.task?.title || `Apply Module ${index + 1}`).replace(/[\u2013\u2014]/g, ','),
-        instructions: String(m?.task?.instructions || '').replace(/[\u2013\u2014]/g, ','),
-        expectedCriteria: String(m?.task?.expectedCriteria || '').replace(/[\u2013\u2014]/g, ','),
-        estimatedMinutes: Number(m?.task?.estimatedMinutes) > 0 ? Number(m.task.estimatedMinutes) : 30,
-        dueDays: Number(m?.task?.dueDays) > 0 ? Number(m.task.dueDays) : 7
-      }
-    }));
-
-    return {
-      title: String(parsed?.title || offline.title).replace(/[\u2013\u2014]/g, ','),
-      summary: String(parsed?.summary || offline.summary).replace(/[\u2013\u2014]/g, ','),
-      description: String(parsed?.description || offline.description).replace(/[\u2013\u2014]/g, ','),
+  const result = await aiChat({
+    system: SYSTEM_PROMPT,
+    user: JSON.stringify({
+      task: hasTranscript ? 'Turn this material into a course.' : 'Write a course from this video description. It is the only material you have.',
+      source: basis,
+      title: input.title,
       track: input.track,
       level: input.level,
-      generatedBy: 'LIVE_LLM',
-      modelName: model,
-      modules,
-      tasks: modules.length
-    };
-  } catch {
-    return offline;
+      moduleCount: input.moduleCount,
+      learner: learnerLine,
+      material
+    }),
+    json: true,
+    temperature: 0.35,
+    timeoutMs: 90000
+  });
+
+  if (!result.ok) {
+    return offline ? { ...offline, fallbackReason: result.error } : { ...emptyDraft(input, basis), fallbackReason: result.error };
   }
+
+  const parsed = parseJsonLoose<any>(result.text);
+  const modules = toModules(Array.isArray(parsed?.modules) ? parsed.modules : []);
+  if (!modules.length) return offline;
+
+  return {
+    title: stripDashes(parsed?.title, offline?.title || input.title),
+    summary: stripDashes(parsed?.summary, offline?.summary || ''),
+    description: stripDashes(parsed?.description, offline?.description || ''),
+    track: input.track,
+    level: input.level,
+    generatedBy: 'LIVE_LLM',
+    modelName: result.model || 'model',
+    basis,
+    modules,
+    tasks: modules.length
+  };
 }
