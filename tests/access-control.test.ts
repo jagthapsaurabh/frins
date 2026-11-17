@@ -944,4 +944,148 @@ describe('FRINS dashboard access control and Discovery "Other" track', () => {
       headers: { Authorization: `Bearer ${adminToken}` }
     });
   });
+
+  it('FRI-ROLE-004: the shipped roles sit in the list, take edits, and cannot be deleted', async () => {
+    const adminToken = await login('admin@frins.org');
+
+    const listed = await fetch(`${base}/api/admin/roles`, { headers: { Authorization: `Bearer ${adminToken}` } });
+    expect(listed.status).toBe(200);
+    const rows = (await listed.json()).rows as any[];
+
+    const guide = rows.find((row) => row.id === 'rol_builtin_guide');
+    const curriculum = rows.find((row) => row.id === 'rol_builtin_curriculum');
+    const head = rows.find((row) => row.id === 'rol_builtin_admin');
+    expect(guide?.builtIn).toBe(true);
+    expect(curriculum?.builtIn).toBe(true);
+    expect(head?.builtIn).toBe(true);
+    expect(guide?.defaults).toEqual({
+      description: expect.any(String),
+      sections: ['tasks', 'learners', 'messages', 'communities']
+    });
+    expect(curriculum?.defaults.sections).toEqual(['*']);
+    expect(head?.defaults.sections).toEqual(['*']);
+
+    // Shipped first, then whatever an admin made.
+    const firstCustom = rows.findIndex((row) => !row.builtIn);
+    const lastBuiltIn = rows.map((row) => !!row.builtIn).lastIndexOf(true);
+    if (firstCustom !== -1) expect(lastBuiltIn).toBeLessThan(firstCustom);
+
+    // The name and level are fixed; the tabs are not.
+    const edited = await fetch(`${base}/api/admin/roles/rol_builtin_guide`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Renamed', baseRole: 'ADMIN', sections: ['video'], description: 'Watches the studio' })
+    });
+    expect(edited.status).toBe(200);
+    const editedRole = (await edited.json()).role;
+    expect(editedRole.name).toBe('Guide');
+    expect(editedRole.baseRole).toBe('GUIDE');
+    expect(editedRole.sections).toEqual(['video']);
+    expect(editedRole.description).toBe('Watches the studio');
+
+    // Every holder feels it on their next request.
+    const guideToken = await login('vikram.guide@frins.org');
+    const courses = await fetch(`${base}/api/admin/courses`, { headers: { Authorization: `Bearer ${guideToken}` } });
+    expect(courses.status).toBe(403);
+    const videos = await fetch(`${base}/api/admin/videos`, { headers: { Authorization: `Bearer ${guideToken}` } });
+    expect(videos.status).toBe(200);
+    const workspace = await fetch(`${base}/api/guide/workspace`, { headers: { Authorization: `Bearer ${guideToken}` } });
+    expect(workspace.status).toBe(200);
+
+    // A shipped role stays put.
+    const removal = await fetch(`${base}/api/admin/roles/rol_builtin_guide`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    expect(removal.status).toBe(409);
+
+    // Reset puts the tabs and the note back to what ships with the app.
+    const reset = await fetch(`${base}/api/admin/roles/rol_builtin_guide/reset`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    expect(reset.status).toBe(200);
+    const restored = (await reset.json()).role;
+    expect(restored.sections).toEqual(['tasks', 'learners', 'messages', 'communities']);
+    expect(restored.description).toBe(guide.defaults.description);
+
+    // Guide's shipped tabs include tasks, so the workspace is open again.
+    const tasksAgain = await fetch(`${base}/api/admin/tasks`, { headers: { Authorization: `Bearer ${guideToken}` } });
+    expect(tasksAgain.status).toBe(200);
+    expect(
+      (db.prepare("SELECT COUNT(*) c FROM audit_events WHERE action = 'ROLE_RESET'").get() as any).c
+    ).toBeGreaterThan(0);
+
+    // A role that was made by hand cannot be reset.
+    const custom = db.prepare('SELECT id FROM roles WHERE name = ?').get(roleName) as any;
+    if (custom) {
+      const refused = await fetch(`${base}/api/admin/roles/${custom.id}/reset`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      expect(refused.status).toBe(400);
+    }
+
+    db.prepare("DELETE FROM audit_events WHERE action = 'ROLE_RESET'").run();
+    db.prepare("DELETE FROM audit_events WHERE action = 'ROLE_UPDATED' AND entity_id = 'rol_builtin_guide'").run();
+  });
+
+  it('FRI-ROLE-005: every new staff account holds a role, and a personal list steps it out', async () => {
+    const adminToken = await login('admin@frins.org');
+    const email = `qa.role5.${Date.now()}@example.com`;
+
+    // A level alone is enough. The shipped role follows.
+    const created = await fetch(`${base}/api/admin/users`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'QA Guide', email, role: 'GUIDE' })
+    });
+    expect(created.status).toBe(201);
+    const account = await created.json();
+    expect(account.roleName).toBe('Guide');
+    const row = db.prepare('SELECT role_id, permissions_json FROM users WHERE lower(email) = ?').get(email) as any;
+    expect(row.role_id).toBe('rol_builtin_guide');
+    expect(row.permissions_json).toBeNull();
+
+    // A list set by hand takes the account out of the role.
+    const personal = await fetch(`${base}/api/admin/users/${account.userId}/permissions`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions: ['messages', 'learners'] })
+    });
+    expect(personal.status).toBe(200);
+    const detached = db.prepare('SELECT role_id, permissions_json FROM users WHERE lower(email) = ?').get(email) as any;
+    expect(detached.role_id).toBeNull();
+    expect(JSON.parse(detached.permissions_json)).toEqual(['messages', 'learners']);
+
+    const token = await login(email, account.temporaryPassword);
+    const tasks = await fetch(`${base}/api/admin/tasks`, { headers: { Authorization: `Bearer ${token}` } });
+    expect(tasks.status).toBe(403);
+
+    // Clearing the list puts them back on the role.
+    const cleared = await fetch(`${base}/api/admin/users/${account.userId}/permissions`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions: [] })
+    });
+    expect(cleared.status).toBe(200);
+    const back = db.prepare('SELECT role_id, permissions_json FROM users WHERE lower(email) = ?').get(email) as any;
+    expect(back.role_id).toBe('rol_builtin_guide');
+    expect(back.permissions_json).toBeNull();
+
+    // Moving the level moves the shipped role with it.
+    const moved = await fetch(`${base}/api/admin/users/${account.userId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'CURRICULUM_OWNER' })
+    });
+    expect(moved.status).toBe(200);
+    const movedJson = await moved.json();
+    expect(movedJson.roleId).toBe('rol_builtin_curriculum');
+    expect(movedJson.roleName).toBe('Curriculum owner');
+
+    db.prepare('DELETE FROM auth_sessions WHERE user_id = ?').run(account.userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(account.userId);
+    db.prepare("DELETE FROM audit_events WHERE entity_id = ?").run(account.userId);
+  });
 });

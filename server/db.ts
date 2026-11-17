@@ -1151,6 +1151,9 @@ export function initDatabaseAndSeed() {
       description TEXT,
       base_role TEXT NOT NULL CHECK (base_role IN ('GUIDE', 'CURRICULUM_OWNER', 'ADMIN')),
       sections_json TEXT NOT NULL DEFAULT '[]',
+      /* A built in role ships with the product. Its name and level are fixed,
+         its tabs are the admin's to change, and it can be reset. */
+      is_builtin INTEGER NOT NULL DEFAULT 0,
       created_by_id TEXT,
       created_by_name TEXT,
       created_at TEXT NOT NULL,
@@ -1815,6 +1818,7 @@ export function initDatabaseAndSeed() {
     'ALTER TABLE users ADD COLUMN permissions_json TEXT',
     // A staff account can be given a named role instead of a personal list.
     'ALTER TABLE users ADD COLUMN role_id TEXT',
+    'ALTER TABLE roles ADD COLUMN is_builtin INTEGER NOT NULL DEFAULT 0',
     'ALTER TABLE notifications ADD COLUMN event_key TEXT'
   ];
   for (const statement of flowColumns) {
@@ -1849,6 +1853,56 @@ export function initDatabaseAndSeed() {
     }
     db.prepare("INSERT OR REPLACE INTO app_meta (key, value, updated_at) VALUES ('ai_free_default_v1', '1', ?)").run(now);
   }
+
+  /* The three staff roles ship with the app, and live in the same table as the
+     ones an admin makes, so they can be seen and changed in one place. Their
+     tabs are seeded once; an edit is never overwritten by a later boot. */
+  const builtInRoles = [
+    {
+      id: 'rol_builtin_guide',
+      name: 'Guide',
+      description: 'Learner reviews, task reviews, messages and communities.',
+      baseRole: 'GUIDE',
+      // The four a guide's own workspace calls on, so it keeps working.
+      sections: ['tasks', 'learners', 'messages', 'communities']
+    },
+    {
+      id: 'rol_builtin_curriculum',
+      name: 'Curriculum owner',
+      description: 'Courses, learner progress, Discovery and the growth tabs.',
+      baseRole: 'CURRICULUM_OWNER',
+      sections: ['*']
+    },
+    {
+      id: 'rol_builtin_admin',
+      name: 'Administrator',
+      description: 'Everything, including staff, settings and the AI engine.',
+      baseRole: 'ADMIN',
+      sections: ['*']
+    }
+  ];
+  for (const role of builtInRoles) {
+    db.prepare(
+      `INSERT OR IGNORE INTO roles
+         (id, name, description, base_role, sections_json, is_builtin, created_by_id, created_by_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, NULL, 'FRINS', ?, ?)`
+    ).run(role.id, role.name, role.description, role.baseRole, JSON.stringify(role.sections), now, now);
+  }
+
+  /* Any staff account that has not been given a role yet takes the built in one
+     for its level. Accounts with a personal tab list are left alone, so access
+     that was set by hand keeps working. */
+  db.prepare(
+    `UPDATE users
+        SET role_id = CASE role
+              WHEN 'GUIDE' THEN 'rol_builtin_guide'
+              WHEN 'CURRICULUM_OWNER' THEN 'rol_builtin_curriculum'
+              WHEN 'ADMIN' THEN 'rol_builtin_admin'
+              ELSE NULL END
+      WHERE role IN ('GUIDE', 'CURRICULUM_OWNER', 'ADMIN')
+        AND role_id IS NULL
+        AND (permissions_json IS NULL OR permissions_json = '')`
+  ).run();
 
   // Settings row for the public Discovery flow. This has to come after the
   // column additions above, because the seed writes into those columns.

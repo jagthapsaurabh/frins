@@ -51,6 +51,14 @@ export const AdminWorkspacePage: React.FC = () => {
   const allowed = !permissions || permissions.includes('*') || permissions.includes(activeTab);
   const firstAllowed = ADMIN_SECTIONS.find((section) => permissions?.includes(section.key));
 
+  /* A person should never open the console on a wall. A guide goes to their own
+     workspace; anyone else goes to the first tab their role opens. The wall is
+     still there for a link they follow by hand. */
+  if (!allowed && !params.section) {
+    if (user?.role === 'GUIDE') return <Navigate to="/guide" replace />;
+    if (firstAllowed) return <Navigate to={firstAllowed.path} replace />;
+  }
+
   if (!allowed) {
     return (
       <div className="admin-body">

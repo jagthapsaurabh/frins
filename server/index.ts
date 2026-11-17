@@ -3589,8 +3589,11 @@ app.get('/api/admin/bookings', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (req,
 const ROLE_BASE_ROLES = ['GUIDE', 'CURRICULUM_OWNER', 'ADMIN'] as const;
 type RoleBase = (typeof ROLE_BASE_ROLES)[number];
 
-const isFullAdmin = (user: AuthenticatedUser | undefined) =>
-  Boolean(user && user.role === 'ADMIN' && !permissionsFor(user));
+const isFullAdmin = (user: AuthenticatedUser | undefined) => {
+  if (!user || user.role !== 'ADMIN') return false;
+  const permissions = permissionsFor(user);
+  return !permissions || permissions.includes('*');
+};
 
 const requireFullAdmin = (req: Request, res: Response, next: NextFunction) => {
   const user = resolveAuthUser(req);
@@ -3614,6 +3617,32 @@ const cleanSections = (raw: unknown): string[] | null => {
   return [...new Set(values.filter((value) => known.has(value)))];
 };
 
+/** The tabs the three shipped roles start with. Kept in step with db.ts. */
+const BUILT_IN_ROLE_DEFAULTS: Record<
+  string,
+  { description: string; sections: string[] }
+> = {
+  rol_builtin_guide: {
+    description: 'Learner reviews, task reviews, messages and communities.',
+    sections: ['tasks', 'learners', 'messages', 'communities']
+  },
+  rol_builtin_curriculum: {
+    description: 'Courses, learner progress, Discovery and the growth tabs.',
+    sections: ['*']
+  },
+  rol_builtin_admin: {
+    description: 'Everything, including staff, settings and the AI engine.',
+    sections: ['*']
+  }
+};
+
+/** The shipped role a flat role name maps to, so every staff account holds one. */
+const BUILT_IN_ROLE_BY_BASE: Record<string, string> = {
+  GUIDE: 'rol_builtin_guide',
+  CURRICULUM_OWNER: 'rol_builtin_curriculum',
+  ADMIN: 'rol_builtin_admin'
+};
+
 const roleRow = (id: string) =>
   db
     .prepare(
@@ -3624,12 +3653,16 @@ const roleRow = (id: string) =>
 
 const roleForClient = (row: any) => {
   if (!row) return null;
+  const builtIn = Boolean(Number(row.is_builtin));
   return {
     id: row.id,
     name: row.name,
     description: row.description || '',
     baseRole: row.base_role,
     sections: readSectionList(row.sections_json) || [],
+    builtIn,
+    // What the role shipped with, so an edit can always be undone.
+    defaults: builtIn ? BUILT_IN_ROLE_DEFAULTS[row.id] || null : null,
     memberCount: Number(row.member_count) || 0,
     created_at: row.created_at,
     updated_at: row.updated_at
@@ -3640,7 +3673,7 @@ app.get('/api/admin/roles', requireRole(['ADMIN', 'CURRICULUM_OWNER']), (_req, r
   const rows = db
     .prepare(
       `SELECT r.*, (SELECT COUNT(*) FROM users u WHERE u.role_id = r.id) AS member_count
-         FROM roles r ORDER BY r.created_at ASC`
+         FROM roles r ORDER BY r.is_builtin DESC, r.created_at ASC`
     )
     .all() as any[];
   res.json({ success: true, rows: rows.map(roleForClient) });
@@ -3688,11 +3721,21 @@ app.patch('/api/admin/roles/:roleId', requireFullAdmin, (req, res) => {
   const existing = roleRow(req.params.roleId);
   if (!existing) return res.status(404).json({ success: false, error: 'That role does not exist.' });
 
-  const name = req.body?.name === undefined ? existing.name : String(req.body.name).trim().replace(/\s+/g, ' ');
+  /* A shipped role carries the name and level the rest of the app knows it by.
+     Its tabs and its note are the admin's to change. */
+  const builtIn = Boolean(Number(existing.is_builtin));
+  const name = builtIn
+    ? existing.name
+    : req.body?.name === undefined
+      ? existing.name
+      : String(req.body.name).trim().replace(/\s+/g, ' ');
   const description =
     req.body?.description === undefined ? existing.description || '' : String(req.body.description).trim().slice(0, 240);
-  const baseRole =
-    req.body?.baseRole === undefined ? existing.base_role : String(req.body.baseRole).toUpperCase();
+  const baseRole = builtIn
+    ? existing.base_role
+    : req.body?.baseRole === undefined
+      ? existing.base_role
+      : String(req.body.baseRole).toUpperCase();
   const sections =
     req.body?.sections === undefined ? readSectionList(existing.sections_json) : cleanSections(req.body.sections);
 
@@ -3743,9 +3786,48 @@ app.patch('/api/admin/roles/:roleId', requireFullAdmin, (req, res) => {
   res.json({ success: true, role: roleForClient(roleRow(existing.id)) });
 });
 
+/** Put a shipped role back to the tabs and note it started with. */
+app.post('/api/admin/roles/:roleId/reset', requireFullAdmin, (req, res) => {
+  const existing = roleRow(req.params.roleId);
+  if (!existing) return res.status(404).json({ success: false, error: 'That role does not exist.' });
+
+  const defaults = BUILT_IN_ROLE_DEFAULTS[existing.id];
+  if (!Number(existing.is_builtin) || !defaults) {
+    return res.status(400).json({
+      success: false,
+      error: 'Only a role that ships with the app can be reset. For your own role, tick its tabs instead.'
+    });
+  }
+
+  db.prepare('UPDATE roles SET description = ?, sections_json = ?, updated_at = ? WHERE id = ?').run(
+    defaults.description,
+    JSON.stringify(defaults.sections),
+    new Date().toISOString(),
+    existing.id
+  );
+
+  writeAuditEvent({
+    actorUserId: req.user!.id,
+    actorRole: req.user!.role,
+    action: 'ROLE_RESET',
+    entityType: 'ROLE',
+    entityId: existing.id,
+    details: { name: existing.name, sections: defaults.sections }
+  });
+
+  res.json({ success: true, role: roleForClient(roleRow(existing.id)) });
+});
+
 app.delete('/api/admin/roles/:roleId', requireFullAdmin, (req, res) => {
   const existing = roleRow(req.params.roleId);
   if (!existing) return res.status(404).json({ success: false, error: 'That role does not exist.' });
+
+  if (Number(existing.is_builtin)) {
+    return res.status(409).json({
+      success: false,
+      error: `${existing.name} ships with the app, so it stays. Change its tabs, or reset it, instead.`
+    });
+  }
 
   if (existing.member_count > 0) {
     return res.status(409).json({
@@ -5243,11 +5325,14 @@ app.post('/api/admin/users', requireFullAdmin, (req, res) => {
   const generatedPassword = suppliedPassword ? null : password;
 
   /* A named role carries its own level, so picking one is the whole answer. */
-  const namedRole = roleId ? roleRow(roleId) : null;
-  if (roleId && !namedRole) {
+  const pickedRole = roleId ? roleRow(roleId) : null;
+  if (roleId && !pickedRole) {
     return res.status(400).json({ success: false, error: 'That role does not exist any more. Pick another.' });
   }
-  const role = namedRole ? String(namedRole.base_role) : String(req.body?.role || 'LEARNER').toUpperCase();
+  const role = pickedRole ? String(pickedRole.base_role) : String(req.body?.role || 'LEARNER').toUpperCase();
+  /* A staff account always holds a role. When the caller named only a level,
+     the role that ships with that level is attached. */
+  const namedRole = pickedRole || roleRow(BUILT_IN_ROLE_BY_BASE[role] || '') || null;
   const assignedSections = namedRole ? cleanSections(readSectionList(namedRole.sections_json)) : null;
 
   if (!name || !email) {
@@ -5339,8 +5424,17 @@ app.patch('/api/admin/users/:userId', requireFullAdmin, (req, res) => {
     : role && ['LEARNER', 'GUIDE', 'ADMIN', 'CURRICULUM_OWNER'].includes(role)
       ? role
       : target.role;
+
+  /* Moving someone to a level without naming a role attaches the shipped role
+     for that level, so no staff account is left without one. */
+  const attachedRole = namedRole || (roleIdGiven ? null : roleRow(BUILT_IN_ROLE_BY_BASE[nextRole] || '')) || null;
+  const nextRoleId = roleIdGiven
+    ? namedRole?.id || null
+    : role && role !== target.role
+      ? attachedRole?.id || null
+      : target.role_id || null;
   const nextStatus = accountStatus && ['ACTIVE', 'SUSPENDED'].includes(accountStatus) ? accountStatus : target.account_status;
-  const nextRoleId = roleIdGiven ? namedRole?.id || null : target.role_id || null;
+  const roleChanged = nextRoleId !== (target.role_id || null);
   const now = new Date().toISOString();
 
   db.prepare(
@@ -5349,7 +5443,7 @@ app.patch('/api/admin/users/:userId', requireFullAdmin, (req, res) => {
             permissions_json = CASE WHEN ? THEN NULL ELSE permissions_json END,
             updated_at = ?
       WHERE id = ?`
-  ).run(nextRole, nextStatus, nextRoleId, roleIdGiven ? 1 : 0, now, userId);
+  ).run(nextRole, nextStatus, nextRoleId, roleChanged ? 1 : 0, now, userId);
 
   writeAuditEvent({
     actorUserId: req.user!.id,
@@ -5374,7 +5468,7 @@ app.patch('/api/admin/users/:userId', requireFullAdmin, (req, res) => {
     role: nextRole,
     accountStatus: nextStatus,
     roleId: nextRoleId,
-    roleName: namedRole?.name || null
+    roleName: (nextRoleId ? roleRow(nextRoleId)?.name : null) || namedRole?.name || null
   });
 });
 
@@ -5391,11 +5485,18 @@ app.patch('/api/admin/users/:userId/permissions', requireFullAdmin, (req, res) =
   const cleaned = [...new Set(raw.map((value: any) => String(value).trim()).filter(Boolean))].slice(0, 30);
   const stored = cleaned.length ? JSON.stringify(cleaned) : null;
 
-  db.prepare('UPDATE users SET permissions_json = ?, updated_at = ? WHERE id = ?').run(
-    stored,
-    new Date().toISOString(),
-    userId
-  );
+  /* A list set by hand wins over the role, so the account is taken out of its
+     role while that list exists. Clearing it puts the account back on the role. */
+  const backOnRole = stored === null && !target.role_id
+    ? roleRow(BUILT_IN_ROLE_BY_BASE[target.role] || '')?.id || null
+    : target.role_id || null;
+  db.prepare(
+    `UPDATE users
+        SET permissions_json = ?,
+            role_id = ?,
+            updated_at = ?
+      WHERE id = ?`
+  ).run(stored, stored === null ? backOnRole : null, new Date().toISOString(), userId);
 
   writeAuditEvent({
     actorUserId: req.user!.id,

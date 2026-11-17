@@ -12,6 +12,9 @@ export interface NamedRole {
   description: string;
   baseRole: 'GUIDE' | 'CURRICULUM_OWNER' | 'ADMIN';
   sections: string[];
+  /** Ships with the app. Its name and level are fixed, its tabs are not. */
+  builtIn: boolean;
+  defaults: { description: string; sections: string[] } | null;
   memberCount: number;
   created_at: string;
   updated_at: string;
@@ -159,8 +162,11 @@ export const RolesPage: React.FC = () => {
       <section className="panel-card">
         <div className="panel-head">
           <div>
-            <h2>Your roles</h2>
-            <p>Name a job, tick the tabs it needs, then give it to a person when you create their account.</p>
+            <h2>Roles</h2>
+            <p>
+              Every role an account can hold. The three shipped roles are here too, so their tabs can be
+              changed or put back the way they came.
+            </p>
           </div>
           <span className="panel-count">{roles.length}</span>
         </div>
@@ -181,7 +187,10 @@ export const RolesPage: React.FC = () => {
                   <ShieldCheck size={15} />
                 </div>
                 <div className="role-main">
-                  <strong>{role.name}</strong>
+                  <strong>
+                    {role.name}
+                    {role.builtIn && <span className="role-builtin-tag">Built in</span>}
+                  </strong>
                   <span className="role-meta">
                     {levelLabel(role.baseRole)}
                     {' · '}
@@ -200,14 +209,16 @@ export const RolesPage: React.FC = () => {
                     <Link className="btn btn-secondary btn-sm" to={`/admin/staff/roles/${role.id}`}>
                       <Pencil size={12} /> Edit
                     </Link>
-                    <button
-                      type="button"
-                      className="btn btn-icon"
-                      aria-label={`Remove ${role.name}`}
-                      onClick={() => setDeleteTarget(role)}
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    {!role.builtIn && (
+                      <button
+                        type="button"
+                        className="btn btn-icon"
+                        aria-label={`Remove ${role.name}`}
+                        onClick={() => setDeleteTarget(role)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -216,30 +227,20 @@ export const RolesPage: React.FC = () => {
         )}
       </section>
 
-      <section className="panel-card">
-        <div className="panel-head">
-          <h2>Built in</h2>
-        </div>
-        <ul className="role-builtin">
-          <li>
-            <strong>Guide</strong>
-            <span>Learner reviews, task reviews, messages. The starting point for a mentor.</span>
-          </li>
-          <li>
-            <strong>Curriculum owner</strong>
-            <span>Courses, learner progress and Discovery, without staff or access.</span>
-          </li>
-          <li>
-            <strong>Administrator</strong>
-            <span>Everything, including staff, settings and the AI engine.</span>
-          </li>
-          <li>
-            <strong>Student</strong>
-            <span>The learner dashboard. Not a staff role.</span>
-          </li>
-        </ul>
-        <p className="section-note" style={{ marginTop: 10 }}>
-          Built in roles cannot be edited. Make your own role when you need a narrower one.
+      <section className="panel-card role-note-card">
+        <h3 className="role-note-title">How the shipped roles behave</h3>
+        <p>
+          Guide, Curriculum owner and Administrator arrive with the app. Their names and levels are fixed,
+          because the rest of the product refers to them by those names. Their tabs are yours: tick or untick,
+          and every account holding that role follows.
+        </p>
+        <p>
+          A guide works from their own workspace. Tasks, Learners, Messages and Communities match the pages
+          already there, so the sidebar lists them once. Ticking another tab adds that console page for them.
+        </p>
+        <p>
+          Students are not staff, so the student dashboard is not a role here. New students get it when their
+          account is created.
         </p>
       </section>
 
@@ -277,6 +278,9 @@ export const RoleEditorPage: React.FC = () => {
   const [baseRole, setBaseRole] = useState<NamedRole['baseRole']>('GUIDE');
   const [sections, setSections] = useState<string[]>([]);
   const [members, setMembers] = useState(0);
+  const [builtIn, setBuiltIn] = useState(false);
+  const [defaults, setDefaults] = useState<NamedRole['defaults']>(null);
+  const [resetting, setResetting] = useState(false);
   const [loading, setLoading] = useState(editing);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -301,6 +305,8 @@ export const RoleEditorPage: React.FC = () => {
           setBaseRole(found.baseRole);
           setSections(found.sections);
           setMembers(found.memberCount);
+          setBuiltIn(found.builtIn);
+          setDefaults(found.defaults);
         }
       } catch {
         if (alive) setError('Could not reach the server.');
@@ -326,6 +332,31 @@ export const RoleEditorPage: React.FC = () => {
   };
 
   const everything = sections.includes('*') || sections.length === ADMIN_SECTIONS.length;
+
+  /** Put a shipped role back to the tabs and note it came with. */
+  const restoreDefaults = async () => {
+    if (!roleId) return;
+    setBusy(true);
+    setError(null);
+    setSaved(null);
+    setResetting(true);
+    try {
+      const res = await authFetch(`/api/admin/roles/${roleId}/reset`, { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        setError(json.error || 'Could not reset the role.');
+        return;
+      }
+      setSections(json.role.sections);
+      setDescription(json.role.description);
+      setSaved(`${json.role.name} is back to the tabs it came with.`);
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setBusy(false);
+      setResetting(false);
+    }
+  };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -383,7 +414,9 @@ export const RoleEditorPage: React.FC = () => {
         title={editing ? name || 'Role' : 'New role'}
         meta={
           editing
-            ? `${members} ${members === 1 ? 'person holds' : 'people hold'} this role`
+            ? `${members} ${members === 1 ? 'person holds' : 'people hold'} this role${
+                builtIn ? ' · ships with the app' : ''
+              }`
             : 'What this job can open'
         }
       />
@@ -403,6 +436,13 @@ export const RoleEditorPage: React.FC = () => {
                 <h2>Name and level</h2>
               </div>
 
+              {builtIn && (
+                <p className="role-locked-note">
+                  This role ships with the app, so its name and level stay as they are. Its tabs and its note
+                  are yours to change.
+                </p>
+              )}
+
               <div className="form-group">
                 <label className="form-label" htmlFor="role-name">
                   Role name
@@ -414,6 +454,7 @@ export const RoleEditorPage: React.FC = () => {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Content reviewer"
                   maxLength={60}
+                  disabled={builtIn}
                   required
                 />
               </div>
@@ -443,6 +484,7 @@ export const RoleEditorPage: React.FC = () => {
                         value={option.value}
                         checked={baseRole === option.value}
                         onChange={() => setBaseRole(option.value)}
+                        disabled={builtIn}
                       />
                       <span>
                         <strong>{option.label}</strong>
@@ -494,10 +536,27 @@ export const RoleEditorPage: React.FC = () => {
                 })}
               </div>
 
+              {baseRole === 'GUIDE' && (
+                <p className="role-guide-hint">
+                  A guide works from their own workspace first. Tasks, Learners, Messages and Communities
+                  already appear there, so ticking them adds no second copy to the sidebar.
+                </p>
+              )}
+
               <div className="access-matrix-actions">
                 <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>
-                  {busy ? 'Saving...' : editing ? 'Save the role' : 'Create the role'}
+                  {busy && !resetting ? 'Saving...' : editing ? 'Save the role' : 'Create the role'}
                 </button>
+                {builtIn && defaults && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={restoreDefaults}
+                    disabled={busy}
+                  >
+                    {resetting ? 'Resetting...' : 'Put the tabs back'}
+                  </button>
+                )}
                 <span className="section-note">
                   {sections.includes('*')
                     ? 'Everything, including sections added later.'
@@ -511,11 +570,19 @@ export const RoleEditorPage: React.FC = () => {
             {editing && (
               <section className="panel-card role-note-card">
                 <h3 className="role-note-title">Changing a role</h3>
-                <p>
-                  Everyone holding this role gets the change. If you move it to another level, their account level
-                  moves with it. Any personal tab list they had is cleared, so this role becomes their whole
-                  access.
-                </p>
+                {builtIn ? (
+                  <p>
+                    {name} ships with the app, so its name and level stay put. Everyone holding it follows any
+                    tab you tick or untick. If an edit does not feel right, put the tabs back and it returns to
+                    the way it came.
+                  </p>
+                ) : (
+                  <p>
+                    Everyone holding this role gets the change. If you move it to another level, their account
+                    level moves with it. Any personal tab list they had is cleared, so this role becomes their
+                    whole access.
+                  </p>
+                )}
                 <Link className="link-button" to="/admin/staff">
                   See who can sign in
                 </Link>

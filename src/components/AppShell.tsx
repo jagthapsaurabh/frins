@@ -86,12 +86,19 @@ const navForRole = (role: string | undefined, permissions?: string[] | null): Na
       { path: '/guide/communities', label: 'Communities', icon: <UsersRound size={17} />, group: 'Workspace' }
     ];
 
+    /* Four sections are the guide workspace seen from the API side. A guide
+       holding them should not get a second copy of the same page in the
+       sidebar, so those are left to their own entries above. */
+    const alreadyInGuideWorkspace = ['tasks', 'learners', 'messages', 'communities'];
+
     // An admin can hand a guide a section or two of the console. Those appear
-    // above their usual work, and nothing else does.
+    // below their usual work, and nothing else does.
     if (allowed) {
       return [
         ...guideItems,
-        ...ADMIN_SECTIONS.filter((section) => canSee(section.key)).map((section) => ({
+        ...ADMIN_SECTIONS.filter(
+          (section) => canSee(section.key) && !alreadyInGuideWorkspace.includes(section.key)
+        ).map((section) => ({
           path: section.path,
           label: section.label,
           icon: section.icon,

@@ -42,8 +42,8 @@ const initialsOf = (name?: string) =>
     .join('');
 
 /**
- * One select for both kinds of role: the four built in ones, and any role this
- * admin made. A named role carries its own level, so the two never disagree.
+ * One select for every role on the system: the ones that ship with the app and
+ * the ones an admin made. A student is not a staff role, so it sits apart.
  */
 const RolePicker: React.FC<{
   id: string;
@@ -54,33 +54,30 @@ const RolePicker: React.FC<{
   disabled?: boolean;
 }> = ({ id, value, onChange, roles, includeLearner = true, disabled }) => (
   <select id={id} className="form-select" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
-    <optgroup label="Built in">
-      {includeLearner && <option value="builtin:LEARNER">Student</option>}
-      <option value="builtin:GUIDE">Guide</option>
-      <option value="builtin:CURRICULUM_OWNER">Curriculum owner</option>
-      <option value="builtin:ADMIN">Administrator</option>
-    </optgroup>
-    {roles.length > 0 && (
-      <optgroup label="Your roles">
-        {roles.map((role) => (
-          <option key={role.id} value={`role:${role.id}`}>
-            {role.name}
-          </option>
-        ))}
+    {includeLearner && (
+      <optgroup label="Student">
+        <option value="LEARNER">Student</option>
       </optgroup>
     )}
+    <optgroup label="Staff roles">
+      {roles.map((role) => (
+        <option key={role.id} value={role.id}>
+          {role.name}
+          {role.builtIn ? '' : ' · yours'}
+        </option>
+      ))}
+    </optgroup>
   </select>
 );
 
+/** What the picker should show for an account: its role, or its level. */
 const roleValueFor = (account: { role_id?: string | null; role?: string }) =>
-  account.role_id ? `role:${account.role_id}` : `builtin:${account.role || 'LEARNER'}`;
+  account.role_id || account.role || 'LEARNER';
 
 const roleNameFor = (value: string, roles: NamedRole[]) => {
-  if (value.startsWith('role:')) {
-    const found = roles.find((role) => role.id === value.slice(5));
-    return found?.name || 'Role';
-  }
-  return ROLE_LABEL[value.slice(8)] || value.slice(8);
+  const found = roles.find((role) => role.id === value);
+  if (found) return found.name;
+  return ROLE_LABEL[value] || value;
 };
 
 /** Directory of every account: staff and learners, filters on the left of the table. */
@@ -166,7 +163,7 @@ export const StaffDirectory: React.FC = () => {
             </td>
             <td data-label="Role">
               <span className="row-title">{account.role_name || ROLE_LABEL[account.role] || account.role}</span>
-              {account.role_name && (
+              {account.role_name && account.role_name !== (ROLE_LABEL[account.role] || account.role) && (
                 <span className="row-sub">{ROLE_LABEL[account.role] || account.role}</span>
               )}
             </td>
@@ -193,7 +190,7 @@ export const NewStaffPage: React.FC = () => {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [roleValue, setRoleValue] = useState('builtin:GUIDE');
+  const [roleValue, setRoleValue] = useState('');
   const [track, setTrack] = useState('trader');
   const [roles, setRoles] = useState<NamedRole[]>([]);
   const [busy, setBusy] = useState(false);
@@ -208,19 +205,22 @@ export const NewStaffPage: React.FC = () => {
   useEffect(() => {
     authFetch('/api/admin/roles')
       .then((res) => (res.ok ? res.json() : null))
-      .then((json) => setRoles(json?.rows || []))
+      .then((json) => {
+        const loaded: NamedRole[] = json?.rows || [];
+        setRoles(loaded);
+        // Start on the Guide role, since that is the usual new staff account.
+        setRoleValue((current) => current || loaded.find((role) => role.baseRole === 'GUIDE')?.id || '');
+      })
       .catch(() => undefined);
   }, [authFetch]);
 
-  const chosenRole = roles.find((entry) => `role:${entry.id}` === roleValue);
+  const chosenRole = roles.find((entry) => entry.id === roleValue);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const body = chosenRole
-      ? { name, email, roleId: chosenRole.id, track }
-      : { name, email, role: roleValue.slice(8), track };
+    const body = chosenRole ? { name, email, roleId: chosenRole.id, track } : { name, email, role: 'LEARNER', track };
     const res = await authFetch('/api/admin/users', {
       method: 'POST',
       body: JSON.stringify(body)
@@ -326,18 +326,16 @@ export const NewStaffPage: React.FC = () => {
             <p className="form-hint">
               {chosenRole.name} opens{' '}
               {chosenRole.sections.includes('*')
-                ? 'every tab'
-                : `${chosenRole.sections.length} ${chosenRole.sections.length === 1 ? 'tab' : 'tabs'}`}
-              : {chosenRole.sections.includes('*')
-                ? 'the whole console'
+                ? 'every tab in the console'
                 : chosenRole.sections
                     .map((key) => ADMIN_SECTIONS.find((section) => section.key === key)?.label || key)
                     .join(', ')}
-              . Change it later on the account page, or edit the role itself.
+              {chosenRole.baseRole === 'GUIDE' ? ', plus their guide workspace' : ''}. Change it later on the
+              account page, or edit the role itself.
             </p>
           ) : (
             <p className="form-hint">
-              A built in role sees the whole of its own workspace. A role you made opens only its own tabs.
+              Pick a role and the account gets exactly those tabs. Students get the learner dashboard instead.
             </p>
           )}
           <p className="form-hint">
@@ -403,7 +401,7 @@ export const StaffAccountPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
-  const [roleValue, setRoleValue] = useState('builtin:GUIDE');
+  const [roleValue, setRoleValue] = useState('');
   const [roles, setRoles] = useState<NamedRole[]>([]);
   const [confirm, setConfirm] = useState<'role' | 'status' | 'password' | null>(null);
   const [busy, setBusy] = useState(false);
@@ -456,20 +454,20 @@ export const StaffAccountPage: React.FC = () => {
     setError(null);
     try {
       if (action === 'role') {
-        const named = roleValue.startsWith('role:');
+        const isStudent = roleValue === 'LEARNER';
+        const picked = roles.find((entry) => entry.id === roleValue);
         const res = await authFetch(`/api/admin/users/${account.id}`, {
           method: 'PATCH',
-          body: JSON.stringify({
-            roleId: named ? roleValue.slice(5) : '',
-            role: named ? undefined : roleValue.slice(8)
-          })
+          body: JSON.stringify(
+            isStudent ? { roleId: '', role: 'LEARNER' } : { roleId: picked?.id || roleValue }
+          )
         });
         const json = await res.json();
         if (!res.ok || !json.success) throw new Error(json.error || 'Could not change the role.');
         setBanner(
-          named
-            ? `Role set to ${json.roleName || 'the chosen role'}. Their tabs come from the role.`
-            : `Role set to ${ROLE_LABEL[json.role] || json.role}. They now see everything that role covers.`
+          isStudent
+            ? 'Role set to Student. They see the learner dashboard.'
+            : `Role set to ${json.roleName || 'the chosen role'}. Their tabs come from the role.`
         );
         load();
       }
@@ -540,7 +538,7 @@ export const StaffAccountPage: React.FC = () => {
       <PageHead
         title={account.name}
         meta={
-          account.role_name
+          account.role_name && account.role_name !== (ROLE_LABEL[account.role] || account.role)
             ? `${account.role_name} · ${ROLE_LABEL[account.role] || account.role}`
             : ROLE_LABEL[account.role] || account.role
         }
@@ -805,9 +803,18 @@ export const StaffAccountPage: React.FC = () => {
                 disabled={isSelf}
               />
               <p className="form-hint">
-                {roleValue.startsWith('role:')
-                  ? 'This account takes its tabs from the role. Edit the role to change everyone who holds it.'
-                  : 'A built in role keeps the whole of its own workspace.'}
+                {roleValue === 'LEARNER'
+                  ? 'A student sees the learner dashboard, which is not a staff role.'
+                  : roleValue === roleValueFor(account)
+                    ? 'This account already holds this role. Edit the role to change everyone who holds it.'
+                    : (() => {
+                        const picked = roles.find((entry) => entry.id === roleValue);
+                        if (!picked) return 'Pick a role and this account takes exactly those tabs.';
+                        const count = picked.sections.includes('*') ? 0 : picked.sections.length;
+                        return `${picked.name} opens ${
+                          count ? `${count} ${count === 1 ? 'tab' : 'tabs'}` : 'every tab'
+                        }. Everyone holding it follows.`;
+                      })()}
               </p>
             </div>
 
