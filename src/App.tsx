@@ -13,6 +13,7 @@ import { AddLearnerPage } from './pages/admin/AddLearnerPage';
 import { LearnerDossierPage } from './pages/admin/LearnerDossierPage';
 import { CourseBuilderPage } from './pages/admin/CourseBuilderPage';
 import { CoursesDirectory } from './pages/admin/CoursesDirectory';
+import { VideoStudioPage } from './pages/admin/VideoStudioPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { NewNotificationPage } from './pages/admin/AdminNotifications';
 import { NewStaffPage, StaffAccountPage } from './pages/admin/StaffPages';
@@ -177,6 +178,16 @@ export const EcosystemShell: React.FC = () => {
           <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
             <AppShell>
               <CoursesDirectory />
+            </AppShell>
+          </RequireStaff>
+        }
+      />
+      <Route
+        path="/admin/video"
+        element={
+          <RequireStaff roles={[...DASHBOARD_ROLES.admin]} loginPath="/admin/login">
+            <AppShell>
+              <VideoStudioPage />
             </AppShell>
           </RequireStaff>
         }

@@ -15,6 +15,15 @@ import {
   runOfflineBenchmarkSuite
 } from './aiPipeline.js';
 import { registerCommunityRoutes } from './communities.js';
+import {
+  buildCourseDraft,
+  canonicalWatchUrl,
+  countWords,
+  extractYouTubeId,
+  fetchVideoMeta,
+  fetchYouTubeTranscript,
+  stripTranscriptMarkup
+} from './videoStudio.js';
 import { registerSummaryRoutes } from './summaries.js';
 import {
   analyzeStudentTaskSubmissionWithAI,
@@ -4948,6 +4957,324 @@ const activeLearnerIdsForStaff = (staffId: string) =>
 // ---------------------------------------------------------------------------
 
 // A light course list for pickers. The overview payload is too heavy for a select.
+// ============================================================================
+// VIDEO STUDIO (Admin only)
+// A pasted YouTube link becomes a transcript, and the transcript becomes a
+// course with lessons and tasks. Saving writes a normal course, so everything
+// downstream (assignment, progress, review) works without knowing where it
+// came from.
+// ============================================================================
+const VIDEO_ROLES = ['ADMIN', 'CURRICULUM_OWNER'] as const;
+
+const videoRowForAdmin = (id: string) =>
+  db.prepare('SELECT * FROM video_sources WHERE id = ?').get(id) as any;
+
+app.get('/api/admin/videos', requireRole([...VIDEO_ROLES]), (_req, res) => {
+  const rows = db
+    .prepare(
+      `SELECT id, video_id, url, title, channel, thumbnail, language, word_count,
+              transcript_source, course_id, created_by_name, created_at, updated_at,
+              LENGTH(transcript) AS transcript_chars
+         FROM video_sources
+        ORDER BY created_at DESC`
+    )
+    .all() as any[];
+
+  res.json({ success: true, rows });
+});
+
+app.get('/api/admin/videos/:videoSourceId', requireRole([...VIDEO_ROLES]), (req, res) => {
+  const row = videoRowForAdmin(req.params.videoSourceId);
+  if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+  res.json({ success: true, video: row });
+});
+
+/**
+ * Paste a link. We try YouTube first. If captions are withheld, the response
+ * carries the reason and the page asks for a pasted transcript instead.
+ */
+app.post('/api/admin/videos', rateLimit(60, 60_000), requireRole([...VIDEO_ROLES]), async (req, res) => {
+  const actor = resolveAuthUser(req);
+  const link = String(req.body?.url || '').trim();
+  const pastedRaw = String(req.body?.transcript || '');
+  const pasted = stripTranscriptMarkup(pastedRaw);
+
+  const videoId = extractYouTubeId(link);
+  if (!videoId) {
+    return res.status(400).json({
+      success: false,
+      error: 'That does not look like a YouTube link. Use a watch, share, shorts or embed link.'
+    });
+  }
+
+  const meta = await fetchVideoMeta(videoId);
+
+  let transcript = pasted;
+  let source: 'YOUTUBE' | 'PASTED' = 'PASTED';
+  let language = '';
+  let note: string | undefined;
+  let fetchReason: string | undefined;
+
+  if (!transcript) {
+    const fetched = await fetchYouTubeTranscript(videoId);
+    if (fetched.transcript) {
+      transcript = fetched.transcript;
+      source = 'YOUTUBE';
+      language = fetched.language;
+    } else {
+      fetchReason = (fetched as any).reason;
+    }
+  }
+
+  if (!transcript) {
+    return res.status(422).json({
+      success: false,
+      error: fetchReason || 'No transcript was found for this video. Paste the transcript and try again.',
+      video: { ...meta, videoId },
+      needsTranscript: true
+    });
+  }
+
+  if (countWords(transcript) < 60) {
+    return res.status(422).json({
+      success: false,
+      error: 'That transcript is too short to build a course from. Sixty words is the minimum.',
+      needsTranscript: true
+    });
+  }
+
+  const now = new Date().toISOString();
+  const id = `vid_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const existing = db
+    .prepare('SELECT id, course_id FROM video_sources WHERE video_id = ? AND created_by_id IS ? ORDER BY created_at DESC LIMIT 1')
+    .get(videoId, actor?.id || null) as any;
+
+  if (existing) {
+    db.prepare(
+      `UPDATE video_sources
+          SET transcript = ?, word_count = ?, transcript_source = ?, language = ?,
+              title = ?, channel = ?, thumbnail = ?, updated_at = ?
+        WHERE id = ?`
+    ).run(
+      transcript,
+      countWords(transcript),
+      source,
+      language || null,
+      meta.title,
+      meta.channel || null,
+      meta.thumbnail,
+      now,
+      existing.id
+    );
+    note = 'This video was already in the studio, so its transcript was refreshed.';
+    return res.json({ success: true, video: videoRowForAdmin(existing.id), note });
+  }
+
+  db.prepare(
+    `INSERT INTO video_sources (
+       id, video_id, url, title, channel, thumbnail, language, transcript, word_count,
+       transcript_source, created_by_id, created_by_name, course_id, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`
+  ).run(
+    id,
+    videoId,
+    meta.url,
+    meta.title,
+    meta.channel || null,
+    meta.thumbnail,
+    language || null,
+    transcript,
+    countWords(transcript),
+    source,
+    actor?.id || null,
+    actor?.name || 'Admin',
+    now,
+    now
+  );
+
+  writeAuditEvent({
+    actorUserId: actor?.id || null,
+    actorRole: actor?.role || 'ADMIN',
+    action: 'VIDEO_TRANSCRIPT_ADDED',
+    entityType: 'VIDEO_SOURCE',
+    entityId: id,
+    details: { videoId, transcriptSource: source, wordCount: countWords(transcript) }
+  });
+
+  res.status(201).json({ success: true, video: videoRowForAdmin(id), note });
+});
+
+app.post('/api/admin/videos/:videoSourceId/transcript', requireRole([...VIDEO_ROLES]), (req, res) => {
+  const row = videoRowForAdmin(req.params.videoSourceId);
+  if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+
+  const cleaned = stripTranscriptMarkup(String(req.body?.transcript || ''));
+  if (countWords(cleaned) < 60) {
+    return res.status(400).json({ success: false, error: 'Sixty words is the minimum for a usable transcript.' });
+  }
+
+  db.prepare(
+    `UPDATE video_sources SET transcript = ?, word_count = ?, transcript_source = 'PASTED', updated_at = ? WHERE id = ?`
+  ).run(cleaned, countWords(cleaned), new Date().toISOString(), row.id);
+
+  res.json({ success: true, video: videoRowForAdmin(row.id) });
+});
+
+/** Draft only. Nothing is written until the admin saves it. */
+app.post('/api/admin/videos/:videoSourceId/draft', rateLimit(20, 60_000), requireRole([...VIDEO_ROLES]), async (req, res) => {
+  const row = videoRowForAdmin(req.params.videoSourceId);
+  if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+
+  const track = String(req.body?.track || 'trader');
+  const level = String(req.body?.level || 'L1 to L2');
+  const moduleCount = Math.min(10, Math.max(2, Number(req.body?.moduleCount) || 4));
+
+  const draft = await buildCourseDraft({
+    title: row.title,
+    transcript: row.transcript,
+    track,
+    level,
+    moduleCount
+  });
+
+  res.json({ success: true, draft });
+});
+
+/**
+ * Save the reviewed draft as a real course. The video itself becomes step one,
+ * then each module is a reading and a task, in order.
+ */
+app.post('/api/admin/videos/:videoSourceId/save', requireRole([...VIDEO_ROLES]), (req, res) => {
+  const actor = resolveAuthUser(req);
+  const row = videoRowForAdmin(req.params.videoSourceId);
+  if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+
+  const draft = req.body?.draft;
+  const modules = Array.isArray(draft?.modules) ? draft.modules : [];
+  if (!modules.length) {
+    return res.status(400).json({ success: false, error: 'There is no draft to save. Generate one first.' });
+  }
+
+  const title = String(draft?.title || row.title).trim().slice(0, 180);
+  const track = String(draft?.track || req.body?.track || 'trader');
+  const level = String(draft?.level || 'L1 to L2');
+  const summary = String(draft?.summary || '').trim();
+  const description = String(draft?.description || '').trim();
+
+  const now = new Date().toISOString();
+  const courseId = `crs_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+  const moduleTitles = modules.map((m: any) => String(m?.title || '').trim()).filter(Boolean);
+
+  db.prepare(
+    `INSERT INTO courses (id, title, track, level, description, modules_json, created_by, created_at, duration_hours, price, is_active, summary)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?)`
+  ).run(
+    courseId,
+    title,
+    track,
+    level,
+    description,
+    JSON.stringify(moduleTitles),
+    actor?.name || 'Admin',
+    now,
+    null,
+    summary || null
+  );
+
+  const insertStep = db.prepare(
+    `INSERT INTO course_steps (
+       id, course_id, position, title, kind, summary, content, resource_url, file_name, file_data,
+       due_days, estimated_minutes, is_milestone, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?)`
+  );
+
+  let position = 1;
+
+  insertStep.run(
+    `stp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+    courseId,
+    position,
+    'Watch: ' + row.title,
+    'VIDEO',
+    summary || 'The video this course is built from.',
+    null,
+    canonicalWatchUrl(row.video_id),
+    7,
+    30,
+    0,
+    now,
+    now
+  );
+  position += 1;
+
+  for (const m of modules) {
+    insertStep.run(
+      `stp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      courseId,
+      position,
+      String(m?.title || `Module ${position}`),
+      'TEXT',
+      String(m?.focus || '').slice(0, 160) || null,
+      String(m?.lesson || ''),
+      null,
+      7,
+      20,
+      0,
+      now,
+      now
+    );
+    position += 1;
+
+    insertStep.run(
+      `stp_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`,
+      courseId,
+      position,
+      String(m?.task?.title || 'Task'),
+      'TASK',
+      null,
+      String(m?.task?.instructions || ''),
+      null,
+      Number(m?.task?.dueDays) > 0 ? Number(m.task.dueDays) : 7,
+      Number(m?.task?.estimatedMinutes) > 0 ? Number(m.task.estimatedMinutes) : 30,
+      1,
+      now,
+      now
+    );
+    position += 1;
+
+    // The marking criteria live with the task so the reviewer sees them.
+    const lastStepId = (
+      db.prepare('SELECT id FROM course_steps WHERE course_id = ? ORDER BY position DESC LIMIT 1').get(courseId) as any
+    )?.id;
+    if (lastStepId) {
+      db.prepare('UPDATE course_steps SET summary = ? WHERE id = ?').run(
+        String(m?.task?.expectedCriteria || '').slice(0, 500) || null,
+        lastStepId
+      );
+    }
+  }
+
+  db.prepare('UPDATE video_sources SET course_id = ?, updated_at = ? WHERE id = ?').run(courseId, now, row.id);
+
+  writeAuditEvent({
+    actorUserId: actor?.id || null,
+    actorRole: actor?.role || 'ADMIN',
+    action: 'COURSE_GENERATED_FROM_VIDEO',
+    entityType: 'COURSE',
+    entityId: courseId,
+    details: { videoSourceId: row.id, modules: modules.length, generatedBy: draft?.generatedBy || 'DETERMINISTIC' }
+  });
+
+  res.status(201).json({ success: true, courseId, stepCount: position - 1 });
+});
+
+app.delete('/api/admin/videos/:videoSourceId', requireRole([...VIDEO_ROLES]), (req, res) => {
+  const row = videoRowForAdmin(req.params.videoSourceId);
+  if (!row) return res.status(404).json({ success: false, error: 'That video is not in the studio.' });
+  db.prepare('DELETE FROM video_sources WHERE id = ?').run(row.id);
+  res.json({ success: true });
+});
+
 app.get('/api/admin/courses', requireRole(['ADMIN', 'CURRICULUM_OWNER', 'GUIDE']), (_req, res) => {
   const rows = db
     .prepare(

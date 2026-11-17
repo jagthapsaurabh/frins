@@ -2212,3 +2212,215 @@ a.kpi:hover { background: #FCFCFD; }
   .app-shell .app-sidebar.rail .app-sidebar-footer { padding: 8px 0; }
   .app-shell .app-sidebar.rail .app-sidebar-footer .app-nav-item { width: 38px; margin: 0 auto; }
 }
+
+/* ---------------------------------------------------------------------------
+   Video studio. Two columns on a laptop: the video and its transcript on the
+   left, the course being built on the right. Everything below the fold is the
+   library of transcripts already brought in.
+   --------------------------------------------------------------------------- */
+
+.vs-page { display: flex; flex-direction: column; gap: 14px; }
+
+.vs-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.vs-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.vs-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.vs-alert-error { background: var(--danger-bg, #FEF3F2); border: 1px solid var(--danger-border, #FDA29B); color: var(--danger-text, #912018); }
+.vs-alert-ok { background: var(--success-bg, #ECFDF3); border: 1px solid var(--success-border, #A6F4C5); color: var(--success-text, #05603A); }
+
+.vs-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.vs-actions-end { justify-content: flex-end; }
+
+.vs-needs {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border-soft, #D6DAE2);
+  border-radius: 6px;
+  background: #FCFCFB;
+}
+
+.vs-needs strong { display: block; font-size: 12.5px; color: var(--text-main); }
+.vs-needs p { margin: 4px 0 10px; font-size: 11.5px; line-height: 1.6; color: var(--text-muted); }
+
+.vs-video {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.vs-video img,
+.vs-video-fallback {
+  width: 96px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #EFEFEC;
+}
+
+.vs-video strong { display: block; font-size: 13px; line-height: 1.4; color: var(--text-main); }
+.vs-video span { display: block; font-size: 11.5px; color: var(--text-light-muted); margin-top: 2px; }
+
+.vs-transcript {
+  margin: 12px 0 0;
+  max-height: 340px;
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #FCFCFB;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: #3F3F46;
+  white-space: pre-wrap;
+}
+
+.vs-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  background: #F7F7F5;
+}
+
+.vs-badge.ok { background: var(--success-bg, #ECFDF3); border-color: var(--success-border, #A6F4C5); color: var(--success-text, #05603A); }
+
+.vs-settings {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.vs-settings .form-group { margin-bottom: 8px; }
+
+.vs-draft-meta { margin-bottom: 12px; }
+.vs-draft-meta > span { display: block; margin-top: 6px; font-size: 11.5px; color: var(--text-light-muted); }
+
+.vs-title-input {
+  font-size: 15px;
+  font-weight: 600;
+  height: 38px;
+}
+
+.vs-modules { display: flex; flex-direction: column; gap: 8px; }
+
+.vs-module {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: #FFFFFF;
+  overflow: hidden;
+}
+
+.vs-module summary {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  background: #FCFCFB;
+}
+
+.vs-module summary::-webkit-details-marker { display: none; }
+.vs-module[open] summary { border-bottom: 1px solid var(--border-subtle); }
+
+.vs-module-num {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--accent-text, #8A6508);
+}
+
+.vs-module-title { font-size: 12.5px; font-weight: 600; color: var(--text-main); }
+.vs-module-tasks { font-size: 10.5px; color: var(--text-light-muted); }
+
+.vs-module-body { padding: 12px; }
+.vs-gap { display: block; margin-top: 10px; }
+
+.vs-task {
+  margin-top: 14px;
+  padding: 12px;
+  border-left: 2px solid var(--accent-border, #EFD9A3);
+  background: #FCFAF4;
+  border-radius: 0 6px 6px 0;
+}
+
+.vs-task-label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text, #8A6508);
+  margin-bottom: 6px;
+}
+
+.vs-task .form-input,
+.vs-task .form-textarea { margin-bottom: 8px; }
+
+.vs-task-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.vs-task-row label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); }
+.vs-task-row input { margin-top: 4px; }
+
+.vs-spin { animation: vs-spin 0.9s linear infinite; }
+@keyframes vs-spin { to { transform: rotate(360deg); } }
+
+.vs-library { margin-top: 2px; }
+.vs-list { display: flex; flex-direction: column; }
+
+.vs-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.vs-list-row:first-child { border-top: 0; }
+.vs-list-main { min-width: 0; flex: 1 1 auto; overflow: hidden; }
+.vs-list-main strong { display: block; font-size: 12.5px; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-list-main span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-light-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vs-list-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+@media (max-width: 1100px) {
+  .vs-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .vs-settings { grid-template-columns: minmax(0, 1fr); }
+  .vs-list-row { flex-direction: column; align-items: stretch; }
+  .vs-list-main { width: 100%; }
+  .vs-list-actions { width: 100%; }
+  .vs-video { grid-template-columns: 72px minmax(0, 1fr); }
+  .vs-video img, .vs-video-fallback { width: 72px; height: 44px; }
+}

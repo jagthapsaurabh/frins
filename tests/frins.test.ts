@@ -20,6 +20,7 @@ import {
   analyzeStudentTaskSubmissionWithAI
 } from '../server/db.js';
 import { buildDiscoveryFlow, flowProgress } from '../src/pages/discoveryFlow.js';
+import { extractYouTubeId, stripTranscriptMarkup, buildDeterministicDraft } from '../server/videoStudio.js';
 
 function toResponsesMap(answers: Record<string, string>): Record<string, { answerValue: string; answerText?: string }> {
   const out: Record<string, { answerValue: string; answerText?: string }> = {};
@@ -326,5 +327,97 @@ describe('Discovery flow adapts to the person', () => {
     expect(investor!.personalRead).toContain('invest for the long term');
     expect(trader!.focusAreas).toContain('A process kept in your head');
     expect(trader!.nextSteps.length).toBe(3);
+  });
+});
+
+describe('Video studio', () => {
+  it('FRI-VIDEO-LINK: reads every YouTube link shape an admin is likely to paste', () => {
+    expect(extractYouTubeId('https://www.youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('https://youtu.be/dQw4w9WgXcQ?t=42')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('https://www.youtube.com/shorts/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('https://www.youtube.com/embed/dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('youtube.com/watch?v=dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('dQw4w9WgXcQ')).toBe('dQw4w9WgXcQ');
+    expect(extractYouTubeId('https://vimeo.com/12345')).toBeNull();
+    expect(extractYouTubeId('')).toBeNull();
+  });
+
+  it('FRI-VIDEO-CLEAN: turns captions into readable paragraphs', () => {
+    const vtt = `WEBVTT
+
+00:00:01.000 --> 00:00:04.000
+Position size is the habit that keeps you alive
+
+00:00:04.000 --> 00:00:07.000
+[Music]
+
+00:00:07.000 --> 00:00:10.000
+Position size is the habit that keeps you alive
+
+00:00:10.000 --> 00:00:13.000
+Decide the stop first, then the size follows
+`;
+    const cleaned = stripTranscriptMarkup(vtt);
+    expect(cleaned).not.toContain('-->');
+    expect(cleaned).not.toContain('[Music]');
+    // The repeated caption line is only kept once.
+    expect(cleaned.match(/Position size is the habit/g)?.length).toBe(1);
+    expect(cleaned).toContain('Decide the stop first');
+  });
+
+  it('FRI-VIDEO-DRAFT: builds a course whose lessons and tasks come from the transcript', () => {
+    const transcript = [
+      'Position sizing is the first decision, not the last one.',
+      'Most people choose a quantity they like and then place the stop wherever the chart looks calm.',
+      'That makes the risk random from trade to trade.',
+      'Decide where you are wrong first, and let the size follow from that level.',
+      'After two losses in a row, halve the risk until a win comes back.',
+      'Confidence is not information, so never size up because you feel sure.',
+      'Keep eight fields in a written plan before the entry.',
+      'Every week, split your trades into those that followed the plan and those that did not.',
+      'Then compare the two lists and see which one paid.'
+    ].join(' ');
+
+    const draft = buildDeterministicDraft({
+      title: 'Position sizing',
+      transcript,
+      track: 'trader',
+      level: 'L1 to L2',
+      moduleCount: 3
+    });
+
+    expect(draft.generatedBy).toBe('DETERMINISTIC');
+    expect(draft.modules.length).toBe(3);
+    expect(draft.modules.length).toBe(draft.tasks);
+    expect(draft.modules[0].lesson).toContain('Position sizing');
+    expect(draft.modules[0].task.instructions).toContain('Instrument and direction');
+    // Headings never end on a dangling joining word.
+    for (const m of draft.modules) {
+      expect(m.title).not.toMatch(/\b(and|of|to|the|with|if)$/i);
+    }
+  });
+
+  it('FRI-VIDEO-DRAFT-ROLE: the same transcript yields role-appropriate wording', () => {
+    const transcript = Array.from({ length: 24 }, (_, i) =>
+      `Line ${i + 1} explains how a written thesis and allocation rules keep a long term position steady.`
+    ).join(' ');
+
+    const investor = buildDeterministicDraft({
+      title: 'Long term',
+      transcript,
+      track: 'investor',
+      level: 'L2',
+      moduleCount: 2
+    });
+    const trader = buildDeterministicDraft({
+      title: 'Long term',
+      transcript,
+      track: 'trader',
+      level: 'L2',
+      moduleCount: 2
+    });
+
+    expect(investor.modules[0].lesson).toContain('build a position');
+    expect(trader.modules[0].lesson).toContain('decide a trade');
   });
 });

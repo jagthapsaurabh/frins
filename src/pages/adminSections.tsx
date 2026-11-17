@@ -13,13 +13,15 @@ import {
   BellRing,
   Settings as SettingsIcon,
   MessageSquare,
-  UsersRound
+  UsersRound,
+  Film
 } from 'lucide-react';
 
 export type AdminSectionKey =
   | 'overview'
   | 'tasks'
   | 'courses'
+  | 'video'
   | 'learners'
   | 'progress'
   | 'staff'
@@ -51,6 +53,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { key: 'tasks', label: 'Tasks', hint: 'Uploads, AI pre-check, chat', icon: <ClipboardList size={17} />, group: 'Work', path: '/admin/tasks' },
   { key: 'messages', label: 'Messages', hint: 'Talk to a learner', icon: <MessageSquare size={17} />, group: 'Work', path: '/admin/messages' },
   { key: 'courses', label: 'Courses', hint: 'Build and publish courses', icon: <BookOpen size={17} />, group: 'Work', path: '/admin/courses' },
+  { key: 'video', label: 'Video studio', hint: 'YouTube link to course', icon: <Film size={17} />, group: 'Work', path: '/admin/video' },
   { key: 'communities', label: 'Communities', hint: 'Groups with a shared feed', icon: <UsersRound size={17} />, group: 'Work', path: '/admin/communities' },
   { key: 'learners', label: 'Learners', hint: 'Roster, plans, assessments', icon: <GraduationCap size={17} />, group: 'People', path: '/admin/learners' },
   { key: 'progress', label: 'Learner progress', hint: 'Courses, tasks, uploads', icon: <TrendingUp size={17} />, group: 'People', path: '/admin/progress' },

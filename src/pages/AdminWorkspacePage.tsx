@@ -57,6 +57,7 @@ export const AdminWorkspacePage: React.FC = () => {
       {activeTab === 'notifications' && <AdminNotifications />}
       {activeTab === 'discovery' && <DiscoveryResultsPage />}
       {activeTab === 'courses' && <Navigate to="/admin/courses" replace />}
+      {activeTab === 'video' && <Navigate to="/admin/video" replace />}
       {activeTab === 'communities' && <Navigate to="/admin/communities" replace />}
       {activeTab === 'messages' && <Navigate to="/admin/messages" replace />}
     </div>

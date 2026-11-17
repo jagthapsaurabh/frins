@@ -1441,6 +1441,27 @@ export function initDatabaseAndSeed() {
       created_at TEXT NOT NULL
     );
 
+    /* A YouTube video an admin has brought in, its transcript, and the course
+       the studio built from it. The transcript is kept so the course can be
+       regenerated later without pasting anything again. */
+    CREATE TABLE IF NOT EXISTS video_sources (
+      id TEXT PRIMARY KEY,
+      video_id TEXT NOT NULL,
+      url TEXT NOT NULL,
+      title TEXT NOT NULL,
+      channel TEXT,
+      thumbnail TEXT,
+      language TEXT,
+      transcript TEXT NOT NULL,
+      word_count INTEGER NOT NULL DEFAULT 0,
+      transcript_source TEXT NOT NULL DEFAULT 'PASTED',
+      created_by_id TEXT,
+      created_by_name TEXT,
+      course_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS notification_reads (
       notification_id TEXT NOT NULL,
       user_id TEXT NOT NULL,
